@@ -3,12 +3,18 @@ import CryptoKit
 
 enum ReportEngine {
     static func localExcerpt(_ text: String) -> String {
+        String(contentLines(text).prefix(24).joined(separator: "\n").prefix(1800))
+    }
+    private static func contentLines(_ text: String) -> [String] {
         let lines = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        return String(lines.prefix(8).joined(separator: "\n").prefix(1400))
+        var start = 0
+        if let metadata = lines.prefix(10).lastIndex(where: { $0.hasPrefix("Source date:") || $0.hasPrefix("Week ending:") }) { start = metadata + 1 }
+        let end = lines.lastIndex(where: { $0.hasPrefix("Invented for Reva software demonstration.") }) ?? lines.count
+        return start < end ? Array(lines[start..<end]) : lines
     }
     static func signature(visit: Visit, records: [MedicalRecord]) -> String {
         // Includes the candidate pool, so a newly imported relevant document also makes a brief stale.
-        let inputs = [visit.type, visit.concern, visit.goal, visit.date, visit.pinnedRecordIDs.sorted().joined(separator: ",")] + records.sorted { $0.id < $1.id }.map { "\($0.id)|\($0.version)|\($0.text)|\($0.summary)|\($0.tags.joined(separator: ","))|\($0.status)" }
+        let inputs = [visit.type, visit.concern, visit.goal, String(RevaDate.parse(visit.date).timeIntervalSince1970), visit.pinnedRecordIDs.sorted().joined(separator: ",")] + records.sorted { $0.id < $1.id }.map { "\($0.id)|\($0.version)|\($0.title)|\($0.date)|\($0.text)|\($0.summary)|\($0.tags.joined(separator: ","))|\($0.status)" }
         return SHA256.hash(data: Data(inputs.joined(separator: "\u{1e}").utf8)).map { String(format: "%02x", $0) }.joined()
     }
     static func isStale(_ visit: Visit, records: [MedicalRecord]) -> Bool {
@@ -43,18 +49,30 @@ enum ReportEngine {
         var sections = [ReportSection(title: "Your focus", body: visit.concern + "\n\nGoal: " + visit.goal, sources: [])]
         for record in selected {
             let pages = record.pageTexts ?? [record.text]
-            let focusWords = (visit.concern + " " + visit.goal).lowercased().split { !$0.isLetter }.filter { $0.count > 3 }
+            let focusWords = Set((visit.concern + " " + visit.goal).lowercased().split { !$0.isLetter }.map { String($0) }.filter { $0.count > 3 })
+            func pageScore(_ text: String) -> Int {
+                let content = contentLines(text).joined(separator: " ").lowercased()
+                let words = Set(content.split { !$0.isLetter }.map { String($0) })
+                var score = focusWords.intersection(words).count
+                if focusWords.contains("implant") || focusWords.contains("hardware") {
+                    if content.contains("implant location:") { score += 20 }
+                    if content.contains("device identification") { score += 5 }
+                }
+                return score
+            }
             let pageIndex = pages.enumerated().max { lhs, rhs in
-                focusWords.filter { lhs.element.lowercased().contains($0) }.count < focusWords.filter { rhs.element.lowercased().contains($0) }.count
+                let left = pageScore(lhs.element), right = pageScore(rhs.element)
+                return left == right ? lhs.offset < rhs.offset : left < right
             }?.offset ?? 0
             let pageText = pages.indices.contains(pageIndex) ? pages[pageIndex] : record.text
             let excerpt = localExcerpt(pageText)
             let caveat = record.needsReview ? "Needs review: verify this extraction against the original.\n\n" : ""
-            sections.append(ReportSection(title: record.title, body: caveat + excerpt, sources: [SourceReference(recordID: record.id, page: pageIndex + 1, excerpt: excerpt, sourceVersion: record.version)]))
+            let sourcePage = (record.pageTexts?.isEmpty == false) ? pageIndex + 1 : 0
+            sections.append(ReportSection(title: record.title, body: caveat + excerpt, sources: [SourceReference(recordID: record.id, page: sourcePage, excerpt: excerpt, sourceVersion: record.version)]))
         }
         sections.append(ReportSection(title: "Information to confirm", body: selected.isEmpty ? "No matching records were found. Add records or pin documents you want to discuss. Missing records do not establish that a condition is absent." : "Confirm current medications, allergies, symptom timing, and any changes since these records were written. This brief contains selected source excerpts; it is not a clinical assessment.", sources: []))
         let suggested = ["Which parts of my history matter most for this concern?", "What should I track before our next visit?", "What are the next steps, and when should I follow up?"]
-        return VisitReport(visitID: visit.id, sourceSignature: signature(visit: visit, records: records), sections: sections, questions: visit.report?.questions ?? (visit.questions.isEmpty ? suggested : visit.questions), notes: visit.report?.notes ?? visit.notes, selectedRecordIDs: selected.map(\.id))
+        return VisitReport(visitID: visit.id, sourceSignature: signature(visit: visit, records: records), sections: sections, questions: visit.questions.isEmpty && visit.report == nil ? suggested : visit.questions, notes: visit.notes, selectedRecordIDs: selected.map(\.id))
     }
 }
 

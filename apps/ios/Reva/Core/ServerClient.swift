@@ -25,6 +25,11 @@ struct ServerClient {
         let safe = String(filename.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "_" }.prefix(170)).trimmingCharacters(in: .whitespaces)
         return safe.isEmpty || safe.hasPrefix(".") ? "document" : safe
     }
+    static func uploadContentType(_ type: String?) -> String {
+        let type = type?.lowercased() ?? "application/octet-stream"
+        let accepted = ["application/pdf", "text/plain", "image/png", "image/jpeg", "image/heic", "image/heif", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mpeg", "audio/wav", "audio/x-wav", "application/octet-stream"]
+        return accepted.contains(type) ? type : "application/octet-stream"
+    }
     init(baseURL: URL, token: String, session: URLSession = .shared) throws {
         guard let host = baseURL.host, !token.isEmpty, baseURL.user == nil, baseURL.password == nil, baseURL.query == nil, baseURL.fragment == nil,
               baseURL.scheme == "https" || (baseURL.scheme == "http" && ["127.0.0.1", "localhost", "::1"].contains(host)) else { throw RevaError.invalid("Use an HTTPS server URL, or HTTP localhost for the demo, and a nonempty token.") }

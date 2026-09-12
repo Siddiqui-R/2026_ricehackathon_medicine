@@ -50,6 +50,7 @@ struct SourceReference: Codable, Identifiable, Equatable {
     var excerpt: String
     var sourceVersion: Int?
     var id: String { "\(recordID)-\(page)" }
+    var locationLabel: String { page > 0 ? "p. \(page)" : "record text" }
 }
 struct ReportSection: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString

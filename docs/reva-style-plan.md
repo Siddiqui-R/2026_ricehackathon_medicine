@@ -1,3 +1,5 @@
+> Implementation authority: the user-selected palette in `design/palette.json` supersedes every earlier A–D proposal below. The native app uses Ivory `#FAF4F4` canvas, white cards, Teal `#0A5B6C` actions and Sky `#E1ECEE` supporting surfaces. Derived dark roles are canvas `#11191C`, cards `#1D292D`, action/text accent `#8AC6D0`, supporting surface `#243C43`, and filled-button text `#10292F`. Gold/Slate/Aqua remain exact source tokens for restrained accents. Current summary labels are **Local excerpt** or **Demo summary**; “AI summary” is reserved for a configured future provider. Historical alternatives are retained only as edit history.
+
 # Reva — iPhone style plan
 
 **Date:** September 12, 2026  

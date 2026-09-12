@@ -62,12 +62,12 @@ struct RecordDetailView: View {
                     DetailLine(symbol: "building.2", text: record.provider)
                     if record.needsReview { StatusNotice(title: "Review the source", message: "Some text or dates need confirmation. Compare the original before using this record in a visit.", symbol: "exclamationmark.circle") }
                     RevaCard {
-                        Label(record.summaryLabel, systemImage: "text.alignleft").font(.headline).foregroundStyle(RevaTheme.accent)
+                        Label(hasAuthoredSummary(record) ? record.summaryLabel : "Local excerpt", systemImage: "text.alignleft").font(.headline).foregroundStyle(RevaTheme.accent)
                         Text(record.summary.isEmpty ? "No readable text yet. Edit the extraction to add a summary." : record.summary).font(.body).textSelection(.enabled)
-                        Text(record.isDemo ? "Prepared from fictional source material for this demo." : "An automatic excerpt of extracted text. Gemini is not connected.").font(.caption).foregroundStyle(.secondary)
+                        Text(hasAuthoredSummary(record) ? "Prepared from fictional source material for this demo." : "An automatic excerpt of extracted text. Gemini is not connected.").font(.caption).foregroundStyle(.secondary)
                     }
                     if store.sourceURL(record) != nil {
-                        Button { original = true } label: { Label("Open original · page \(sourcePage)", systemImage: "doc.richtext") }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
+                        Button { original = true } label: { Label(sourcePage > 0 ? "Open original · page \(sourcePage)" : "Open original", systemImage: "doc.richtext") }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
                     }
                     if !record.notes.isEmpty { RevaCard { Text("Notes").font(.headline); Text(record.notes).textSelection(.enabled) } }
                     RevaCard {
@@ -82,25 +82,38 @@ struct RecordDetailView: View {
         }.navigationTitle("Record").navigationBarTitleDisplayMode(.inline)
             .confirmationDialog("Delete this record from your local history? Existing briefs will be marked out of date.", isPresented: $deleting, titleVisibility: .visible) { Button("Delete record", role: .destructive) { if store.perform({ try store.deleteRecord(id) }) { dismiss() } } }
     }
+    /// A fictional record keeps its origin badge after a text correction, but its authored demo summary is replaced by a local excerpt; label what is shown.
+    private func hasAuthoredSummary(_ record: MedicalRecord) -> Bool { record.isDemo && record.summary != ReportEngine.localExcerpt(record.text) }
 }
 struct RecordEditorView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State var record: MedicalRecord
+    private let original: MedicalRecord
+    @State private var record: MedicalRecord
     @State private var reviewed = false
+    init(record: MedicalRecord) { original = record; _record = State(initialValue: record) }
+    private var textChanged: Bool { record.text != original.text }
+    private var textPresent: Bool { !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
         Form {
             Section("Record details") { TextField("Title", text: $record.title); TextField("Provider", text: $record.provider); DatePicker("Record date", selection: Binding(get: { RevaDate.parse(record.date) }, set: { record.date = RevaDate.day($0) }), displayedComponents: .date) }
-            Section { TextEditor(text: $record.text).frame(minHeight: 220) } header: { Text("Extracted text") } footer: { Text("Keep the original wording, values, and units. Editing refreshes the local excerpt and marks existing briefs out of date.") }
+            Section { TextEditor(text: $record.text).frame(minHeight: 220) } header: { Text("Extracted text") } footer: { Text("Keep the original wording, values, and units. Changing text refreshes the local excerpt and marks existing briefs out of date. Check source details again after a correction. Title, date, and notes edits keep the summary.") }
             Section("Your notes") { TextEditor(text: $record.notes).frame(minHeight: 100) }
             Section { Toggle("I checked the text against the source", isOn: $reviewed) }
         }.navigationTitle("Edit record").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") {
-                var revised = record; revised.summary = ReportEngine.localExcerpt(record.text); revised.isDemo = false
-                revised.pageTexts = nil // A manual whole-document correction no longer claims the original page segmentation.
-                revised.status = reviewed && !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ready" : "needsReview"
-                if store.perform({ try store.save(revised) }) { dismiss() }
-            }.disabled(record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
+    }
+    private func save() {
+        var revised = record
+        revised.isDemo = original.isDemo // Fictional origin describes the source, not whether the user edited it.
+        if textChanged {
+            revised.summary = ReportEngine.localExcerpt(record.text)
+            revised.pageTexts = nil // A manual whole-document correction no longer claims the original page segmentation.
+            revised.status = reviewed && textPresent ? "ready" : "needsReview"
+        } else if reviewed, textPresent, original.status == "needsReview" {
+            revised.status = "ready" // Explicit confirmation clears the review state; summary and pages stay; the source version advances.
+        }
+        if store.perform({ try store.save(revised) }) { dismiss() }
     }
 }
 
@@ -209,8 +222,31 @@ struct SourcePreview: View {
 }
 struct NativePDFView: UIViewRepresentable {
     let url: URL; let page: Int
-    func makeUIView(context: Context) -> PDFView { let view = PDFView(); view.autoScales = true; view.displayMode = .singlePageContinuous; view.document = PDFDocument(url: url); if let target = view.document?.page(at: max(0, page-1)) { view.go(to: target) }; return view }
-    func updateUIView(_ uiView: PDFView, context: Context) {}
+    func makeUIView(context: Context) -> RevaPDFView { let view = RevaPDFView(); view.autoScales = true; view.displayMode = .singlePageContinuous; return view }
+    func updateUIView(_ uiView: RevaPDFView, context: Context) { uiView.show(url: url, page: page) }
+}
+/// PDFKit ignores `go(to:)` before the view has a laid-out size, so the target page is applied in `layoutSubviews` and re-applied only when the URL or page changes.
+final class RevaPDFView: PDFView {
+    private var shownURL: URL?
+    private var shownPage = 0
+    private var pendingPageIndex: Int?
+    private var remainingAttempts = 0
+    func show(url: URL, page: Int) {
+        if shownURL != url { document = PDFDocument(url: url); shownURL = url; shownPage = 0 }
+        guard page != shownPage else { return }
+        shownPage = page
+        pendingPageIndex = min(max(0, page - 1), max(0, (document?.pageCount ?? 1) - 1))
+        remainingAttempts = 3
+        setNeedsLayout()
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let index = pendingPageIndex, bounds.width > 0, bounds.height > 0, let target = document?.page(at: index) else { return }
+        go(to: target)
+        remainingAttempts -= 1
+        if currentPage == target || remainingAttempts <= 0 { pendingPageIndex = nil }
+        else { DispatchQueue.main.async { [weak self] in self?.setNeedsLayout() } } // PDFKit may still be laying out its document; retry on the next pass, bounded.
+    }
 }
 struct QuickLookView: UIViewControllerRepresentable {
     let url: URL

@@ -154,7 +154,7 @@ struct ReportView: View {
                             Text(section.title).font(.headline)
                             Text(section.body).font(.subheadline).textSelection(.enabled)
                             ForEach(section.sources) { source in
-                                NavigationLink { RecordDetailView(id: source.recordID, sourcePage: source.page) } label: { Label("\(store.record(source.recordID)?.title ?? "Deleted source") · p. \(source.page)", systemImage: "doc.text.magnifyingglass").font(.caption.weight(.medium)) }.padding(.top, 4)
+                                NavigationLink { RecordDetailView(id: source.recordID, sourcePage: source.page) } label: { Label("\(store.record(source.recordID)?.title ?? "Deleted source") · \(source.locationLabel)", systemImage: "doc.text.magnifyingglass").font(.caption.weight(.medium)) }.padding(.top, 4)
                             }
                         }
                     }
@@ -175,7 +175,7 @@ struct ReportView: View {
     }
     private func exportReport(_ visit: Visit, _ report: VisitReport) {
         store.perform {
-            var sections = report.sections.map { section in PDFSection(title: section.title, body: section.body + (section.sources.isEmpty ? "" : "\n\nSource: " + section.sources.map { "\(store.record($0.recordID)?.title ?? "Missing") · p. \($0.page)" }.joined(separator: "; "))) }
+            var sections = report.sections.map { section in PDFSection(title: section.title, body: section.body + (section.sources.isEmpty ? "" : "\n\nSource: " + section.sources.map { "\(store.record($0.recordID)?.title ?? "Missing") · \($0.locationLabel)" }.joined(separator: "; "))) }
             sections.append(PDFSection(title: "Questions to bring", body: report.questions.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")))
             if !report.notes.isEmpty { sections.append(PDFSection(title: "Your notes", body: report.notes)) }
             exportURL = try ReportPDFRenderer.render(title: "Reva · " + visit.title, subtitle: "Local demo brief · " + RevaDate.display(visit.date, time: true, zone: visit.timeZone), sections: sections, sources: report.selectedRecordIDs.compactMap { store.record($0) }.map { "\($0.title) · \(RevaDate.display($0.date)) · source version \($0.version)" })
@@ -193,6 +193,6 @@ struct ReportEditorView: View {
         Section { TextEditor(text: $questions).frame(minHeight: 220) } header: { Text("Questions to ask") } footer: { Text("One question per line. Your edits stay when the brief is regenerated.") }
         Section("Your notes") { TextEditor(text: $notes).frame(minHeight: 160) }
     }.navigationTitle("Make it yours").navigationBarTitleDisplayMode(.inline).onAppear { questions = visit.report?.questions.joined(separator: "\n") ?? ""; notes = visit.report?.notes ?? "" }
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { var latest = store.visit(visit.id) ?? visit; latest.report?.questions = questions.components(separatedBy: .newlines).filter { !$0.isEmpty }; latest.report?.notes = notes; if store.perform({ try store.save(latest) }) { dismiss() } } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { var latest = store.visit(visit.id) ?? visit; latest.questions = questions.components(separatedBy: .newlines).filter { !$0.isEmpty }; latest.notes = notes; if store.perform({ try store.save(latest) }) { dismiss() } } } }
     }
 }

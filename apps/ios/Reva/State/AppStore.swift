@@ -9,6 +9,7 @@ import Combine
     @Published var isSyncing = false
     @Published var serverStatus = "Not connected"
     @Published var serverRevision = 0
+    @Published var serverConflictRevision: Int?
     let repository: LocalRepository
     private var serverIdentity = ""
 
@@ -46,22 +47,29 @@ import Combine
     func resetDemo() throws {
         guard let url = Bundle.main.url(forResource: "seed", withExtension: "json") else { throw RevaError.invalid("The fictional demo dataset is missing from this build.") }
         let seed = try JSONDecoder().decode(AppSnapshot.self, from: Data(contentsOf: url)); try seed.validate(); try repository.save(seed)
-        snapshot = seed; startupError = nil; notice = "Fictional demo restored."; serverRevision = 0
+        snapshot = seed; startupError = nil; notice = "Fictional demo restored."; serverRevision = 0; serverConflictRevision = nil
     }
     func save(_ record: MedicalRecord) throws {
         try mutate { data in
-            if let i = data.records.firstIndex(where: { $0.id == record.id }) { var revised = record; revised.version = data.records[i].version + 1; data.records[i] = revised }
-            else { data.records.append(record) }
+            guard let i = data.records.firstIndex(where: { $0.id == record.id }) else { data.records.append(record); return }
+            let current = data.records[i]
+            var revised = record
+            // Only changes a brief can quote or select on advance the source version; notes and provider edits keep it.
+            let affectsBriefs = revised.title != current.title || revised.date != current.date || revised.text != current.text || revised.tags != current.tags || revised.summary != current.summary || revised.status != current.status
+            revised.version = affectsBriefs ? current.version + 1 : current.version
+            data.records[i] = revised
         }
     }
     func deleteRecord(_ id: String) throws {
         try mutate { data in data.records.removeAll { $0.id == id }; for i in data.visits.indices { data.visits[i].pinnedRecordIDs.removeAll { $0 == id } } }
     }
     func save(_ visit: Visit) throws {
+        var visit = visit
+        visit.report?.questions = visit.questions; visit.report?.notes = visit.notes
         try mutate { data in if let i = data.visits.firstIndex(where: { $0.id == visit.id }) { data.visits[i] = visit } else { data.visits.append(visit) } }
     }
     func generateReport(_ id: String) throws {
-        try mutate { data in guard let i = data.visits.firstIndex(where: { $0.id == id }) else { return }; data.visits[i].report = ReportEngine.generate(visit: data.visits[i], records: data.records) }
+        try mutate { data in guard let i = data.visits.firstIndex(where: { $0.id == id }) else { return }; let report = ReportEngine.generate(visit: data.visits[i], records: data.records); data.visits[i].questions = report.questions; data.visits[i].report = report }
     }
     func save(_ request: BookingRequest) throws {
         try BookingEngine.validate(request)
@@ -99,7 +107,7 @@ import Combine
     func client(url: String, token: String) throws -> ServerClient {
         guard let base = URL(string: url) else { throw RevaError.invalid("Enter a valid server URL.") }
         let identity = url + "|" + token
-        if identity != serverIdentity { serverRevision = 0; serverIdentity = identity; serverStatus = "Not connected" }
+        if identity != serverIdentity { serverRevision = 0; serverConflictRevision = nil; serverIdentity = identity; serverStatus = "Not connected" }
         return try ServerClient(baseURL: base, token: token)
     }
     func sync(url: String, token: String, action: String) async {
@@ -110,13 +118,13 @@ import Combine
             if action == "push", let snapshot {
                 for record in snapshot.records { if let name = record.sourceFilename {
                     guard let url = sourceURL(name) else { throw RevaError.invalid("An original source is missing. Restore it before pushing.") }
-                    try await client.uploadAttachment(id: ServerClient.attachmentID(for: name), filename: ServerClient.attachmentMetadataName(name), data: Data(contentsOf: url), type: record.mimeType ?? "application/octet-stream")
+                    try await client.uploadAttachment(id: ServerClient.attachmentID(for: name), filename: ServerClient.attachmentMetadataName(name), data: Data(contentsOf: url), type: ServerClient.uploadContentType(record.mimeType))
                 } }
                 for recording in snapshot.recordings { if let name = recording.audioFilename {
                     guard let url = sourceURL(name) else { throw RevaError.invalid("A recording file is missing. Restore it before pushing.") }
                     try await client.uploadAttachment(id: ServerClient.attachmentID(for: name), filename: ServerClient.attachmentMetadataName(name), data: Data(contentsOf: url), type: "audio/mp4")
                 } }
-                serverRevision = try await client.push(snapshot, revision: serverRevision); notice = "Local snapshot copied to server revision \(serverRevision)."
+                serverRevision = try await client.push(snapshot, revision: serverRevision); serverConflictRevision = nil; notice = "Local snapshot copied to server revision \(serverRevision)."
             } else if action == "pull" {
                 let remote = try await client.pull()
                 let names = remote.snapshot.records.compactMap(\.sourceFilename) + remote.snapshot.recordings.compactMap(\.audioFilename)
@@ -124,8 +132,13 @@ import Combine
                 var bytes: [String: Data] = [:]
                 for name in Set(names) { bytes[name] = try await client.attachment(id: ServerClient.attachmentID(for: name)) }
                 for (name, data) in bytes { _ = try repository.storeAttachment(data, filename: name) }
-                try repository.save(remote.snapshot); snapshot = remote.snapshot; serverRevision = remote.revision; notice = "Server revision \(remote.revision) loaded."
+                try repository.save(remote.snapshot); snapshot = remote.snapshot; serverRevision = remote.revision; serverConflictRevision = nil; notice = "Server revision \(remote.revision) loaded."
             }
+        } catch ServerFailure.conflict {
+            do { let remote = try await client(url: url, token: token).pull(); serverConflictRevision = remote.revision }
+            catch ServerFailure.empty(let revision) { serverConflictRevision = revision }
+            catch { serverConflictRevision = nil }
+            errorMessage = "The server changed. Your local snapshot is intact. Pull the server copy, or explicitly replace it with your local copy in Developer settings."
         } catch ServerFailure.empty(let revision) { serverRevision = revision; errorMessage = ServerFailure.empty(revision).localizedDescription }
         catch { errorMessage = error.localizedDescription; if action == "probe" { serverStatus = "Connection failed" } }
     }

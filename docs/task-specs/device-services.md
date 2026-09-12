@@ -18,7 +18,7 @@ For each PDF page, use embedded text where readable; otherwise render a bounded 
 
 ## Native camera scanner
 
-`DocumentScanner: UIViewControllerRepresentable` exposes exact callbacks `onFinish: ([UIImage]) -> Void`, `onCancel: () -> Void`, `onError: (Error) -> Void`. Add a convenience supported Boolean that reads `VNDocumentCameraViewController.isSupported`; caller gates presentation and offers real sample import on the simulator. The native scanner owns its capture/review interface. Delegate emits one terminal callback and bounds accepted pages to the import page limit. Caller dismisses its sheet, persists scan images or a generated PDF, then invokes ingestion. No synthetic scanner output.
+`DocumentScanner: UIViewControllerRepresentable` exposes exact callbacks `onFinish: ([UIImage]) -> Void`, `onCancel: () -> Void`, `onError: (Error) -> Void`. `DocumentScanner.isSupported` is explicitly false in simulator builds and otherwise reads `VNDocumentCameraViewController.isSupported`; caller gates presentation and offers real sample import on the simulator. The native scanner owns its capture/review interface. Delegate emits one terminal callback and bounds accepted pages to the import page limit. Caller dismisses its sheet, persists scan images or a generated PDF, then invokes ingestion. No synthetic scanner output.
 
 ## Recording and playback
 
@@ -48,4 +48,54 @@ Observe audio interruptions, route loss, media service reset, and app background
 
 ## Implementation and verification evidence
 
-Pending implementation. Installed Xcode reports 26.4; iPhone simulator SDK path is `/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.4.sdk`. Initial xcrun probe emitted sandbox temp-cache warnings, but resolved the SDK. Use compiler paths directly and an owned temporary module cache for isolated typechecking.
+Implemented native sources: `DocumentImportService.swift`, `DocumentScanner.swift`, `AudioServices.swift`, and `ReportPDFRenderer.swift`. No app-state, project, plist, or shared UI changes were made. The repeatable isolated verification harness lives at `apps/ios/Reva/Device/Verification/Harness.swift.in` with `run-checks.py`; the `.in` suffix prevents the app generator from compiling a second app entrypoint. It uses a separate temporary `.app`, app identifier `health.revamed.DeviceHarness`, synthetic data only, and no microphone or camera permission request. The runner's Python syntax was checked; the equivalent compiler/install/launch commands and this exact harness were executed during implementation.
+
+### Compiler evidence
+
+Installed Xcode 26.4, Swift 6.3. Both native targets passed full compiler checks with Swift 6 and `-strict-concurrency=complete`:
+
+- iOS simulator: compiled and linked the owned sources plus the standalone harness as an arm64 iOS 18 minimum executable, then installed and ran it on iPhone 17 / iOS 26.4, UUID `4F76BEA7-8C37-499C-90B6-AA551D862B0A`.
+- Physical-device SDK: `swiftc -emit-module -module-name RevaDevice -swift-version 6 -strict-concurrency=complete -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.4.sdk -target arm64-apple-ios18.0 -module-cache-path /private/tmp/reva-device-module-cache -emit-module-path /private/tmp/reva-device-qa/RevaDevice.swiftmodule apps/ios/Reva/Device/*.swift` exited 0. This proves compilation only, not hardware execution.
+- Initial `-typecheck` passed after annotating the main-thread VisionKit delegate conformance `@preconcurrency`; full executable compilation subsequently detected an actor-region issue involving `autoreleasepool`. Stateless extraction helpers were made explicitly nonisolated, preserving serialized actor entry and passing the stronger executable/module checks.
+
+Repeat the runtime checks on an already booted Apple Silicon iPhone simulator with:
+
+```sh
+python3 apps/ios/Reva/Device/Verification/run-checks.py --device booted --output /private/tmp/reva-device-qa
+```
+
+The script restores `health.revamed.Reva` after the checks when installed. It does not change the shared Xcode project. It requires normal local Xcode/CoreSimulator access; the restricted agent sandbox required approved simulator operations because its default process could not reach CoreSimulator services. Compiler caches and all artifacts remained in owned temporary directories.
+
+### Runtime evidence: 26 checks passed
+
+The final harness log ends with `ALL CHECKS PASSED`. Verified cases:
+
+- UTF-8 and UTF-16 decoding, exact original bytes, page text, empty/binary/remote rejection, the 16 MiB bound, corrupt image rejection.
+- Real Vision OCR on a synthetic PNG; MIME sniffing independent of filename extension; leaf filename sanitization; mandatory OCR review warning; blank image yields empty text plus review warning.
+- Embedded two-page PDF text maps to each original page and retains original bytes; real image-only PDF OCR; 31-page rejection; a 12-page blank PDF retains twelve page indexes and names pages skipped beyond the ten-page OCR limit.
+- 200,000-character truncation carries a clear warning; cancellation propagates.
+- A 16-page PDF includes all 75 distinct paragraph markers and all supplied citations. Every page contains the source/provenance footer. An empty export title is rejected.
+- Finishing without captured audio is rejected. A real generated tone plays with advancing timer; pause, seek, nonfinite seek rejection, natural completion, stop/reset, and missing audio rejection work.
+- The simulator scanner wrapper returns unsupported.
+
+Runtime testing found and fixed two consequential platform behaviors: ImageIO may create an image-source object for text while returning no actual image type, so detection now checks the type; and this simulator's VisionKit support flag returned true despite unavailable document-camera hardware, so the wrapper now explicitly disables simulator scanning. Tests also exposed two harness assumptions that were corrected without altering adapter behavior: PDFKit changes underscore reading order in its text extraction, so distinct plain alphabetic markers replaced underscored assertions; each synthetic PDF now uses a fresh UIGraphicsPDFRenderer instance.
+
+### PDF visual review
+
+Used the PDF skill's read-only visual review workflow. Poppler rendered the native exported PDF, and pages 1, 8, and 16 were inspected. The initial rendering revealed vertically flipped Core Text glyphs despite successful text extraction. Resetting the text matrix to identity before Core Text drawing fixed the defect. The latest images show readable upright text, consistent margins, sensible section spacing, complete source citations, and unclipped footers/page numbers. Text presence checks cover all 16 pages; color-pixel and text-transform inspection confirmed the repeated header is present on the sampled pages.
+
+Temporary evidence paths for primary review (no unrelated repository output changes):
+
+- `/private/tmp/reva-device-qa/results.txt`
+- `/private/tmp/reva-device-qa/adapter-report.pdf`
+- `/private/tmp/reva-device-qa/report-first.png`
+- `/private/tmp/reva-device-qa/report-middle.png`
+- `/private/tmp/reva-device-qa/report-last.png`
+
+The harness was terminated and the installed Reva app restored successfully (`simctl launch health.revamed.Reva` returned PID 98009). Primary may now use the simulator for integrated UI checks.
+
+### Remaining manual/integration checks and limits
+
+Physical camera capture, microphone permission/actual microphone input, headset/phone-call interruptions, protected-file behavior while locked, and one-hour recording behavior require real-device verification. The recorder's finish-without-capture error was exercised; successful recording was not claimed tested by this harness. Playback used a generated low-volume tone, not a patient recording. No transcript generation exists in these adapters.
+
+The primary app must use `DocumentScanner.isSupported` (the wrapper), retain an `AudioRecorder` for the capture session, transfer/persist the URL returned by successful `finish()`, pause on scene-phase changes as additional UI protection, display import warnings and editable preview text, persist source bytes/pageTexts, and present the share sheet. `isRecording` stays true while a session is paused; `audioURL` can refer to an unfinished draft, so saving domain state should follow `finish()` success. `cancel()` never deletes an already delivered recording. PDF text and OCR reading order can differ from visual order, especially tables/underscores/handwriting; originals remain authoritative and OCR is always marked for review. Embedded text is preferred when a page has at least twenty characters, so text inside images on a mixed-content page may need manual review. Languages follow the device's supported Vision recognizer; no model downloads or accuracy guarantees are made.

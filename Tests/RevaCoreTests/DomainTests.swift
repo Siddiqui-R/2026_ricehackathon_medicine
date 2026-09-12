@@ -34,7 +34,7 @@ final class DomainTests: XCTestCase {
         XCTAssertTrue(ReportEngine.isStale(visit, records: data.records))
         visit.report = ReportEngine.generate(visit: visit, records: data.records)
         data.records.removeFirst(); XCTAssertTrue(ReportEngine.isStale(visit, records: data.records))
-        let oldQuestions = visit.report?.questions; visit.report?.notes = "My own note."
+        let oldQuestions = visit.questions; visit.notes = "My own note."
         let renewed = ReportEngine.generate(visit: visit, records: data.records)
         XCTAssertEqual(renewed.questions, oldQuestions); XCTAssertEqual(renewed.notes, "My own note.")
     }
@@ -44,7 +44,7 @@ final class DomainTests: XCTestCase {
         let repo = LocalRepository(directory: root); var data = try fixture()
         try repo.save(data)
         data.records[0].notes = "Persist me"; try repo.save(data)
-        XCTAssertEqual(LocalRepository(directory: root).load()?.snapshot.records[0].notes, "Persist me")
+        XCTAssertEqual(try LocalRepository(directory: root).load()?.snapshot.records[0].notes, "Persist me")
         let bytes = Data([0, 1, 255, 42]); _ = try repo.storeAttachment(bytes, filename: "source.pdf")
         XCTAssertEqual(try Data(contentsOf: XCTUnwrap(repo.attachment("source.pdf"))), bytes)
         XCTAssertThrowsError(try repo.storeAttachment(bytes, filename: "../escape"))
@@ -69,5 +69,19 @@ final class DomainTests: XCTestCase {
     func testLocalExcerptDoesNotInventFactsOrDropNegation() {
         let text = "No chest pain.\nDose: 2.5 mg\nPotassium 4.1 mmol/L"
         XCTAssertEqual(ReportEngine.localExcerpt(text), text)
+    }
+    func testQuestionAuthorityAndEquivalentDateFormatting() throws {
+        let data = try fixture(); var visit = data.visits[0]
+        visit.report = ReportEngine.generate(visit: visit, records: data.records)
+        let signature = visit.report?.sourceSignature
+        visit.questions = ["My revised question"]
+        visit.notes = "My revised note"
+        visit.date = RevaDate.iso(RevaDate.parse(visit.date))
+        XCTAssertEqual(ReportEngine.signature(visit: visit, records: data.records), signature)
+        let regenerated = ReportEngine.generate(visit: visit, records: data.records)
+        XCTAssertEqual(regenerated.questions, visit.questions)
+        XCTAssertEqual(regenerated.notes, visit.notes)
+        visit.questions = []
+        XCTAssertEqual(ReportEngine.generate(visit: visit, records: data.records).questions, [])
     }
 }

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance = "System"
     @State private var reset = false
     @State private var confirmPull = false
+    @State private var confirmOverwrite = false
     @State private var serverURL = "http://127.0.0.1:8080"
     @State private var token = "reva-local-demo-token"
     var body: some View {
@@ -33,6 +34,10 @@ struct SettingsView: View {
                 Button("Check connection") { Task { await store.sync(url: serverURL, token: token, action: "probe") } }
                 Button("Push local snapshot") { Task { await store.sync(url: serverURL, token: token, action: "push") } }
                 Button("Pull server snapshot") { confirmPull = true }
+                if let revision = store.serverConflictRevision {
+                    Text("Server revision \(revision) differs from this device.").font(.caption).foregroundStyle(.secondary)
+                    Button("Replace server with local snapshot") { confirmOverwrite = true }
+                }
                 if store.isSyncing { ProgressView("Connecting…") }
             }.disabled(store.isSyncing) }
             Section { Button("Restore fictional demo", role: .destructive) { reset = true } } footer: { Text("Restores the original sample profile, records, and visits. Local changes disappear from the active demo; source files remain in app storage until the app is removed.") }
@@ -40,6 +45,7 @@ struct SettingsView: View {
         }.navigationTitle("Profile & settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .confirmationDialog("Restore the fictional demo and replace your local changes?", isPresented: $reset, titleVisibility: .visible) { Button("Restore demo", role: .destructive) { store.perform { try store.resetDemo() } } }
-            .confirmationDialog("Replace local data with the server snapshot? A backup of your current local state is kept on this device.", isPresented: $confirmPull, titleVisibility: .visible) { Button("Pull server snapshot") { Task { await store.sync(url: serverURL, token: token, action: "pull") } } }
+            .confirmationDialog("Replace local data with the server snapshot? Unsynced local changes will leave the active view.", isPresented: $confirmPull, titleVisibility: .visible) { Button("Pull server snapshot") { Task { await store.sync(url: serverURL, token: token, action: "pull") } } }
+            .confirmationDialog("Replace the server snapshot with this device’s local copy? This is an explicit overwrite of the reviewed server revision.", isPresented: $confirmOverwrite, titleVisibility: .visible) { Button("Replace server snapshot", role: .destructive) { if let revision = store.serverConflictRevision { store.serverRevision = revision; Task { await store.sync(url: serverURL, token: token, action: "push") } } } }
     }
 }
