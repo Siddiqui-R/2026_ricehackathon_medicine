@@ -1,5 +1,8 @@
 // Purpose: Same-origin Vercel API for accounts, durable Tiger storage and configured AI.
 // Only exact routes dispatch; auth precedes private storage/provider access. No secrets enter Vite.
+// Inputs: Bounded HTTP requests and server environment configuration.
+// Outputs: Existing client JSON DTOs, original bytes or sanitized errors.
+// Side effects: Authenticated database and provider operations through focused modules.
 import { migrate, database } from "../backend/database.mjs";
 import { authenticate, accountRoute, throttle } from "../backend/accounts.mjs";
 import { stateRoute, attachmentRoute } from "../backend/storage.mjs";
@@ -12,6 +15,7 @@ import {
 } from "../backend/transfers.mjs";
 
 export const config = { api: { bodyParser: false } };
+// MARK: - Streaming body boundary and size limits
 async function readBody(req, max, json) {
   if (Number(req.headers["content-length"] || 0) > max)
     fail(413, "Request exceeds this route’s size limit.");
@@ -35,6 +39,7 @@ async function readBody(req, max, json) {
     fail(400, "Invalid JSON body.");
   }
 }
+// MARK: - Exact route dispatch, origin policy and authentication
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -195,6 +200,7 @@ export default async function handler(req, res) {
         }
       }
     }
+    // MARK: - Response serialization and sanitized failures
     res.statusCode = result.status || 200;
     for (const [name, value] of Object.entries(result.headers || {}))
       res.setHeader(name, value);

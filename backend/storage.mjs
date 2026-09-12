@@ -1,4 +1,7 @@
 // Purpose: Owner-scoped snapshots and originals with transactions, CAS and quotas.
+// Inputs: Authenticated owner IDs, validated snapshot bodies and original bytes.
+// Outputs: Revision envelopes, original bytes and bounded HTTP metadata.
+// Side effects: Transactional Tiger reads/writes and a bounded mutation audit.
 import { randomUUID, createHash } from "node:crypto";
 import { database, transaction } from "./database.mjs";
 import { fail, snapshot, filename, safeID } from "./validation.mjs";
@@ -20,6 +23,7 @@ const types = new Set([
   "video/mp4",
   "application/octet-stream",
 ]);
+// MARK: - Owner serialization and bounded audit
 async function ownerLock(client, owner) {
   await client.query(
     "INSERT INTO reva_owner_state(owner_id) VALUES($1) ON CONFLICT DO NOTHING",
@@ -42,6 +46,7 @@ async function audit(client, owner, action, revision) {
     [owner],
   );
 }
+// MARK: - Revision-checked snapshots and deletion tombstones
 export async function stateRoute(method, owner, input) {
   if (method === "GET") {
     const row = (
@@ -94,6 +99,7 @@ export async function stateRoute(method, owner, input) {
     };
   });
 }
+// MARK: - Original storage quotas and immutable range downloads
 export async function attachmentRoute(method, owner, id, bytes, headers) {
   if (!safeID(id)) fail(400, "Invalid attachment identifier.");
   if (method === "GET") {

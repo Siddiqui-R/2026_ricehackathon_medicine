@@ -1,5 +1,8 @@
 // Purpose: Exercise real HTTP + Tiger transactions using isolated fictional accounts, then delete only those accounts.
-// Run with REVA_TEST_DB=true. Reads ignored .env for this explicit integration test only.
+// Run with REVA_TEST_DB=true locally or REVA_TEST_ORIGIN=https://revamed.health for deployed tests.
+// Inputs: Explicit test target and generated fictional credentials.
+// Outputs: HTTP contract assertions; no provider calls.
+// Side effects: Creates and deletes only isolated test accounts. Local mode reads ignored .env.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -8,17 +11,24 @@ import { readFile } from "node:fs/promises";
 import { parseEnv } from "node:util";
 import handler from "../api/reva.mjs";
 import { closeDatabase } from "./database.mjs";
+// MARK: - Account-isolated end-to-end lifecycle and guaranteed cleanup
 test(
   "Vercel HTTP contracts: accounts, owner isolation, CAS, originals, logout, password change and deletion",
-  { skip: process.env.REVA_TEST_DB !== "true", timeout: 120000 },
+  {
+    skip: process.env.REVA_TEST_DB !== "true" && !process.env.REVA_TEST_ORIGIN,
+    timeout: 120000,
+  },
   async () => {
-    Object.assign(
-      process.env,
-      parseEnv(await readFile(new URL("../.env", import.meta.url), "utf8")),
-    );
+    if (!process.env.REVA_TEST_ORIGIN)
+      Object.assign(
+        process.env,
+        parseEnv(await readFile(new URL("../.env", import.meta.url), "utf8")),
+      );
     const server = createServer(handler);
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const origin = "http://127.0.0.1:" + server.address().port;
+    const origin =
+      process.env.REVA_TEST_ORIGIN ||
+      "http://127.0.0.1:" + server.address().port;
     const password = "Reva-test-" + randomUUID();
     const accounts = [];
     async function request(path, method = "GET", token, body, headers = {}) {

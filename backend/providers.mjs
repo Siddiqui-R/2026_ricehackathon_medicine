@@ -1,5 +1,8 @@
 // Purpose: Server-only Gemini and ElevenLabs Scribe adapters for the existing app DTOs.
 // Inputs are bounded and untrusted; no source text, credentials or raw provider errors are logged.
+// Inputs: Source DTOs, audio bytes and server-only provider keys.
+// Outputs: Schema-validated summaries, preparation and timestamped transcripts.
+// Side effects: Authenticated HTTPS requests to fixed provider origins.
 import {
   fail,
   text,
@@ -7,6 +10,7 @@ import {
   summaryInput,
   preparationInput,
 } from "./validation.mjs";
+// MARK: - Configuration discovery and bounded provider responses
 export function providerStatus() {
   return {
     gemini: {
@@ -54,6 +58,7 @@ async function providerJSON(url, options, fetcher) {
     fail(502, "The provider returned invalid JSON.");
   }
 }
+// MARK: - Source-grounded Gemini requests and strict output validation
 export async function gemini(operation, input, fetcher = fetch) {
   if (operation === "summarize") summaryInput(input);
   else preparationInput(input);
@@ -148,6 +153,7 @@ export async function gemini(operation, input, fetcher = fetch) {
     fail(503, "Invalid preparation response or unknown source IDs.");
   return { ...result, model };
 }
+// MARK: - Scribe timing and neutral speaker normalization
 export function scribeResult(result) {
   if (!text(result.text, 200000) || !Array.isArray(result.words))
     fail(422, "No usable speech was transcribed. Review the saved audio.");
@@ -193,6 +199,7 @@ export function scribeResult(result) {
   }
   return { text: result.text, segments, model: "scribe_v2" };
 }
+// MARK: - Multipart saved-audio transcription
 export async function transcribe(bytes, headers, fetcher = fetch) {
   if (!process.env.ELEVENLABS_API_KEY)
     fail(503, "ElevenLabs transcription is not configured.");

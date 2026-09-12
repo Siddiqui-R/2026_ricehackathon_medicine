@@ -1,5 +1,10 @@
+// Purpose: Verify Vercel transfer limits and preservation of stable originals.
+// Inputs: Fictional blobs and mocked HTTP responses.
+// Outputs: Assertions for chunk boundaries and immutable downloads.
+// Side effects: No network; in-memory fixtures only.
 import { expect, it, vi } from 'vitest';
 import { RevaAPI } from '../api';
+// MARK: - Upload staging and range download contracts
 it('stages a large original in bounded chunks before replacing its stable attachment', async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 204 }));
   const api = new RevaAPI('fictional-token', fetcher, true);

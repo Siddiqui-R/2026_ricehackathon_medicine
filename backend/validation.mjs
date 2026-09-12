@@ -1,4 +1,8 @@
 // Purpose: Validate the existing client contracts before SQL or paid provider side effects.
+// Inputs: Untrusted JSON values and HTTP metadata.
+// Outputs: Validated fields or typed HTTP errors.
+// Side effects: None.
+// MARK: - Bounded primitive values and sanitized errors
 export class HTTPError extends Error {
   constructor(status, reason, headers = {}) {
     super(reason);
@@ -21,6 +25,7 @@ export const filename = (v) =>
   /^[A-Za-z0-9 _().-]{1,180}$/.test(v) &&
   !v.startsWith(".") &&
   v === v.trim();
+// MARK: - Snapshot structure and account credential policy
 export function snapshot(value) {
   if (
     !value ||
@@ -75,6 +80,7 @@ export function password(value, email) {
       "Use at least 8 characters, a capital letter, a number and a symbol; at most 72 UTF-8 bytes, no line breaks, and a password different from your email.",
     );
 }
+// MARK: - Provider source limits and source identity checks
 export function summaryInput(input) {
   if (
     !safeID(input?.recordID) ||

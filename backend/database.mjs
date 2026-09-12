@@ -1,8 +1,11 @@
 // Purpose: Reuse the Swift schema and TLS-verified Tiger database from Vercel Functions.
 // Side effects: Ordered migrations under the same advisory lock; bounded pooled SQL transactions.
+// Inputs: Server-only DATABASE_URL and bundled versioned SQL.
+// Outputs: A bounded connection pool and transaction results.
 import pg from "pg";
 import { readFile } from "node:fs/promises";
 let pool, ready;
+// MARK: - TLS pool and transaction lifecycle
 export function database() {
   if (!pool) {
     const url = new URL(process.env.DATABASE_URL || "");
@@ -37,6 +40,7 @@ export async function transaction(fn) {
     client.release();
   }
 }
+// MARK: - Ordered shared schema and additive Vercel tables
 export async function migrate() {
   if (!ready)
     ready = transaction(async (client) => {

@@ -1,5 +1,8 @@
 // Purpose: Account/session compatibility with the Swift API, using shared durable storage.
 // Passwords use bcrypt; only SHA-256 hashes of opaque bearer tokens are stored.
+// Inputs: Validated credential fields and bearer tokens.
+// Outputs: Account/session DTOs or sanitized authentication failures.
+// Side effects: Shared SQL throttles, account and session mutations.
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { database, transaction } from "./database.mjs";
@@ -29,6 +32,7 @@ export async function throttle(label, limit, seconds) {
     "DELETE FROM reva_web_limits WHERE resets_at<now()-interval '1 day'",
   );
 }
+// MARK: - Opaque session issuance and resolution
 async function issue(client, row) {
   const token = "rs_" + randomBytes(32).toString("base64url"),
     id = randomUUID();
@@ -86,6 +90,7 @@ export async function authenticate(header) {
     },
   };
 }
+// MARK: - Registration, login and password-confirmed account actions
 export async function accountRoute(route, method, input, identity, peer) {
   if (route === "signup" || route === "login") {
     if (method !== "POST") fail(405, "Method not supported.");

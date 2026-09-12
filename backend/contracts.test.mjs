@@ -1,8 +1,12 @@
 // Purpose: Check strict input/output validation with fictional fixtures and a mocked provider.
+// Inputs: Fictional DTOs and controlled HTTP responses.
+// Outputs: Validation assertions.
+// Side effects: Test-process environment only; no external requests.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { snapshot, credentials, preparationInput } from "./validation.mjs";
 import { gemini, scribeResult } from "./providers.mjs";
+// MARK: - Source and provider contract fixtures
 const source = {
   recordID: "source-1",
   title: "Fictional note",

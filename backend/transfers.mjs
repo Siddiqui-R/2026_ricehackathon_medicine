@@ -1,7 +1,11 @@
 // Purpose: Transfer originals up to 16 MiB in <=3 MiB requests under Vercel's 4.5 MB body limit.
 // Incomplete uploads expire, count toward a per-owner staging quota and never replace originals.
+// Inputs: Authenticated owner, upload ID, sequential offset, total and bounded bytes.
+// Outputs: Staged transfer acknowledgments and complete byte buffers.
+// Side effects: Temporary Tiger rows with one-hour expiry.
 import { database, transaction } from "./database.mjs";
 import { fail, safeID } from "./validation.mjs";
+// MARK: - Sequential upload staging and owner quotas
 export async function transferChunk(owner, id, offset, total, bytes) {
   if (
     !safeID(id) ||
@@ -51,6 +55,7 @@ export async function transferChunk(owner, id, offset, total, bytes) {
     return { status: 204 };
   });
 }
+// MARK: - Complete transfer retrieval and consumption cleanup
 export async function readTransfer(owner, id) {
   if (!safeID(id)) fail(400, "Invalid upload reference.");
   const row = (
