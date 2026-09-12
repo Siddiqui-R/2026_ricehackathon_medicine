@@ -202,10 +202,18 @@ public protocol AccountStore: Sendable {
     func user(email: String) async throws -> UserRecord?
     func user(id: String) async throws -> UserRecord?
     func updatePassword(userID: String, hash: String, at: Date) async throws
+    /// Atomically checks the verified password and presenting live session, changes the password,
+    /// and revokes every other session. Returns false without writes if verification became stale.
+    func changePassword(
+        userID: String, verifiedPasswordHash: String, newHash: String, keepingSessionID: UUID, at: Date
+    ) async throws -> Bool
     /// Removes the user, every session, and the owner's state/attachments/audit rows.
     func deleteUser(id: String) async throws
     /// Enforces the 20-live-sessions-per-user cap by revoking the oldest sessions.
     func createSession(_ session: SessionRecord) async throws
+    /// Checks the verified password and inserts under the same lock as password changes, so an
+    /// in-flight log-in cannot issue a session after its password was replaced. False makes no writes.
+    func createSession(_ session: SessionRecord, verifiedPasswordHash: String) async throws -> Bool
     /// Returns nil when no live session matches; revoked and expired sessions are never returned.
     func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)?
     func touchSession(id: UUID, at: Date) async throws

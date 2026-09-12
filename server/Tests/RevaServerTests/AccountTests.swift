@@ -1,7 +1,7 @@
 // Purpose: Exercise sign-up, log-in, sessions, password change, deletion, throttling, CORS, and account configuration.
 // Inputs: Synthetic emails/passwords, a private static token, bcrypt cost 4, and temporary actor-backed local storage.
 // Outputs: Swift Testing assertions on the exact /v1/auth contract, bearer behaviour, and local account persistence.
-// Side effects: Writes temporary accounts.json/owner files and launches VaporTesting applications with cleanup. No network.
+// Side effects: Writes temporary .accounts.json/owner files and launches VaporTesting applications with cleanup. No network.
 
 import Foundation
 import Testing
@@ -617,7 +617,7 @@ struct AccountTests {
         let user = try storedUser(email: "persist@example.com")
         let token = SessionToken.generate()
         let session = storedSession(user: user, token: token)
-        let file = directory.appendingPathComponent("accounts.json")
+        let file = directory.appendingPathComponent(".accounts.json")
         func writeOriginal() async throws {
             let original = try LocalFileStore(directory: directory)
             try await original.createUser(user)
@@ -680,7 +680,7 @@ struct AccountTests {
             #expect(try await store.session(tokenHash: SessionToken.hash(tokens[1])) == nil)
             #expect(try await store.session(tokenHash: SessionToken.hash(tokens[2])) != nil)
             #expect(try await stateStatus(app, token: http.token) == .notFound)
-            // A session revoked more than 30 days ago disappears from accounts.json on the next write.
+            // A session revoked more than 30 days ago disappears from .accounts.json on the next write.
             let ancient = SessionToken.generate()
             try await store.createSession(
                 storedSession(
@@ -689,7 +689,7 @@ struct AccountTests {
             try await store.revokeSessions(userID: user.id, except: nil)
             let document = try JSONDecoder().decode(
                 AccountsDocument.self,
-                from: Data(contentsOf: directory.appendingPathComponent("accounts.json")))
+                from: Data(contentsOf: directory.appendingPathComponent(".accounts.json")))
             #expect(!document.sessions.contains { $0.tokenHash == SessionToken.hash(ancient) })
             #expect(document.sessions.filter { $0.userID == user.id }.count == 22)
             #expect(document.sessions.allSatisfy { $0.revokedAt != nil })

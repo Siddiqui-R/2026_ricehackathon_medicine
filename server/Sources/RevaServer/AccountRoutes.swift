@@ -28,7 +28,9 @@ func registerAccountRoutes(
             label: AccountPolicy.sessionLabel(userAgent: request.headers.first(name: .userAgent)),
             createdAt: now, lastUsedAt: now, expiresAt: now.addingTimeInterval(sessionLifetime),
             revokedAt: nil)
-        try await accounts.createSession(session)
+        guard try await accounts.createSession(session, verifiedPasswordHash: user.passwordHash) else {
+            throw Abort(.unauthorized, reason: "Email or password is incorrect.")
+        }
         let response = Response(status: status)
         try response.content.encode(
             AuthSessionEnvelope(token: token, expiresAt: session.expiresAt, user: AuthUser(user)))
@@ -89,8 +91,15 @@ func registerAccountRoutes(
             await throttle.recordFailure(key)
             throw Abort(.unauthorized, reason: "Email or password is incorrect.")
         }
+        let response: Response
+        do {
+            response = try await issueSession(request, user: record, status: .ok)
+        } catch let error as Abort where error.status == .unauthorized {
+            await throttle.recordFailure(key)
+            throw error
+        }
         await throttle.clear(key)
-        return try await issueSession(request, user: record, status: .ok)
+        return response
     }
 
     // MARK: - Identity inspection for both bearer kinds
@@ -126,8 +135,14 @@ func registerAccountRoutes(
         guard try await verifyCurrent(input.currentPassword, for: user, hasher: hasher) else {
             throw Abort(.unauthorized, reason: "Current password is incorrect.")
         }
-        try await accounts.updatePassword(userID: user.id, hash: hasher.hash(input.newPassword), at: Date())
-        try await accounts.revokeSessions(userID: user.id, except: session.id)
+        let hash = try await hasher.hash(input.newPassword)
+        guard
+            try await accounts.changePassword(
+                userID: user.id, verifiedPasswordHash: user.passwordHash, newHash: hash,
+                keepingSessionID: session.id, at: Date())
+        else {
+            throw Abort(.unauthorized, reason: "Current password is incorrect.")
+        }
         return .noContent
     }
 

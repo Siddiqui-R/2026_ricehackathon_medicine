@@ -171,3 +171,10 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 ## Consolidated audit repairs — September 12, 2026
 
 Three simultaneous Astra agents at xhigh repaired the 23 confirmed audit findings in isolated native, extraction and browser worktrees. The coordinator integrated checkpoints, ran native and browser builds plus real local client/server and OCR checks, preserved the shared checkout's unrelated work, and reconciled concurrent Windows repair commit `36c055d` without replacing its history. The [repair report](reviews/06-audit-repairs.md) records final evidence, stack boundaries, retained remote improvements and device/service limits. The [UI follow-ups](ui-todo.md) record the five subsequently implemented browser requests.
+
+
+## Preserved concurrent integration — September 12, 2026
+
+Saved the account/landing, Central-time, native glass-tab and streamlined record work in `e04b9bd`, then merged the incoming ElevenLabs documentation and original browser/native/evidence repair histories. Reviewed remaining worktree edits without replacing newer modules. The [integration report](reviews/08-preserved-integration.md) records checkpoint recovery, feature preservation and checks.
+
+Fixed account attachment ownership/atomic audio saves, SQL migration comment splitting, local account-registry filename collision, and password/session races. Final checks passed: 197 browser tests, seven wrapper checks, 59 server tests, 57 core tests plus the real local client/server check, native state/audio and PDF/OCR harnesses, 24 Tiger mocks, browser/server/iOS builds, formatting and structure. Two live PostgreSQL gates were skipped. Simulator and production-browser navigation/original previews passed. No live provider, phone call or hosted deployment was performed.

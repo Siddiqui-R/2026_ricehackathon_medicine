@@ -1,12 +1,11 @@
 // Purpose: Let a user explicitly record or upload original visit audio and save it with notes.
 // Inputs: A visit, participant consent, browser microphone support, or a user-selected audio file.
 // Outputs: A durable recording with original audio and no invented transcript.
-// Side effects: Captures microphone only after consent; stores an attachment then publishes its metadata through context.
+// Side effects: Captures microphone only after consent; saves audio and metadata atomically in the active workspace.
 
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { Mic, Pause, Play, Square, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { saveAttachment } from '../../core/repository';
 import type { Visit, VisitRecording } from '../../core/models';
 import { durationLabel, nowISO, uid } from '../../core/domain';
 import { Button, Field, Modal } from '../../components/ui';
@@ -46,7 +45,7 @@ async function inspectDuration(blob: Blob): Promise<number> {
 
 // MARK: - Consent, capture preview, and explicit durable save
 export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: () => void }) {
-  const { mutate, notify } = useReva();
+  const { saveRecording, notify } = useReva();
   const capture = useVisitRecorder();
   const [id] = useState(uid);
   const [consent, setConsent] = useState(false);
@@ -111,7 +110,6 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
         throw new Error('This recording has no captured audio duration.');
       if (original.size > MAX_AUDIO_BYTES) throw new Error('Audio exceeds the 16 MiB limit.');
       const filename = `reva-audio-${id}.${upload?.extension ?? audioExtension(original.type)}`;
-      await saveAttachment(filename, original);
       const recording: VisitRecording = {
         id,
         visitID: visit.id,
@@ -124,11 +122,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
         isSample: false,
         status: 'saved',
       };
-      await mutate((draft) => {
-        if (!draft.visits.some((item) => item.id === visit.id))
-          throw new Error('This visit is no longer available.');
-        if (!draft.recordings.some((item) => item.id === id)) draft.recordings.push(recording);
-      });
+      await saveRecording(recording, original);
       notify('Original audio saved. Add a transcript when your transcription service is configured.');
       onClose();
     } catch (failure) {

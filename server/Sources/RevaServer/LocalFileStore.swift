@@ -3,7 +3,7 @@
 // Outputs: Persisted state/revisions/accounts or explicit conflict, missing, quota, corruption, and filesystem errors.
 // Side effects: Creates private files, fsyncs replacement contents, atomically renames them, and holds a writer lock.
 // Ownership: One actor/process owns a directory. Separate attachment and snapshot requests are separate commits.
-// accounts.json holds every user and session row (bcrypt/SHA-256 hashes only) and is rewritten as a whole on each change.
+// .accounts.json holds every user and session row (bcrypt/SHA-256 hashes only), outside the owner filename namespace.
 
 import Foundation
 import Vapor
@@ -35,6 +35,7 @@ public actor LocalFileStore: RevaStore, AccountStore {
     // Unverifiable data fails closed instead of silently creating a replacement snapshot.
     private func url(_ owner: String) throws -> URL {
         guard Validation.safeID(owner) else { throw StoreError.corrupt }
+        if owner == "accounts" { try migrateLegacyAccountsIfNeeded() }
         return directory.appendingPathComponent(owner + ".json")
     }
 
@@ -54,7 +55,7 @@ public actor LocalFileStore: RevaStore, AccountStore {
         try commit(try JSONEncoder().encode(document), to: try url(owner))
     }
 
-    // MARK: - Private temp-file, fsync, rename commit shared by owner documents and accounts.json
+    // MARK: - Private temp-file, fsync, rename commit shared by owner documents and .accounts.json
     private func commit(_ data: Data, to target: URL) throws {
         let temporary = directory.appendingPathComponent(".pending-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: temporary) }
@@ -143,9 +144,42 @@ public actor LocalFileStore: RevaStore, AccountStore {
     static let maximumSessionRows = 100_000
     static let sessionRetention: TimeInterval = 30 * 24 * 60 * 60
 
-    private var accountsURL: URL { directory.appendingPathComponent("accounts.json") }
+    private var accountsURL: URL { directory.appendingPathComponent(".accounts.json") }
+
+    /// Earlier account builds used a filename also valid for the static owner named "accounts".
+    /// Move only an unambiguous registry, preserving existing owner documents and failing closed on corruption.
+    private func migrateLegacyAccountsIfNeeded() throws {
+        guard !FileManager.default.fileExists(atPath: accountsURL.path) else { return }
+        let legacy = directory.appendingPathComponent("accounts.json")
+        guard FileManager.default.fileExists(atPath: legacy.path) else { return }
+        do {
+            let size = try legacy.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= 100 * 1024 * 1024 else { throw StoreError.corrupt }
+            let data = try Data(contentsOf: legacy)
+            guard let shape = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw StoreError.corrupt
+            }
+            let hasAccountFields = shape["users"] != nil || shape["sessions"] != nil
+            let hasOwnerFields = ["revision", "snapshot", "attachments", "audit"].contains {
+                shape[$0] != nil
+            }
+            if hasAccountFields, !hasOwnerFields {
+                let registry = try JSONDecoder().decode(AccountsDocument.self, from: data)
+                guard registry.formatVersion == 1 else { throw StoreError.corrupt }
+                // One process holds the directory lock. Rename keeps the only registry intact on failure.
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: legacy.path)
+                try FileManager.default.moveItem(at: legacy, to: accountsURL)
+            } else if hasOwnerFields, !hasAccountFields {
+                let owner = try JSONDecoder().decode(OwnerDocument.self, from: data)
+                guard owner.formatVersion == 1, owner.revision >= 0 else { throw StoreError.corrupt }
+            } else {
+                throw StoreError.corrupt
+            }
+        } catch { throw StoreError.corrupt }
+    }
 
     private func readAccounts() throws -> AccountsDocument {
+        try migrateLegacyAccountsIfNeeded()
         let file = accountsURL
         guard FileManager.default.fileExists(atPath: file.path) else { return AccountsDocument() }
         do {
@@ -203,6 +237,29 @@ public actor LocalFileStore: RevaStore, AccountStore {
         try writeAccounts(document)
     }
 
+    /// Compare the verified password and presenting session, then commit the new hash and revocations together.
+    public func changePassword(
+        userID: String, verifiedPasswordHash: String, newHash: String, keepingSessionID: UUID, at date: Date
+    ) async throws -> Bool {
+        var document = try readAccounts()
+        guard let index = document.users.firstIndex(where: { $0.id == userID }),
+            document.users[index].passwordHash == verifiedPasswordHash,
+            document.sessions.contains(where: {
+                $0.id == keepingSessionID && $0.userID == userID && $0.isLive(at: Date())
+            })
+        else { return false }
+        document.users[index] = document.users[index].replacingPassword(hash: newHash, at: date)
+        for sessionIndex in document.sessions.indices
+        where document.sessions[sessionIndex].userID == userID
+            && document.sessions[sessionIndex].id != keepingSessionID
+            && document.sessions[sessionIndex].revokedAt == nil
+        {
+            document.sessions[sessionIndex] = document.sessions[sessionIndex].revoked(at: date)
+        }
+        try writeAccounts(document, now: date)
+        return true
+    }
+
     /// Owner data is removed first so a failure after that point still leaves no orphaned snapshot behind.
     public func deleteUser(id: String) async throws {
         var document = try readAccounts()
@@ -220,6 +277,22 @@ public actor LocalFileStore: RevaStore, AccountStore {
     /// Creating a 21st live session revokes the oldest live sessions until 20 remain including the new one.
     public func createSession(_ session: SessionRecord) async throws {
         var document = try readAccounts()
+        try insertSession(session, into: &document)
+    }
+
+    /// A password verified before a concurrent change cannot issue a fresh session afterward.
+    public func createSession(_ session: SessionRecord, verifiedPasswordHash: String) async throws -> Bool {
+        var document = try readAccounts()
+        guard
+            document.users.contains(where: {
+                $0.id == session.userID && $0.passwordHash == verifiedPasswordHash
+            })
+        else { return false }
+        try insertSession(session, into: &document)
+        return true
+    }
+
+    private func insertSession(_ session: SessionRecord, into document: inout AccountsDocument) throws {
         guard document.users.contains(where: { $0.id == session.userID }) else {
             throw AccountError.userMissing
         }

@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { Download, LoaderCircle } from 'lucide-react';
-import { getAttachment } from '../../core/repository';
+import { useReva } from '../../core/RevaContext';
 import type { MedicalRecord } from '../../core/models';
 import { Modal } from '../../components/ui';
 import { boundedText, MAX_TEXT_BYTES, textByteCount } from './extractDocument';
@@ -20,6 +20,7 @@ export function SourcePreview({
   page?: number;
   onClose: () => void;
 }) {
+  const { getAttachment } = useReva();
   const [url, setURL] = useState('');
   const [text, setText] = useState('');
   const [shortened, setShortened] = useState(false);
@@ -28,6 +29,10 @@ export function SourcePreview({
   useEffect(() => {
     let active = true;
     let objectURL = '';
+    setURL('');
+    setText('');
+    setShortened(false);
+    setError('');
     void (async () => {
       try {
         if (!record.sourceFilename) throw new Error('This record has no original attachment.');
@@ -52,7 +57,7 @@ export function SourcePreview({
       active = false;
       if (objectURL) URL.revokeObjectURL(objectURL);
     };
-  }, [record.sourceFilename, type]);
+  }, [getAttachment, record.sourceFilename, type]);
   return (
     <Modal title="Original source" onClose={onClose} wide>
       <div className="stack">

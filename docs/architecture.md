@@ -310,3 +310,10 @@ sequenceDiagram
 | `connect-src` in `vercel.json` | Vercel | must add the API origin before cross-origin requests can leave the page |
 
 Static `REVA_TOKENS` identities keep working beside accounts for the iOS developer path. The demo at `/demo` still uses the local demo token and manual sync. The setup guide's checklist (health, sign-up, log-in, session, state round trip, CORS preflight, `SELECT count(*) FROM reva_users;`) is the acceptance test for the first real deployment; until it runs, this section describes configuration, not observed behaviour.
+
+
+## Preserved integration boundaries — September 12, 2026
+
+The remote ElevenLabs documentation and original browser, native, and evidence repair branch histories are merged with the account/landing work and the approved native glass tab behavior. Central time defaults, source evidence, OCR limits, recording recovery, and the streamlined record workflow remain in place. The [integration report](reviews/08-preserved-integration.md) records verification and the preserved worktree checkpoints.
+
+Account storage uses `.accounts.json` locally, outside valid owner filenames. Only an unambiguous legacy account registry is migrated from `accounts.json`; static owner data stays intact. PostgreSQL migrations discard standalone SQL comment lines before splitting bundled statements. Password changes and session issuance share an atomic user check so older verified credentials cannot create a session after replacement. Browser original-file previews and captured audio use the active store repository; recording metadata and original bytes commit together before auto-sync.

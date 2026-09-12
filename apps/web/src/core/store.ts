@@ -11,6 +11,7 @@ import type {
   ProviderStatus,
   ServerState,
   Visit,
+  VisitRecording,
 } from './models.ts';
 import {
   currentSummary,
@@ -502,6 +503,8 @@ export class RevaStore {
     });
 
   // MARK: - Source and visit editing retain exact user-authored questions, notes and versions.
+  // Every preview and capture stays bound to this workspace's repository, including account stores.
+  getAttachment = (filename: string): Promise<Blob> => this.persistence.getAttachment(filename);
   // Imports publish their original in the same transaction as the source, including on retry.
   saveRecord = (record: MedicalRecord, expectedVersion?: number, original?: Blob): Promise<void> =>
     this.edit(
@@ -510,6 +513,19 @@ export class RevaStore {
         upsertRecord(draft, record, expectedVersion);
       },
       original && record.sourceFilename ? new Map([[record.sourceFilename, original]]) : undefined,
+    );
+  // Recording metadata and original audio commit together, so a failed save can safely be retried.
+  saveRecording = (recording: VisitRecording, original: Blob): Promise<void> =>
+    this.edit(
+      (draft) => {
+        if (!recording.audioFilename) throw new Error('The original audio filename is missing.');
+        if (!draft.visits.some((visit) => visit.id === recording.visitID))
+          throw new Error('This visit is no longer available.');
+        if (draft.recordings.some((saved) => saved.id === recording.id))
+          throw new Error('This recording was already saved. Close this dialog to review it.');
+        draft.recordings.push(structuredClone(recording));
+      },
+      recording.audioFilename ? new Map([[recording.audioFilename, original]]) : undefined,
     );
   deleteRecord = (id: string): Promise<void> =>
     this.edit((draft) => {

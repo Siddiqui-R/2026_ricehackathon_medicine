@@ -7,14 +7,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
-import { getAttachment } from '../../core/repository';
 import type { VisitRecording } from '../../core/models';
 import { durationLabel, formatDate } from '../../core/domain';
 import { Badge, Button, Field, Modal } from '../../components/ui';
 
 // MARK: - Original playback and explicit connected transcription
 export function RecordingDetail({ recording, onClose }: { recording: VisitRecording; onClose: () => void }) {
-  const { snapshot, providers, transcribeRecording, saveMemory, busy } = useReva();
+  const { snapshot, providers, transcribeRecording, saveMemory, getAttachment, busy } = useReva();
   const [audio, setAudio] = useState('');
   const [audioError, setAudioError] = useState('');
   const [editor, setEditor] = useState<'transcript' | 'notes' | null>(null);
@@ -44,7 +43,7 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
       cancelled = true;
       if (objectURL) URL.revokeObjectURL(objectURL);
     };
-  }, [recording.audioFilename, recording.isSample]);
+  }, [getAttachment, recording.audioFilename, recording.isSample]);
   async function act(operation: () => Promise<void>) {
     setError('');
     setWorking(true);

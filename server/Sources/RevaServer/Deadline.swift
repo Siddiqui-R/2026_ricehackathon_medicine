@@ -69,11 +69,26 @@ public struct BoundedAccountStore: AccountStore {
     public func updatePassword(userID: String, hash: String, at date: Date) async throws {
         try await withDatabaseDeadline { try await base.updatePassword(userID: userID, hash: hash, at: date) }
     }
+    public func changePassword(
+        userID: String, verifiedPasswordHash: String, newHash: String, keepingSessionID: UUID,
+        at date: Date
+    ) async throws -> Bool {
+        try await withDatabaseDeadline {
+            try await base.changePassword(
+                userID: userID, verifiedPasswordHash: verifiedPasswordHash, newHash: newHash,
+                keepingSessionID: keepingSessionID, at: date)
+        }
+    }
     public func deleteUser(id: String) async throws {
         try await withDatabaseDeadline { try await base.deleteUser(id: id) }
     }
     public func createSession(_ session: SessionRecord) async throws {
         try await withDatabaseDeadline { try await base.createSession(session) }
+    }
+    public func createSession(_ session: SessionRecord, verifiedPasswordHash: String) async throws -> Bool {
+        try await withDatabaseDeadline {
+            try await base.createSession(session, verifiedPasswordHash: verifiedPasswordHash)
+        }
     }
     public func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)? {
         try await withDatabaseDeadline { try await base.session(tokenHash: tokenHash) }

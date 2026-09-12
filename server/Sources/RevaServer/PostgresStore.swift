@@ -27,6 +27,17 @@ public struct PostgresStore: RevaStore, AccountStore {
     /// maximum runs in order inside one transaction; a recorded version above this list fails startup.
     static let migrations: [(version: Int, name: String)] = [(1, "001_snapshot"), (2, "002_accounts")]
 
+    /// Bundled migrations use standalone SQL statements and full-line comments. Remove comments before
+    /// splitting so punctuation in documentation can never become an executable statement fragment.
+    static func migrationStatements(in sql: String) -> [String] {
+        sql.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
+            .joined(separator: "\n")
+            .split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     public func migrate() async throws {
         var sources: [(version: Int, sql: String)] = []
         for migration in Self.migrations {
@@ -55,11 +66,8 @@ public struct PostgresStore: RevaStore, AccountStore {
                     throw ConfigurationError("Database schema is newer than this server.")
                 }
                 for source in sources where source.version > version {
-                    for statement in source.sql.split(separator: ";") {
-                        let trimmed = statement.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty {
-                            try await execute(connection, PostgresQuery(unsafeSQL: trimmed))
-                        }
+                    for statement in Self.migrationStatements(in: source.sql) {
+                        try await execute(connection, PostgresQuery(unsafeSQL: statement))
                     }
                     try await execute(
                         connection, "INSERT INTO reva_schema_migrations (version) VALUES (\(source.version))")
@@ -209,6 +217,36 @@ public struct PostgresStore: RevaStore, AccountStore {
         guard updated else { throw AccountError.userMissing }
     }
 
+    /// Password verification, replacement and revocation share the user lock used to issue sessions.
+    public func changePassword(
+        userID: String, verifiedPasswordHash: String, newHash: String, keepingSessionID: UUID,
+        at date: Date
+    ) async throws -> Bool {
+        try await transaction { connection in
+            guard try await lockedPassword(userID: userID, connection: connection) == verifiedPasswordHash
+            else { return false }
+            let sessions = try await connection.query(
+                """
+                SELECT session_id FROM reva_sessions
+                WHERE session_id = \(keepingSessionID) AND user_id = \(userID)
+                  AND revoked_at IS NULL AND expires_at > clock_timestamp()
+                FOR UPDATE
+                """, logger: logger)
+            var presentingSessionIsLive = false
+            for try await _ in sessions { presentingSessionIsLive = true }
+            guard presentingSessionIsLive else { return false }
+            try await execute(
+                connection,
+                "UPDATE reva_users SET password_hash = \(newHash), password_updated_at = \(date) WHERE user_id = \(userID)"
+            )
+            try await execute(
+                connection,
+                "UPDATE reva_sessions SET revoked_at = \(date) WHERE user_id = \(userID) AND revoked_at IS NULL AND session_id != \(keepingSessionID)"
+            )
+            return true
+        }
+    }
+
     /// One transaction removes the owner aggregate (attachments and audit cascade) and the user (sessions cascade).
     public func deleteUser(id: String) async throws {
         guard Validation.safeID(id) else { throw StoreError.corrupt }
@@ -225,12 +263,20 @@ public struct PostgresStore: RevaStore, AccountStore {
     // MARK: - Sessions
     /// The user row lock serializes concurrent log-ins so the 20-live-session cap holds.
     public func createSession(_ session: SessionRecord) async throws {
+        guard try await insertSession(session, verifiedPasswordHash: nil) else {
+            throw AccountError.userMissing
+        }
+    }
+
+    public func createSession(_ session: SessionRecord, verifiedPasswordHash: String) async throws -> Bool {
+        try await insertSession(session, verifiedPasswordHash: verifiedPasswordHash)
+    }
+
+    private func insertSession(_ session: SessionRecord, verifiedPasswordHash: String?) async throws -> Bool {
         try await transaction { connection in
-            let users = try await connection.query(
-                "SELECT user_id FROM reva_users WHERE user_id = \(session.userID) FOR UPDATE", logger: logger)
-            var exists = false
-            for try await _ in users { exists = true }
-            guard exists else { throw AccountError.userMissing }
+            guard let currentHash = try await lockedPassword(userID: session.userID, connection: connection)
+            else { return false }
+            if let verifiedPasswordHash, currentHash != verifiedPasswordHash { return false }
             let keep = AccountPolicy.maximumLiveSessions - 1
             try await execute(
                 connection,
@@ -246,7 +292,16 @@ public struct PostgresStore: RevaStore, AccountStore {
                 INSERT INTO reva_sessions (session_id, token_hash, user_id, label, created_at, last_used_at, expires_at, revoked_at)
                 VALUES (\(session.id), \(session.tokenHash), \(session.userID), \(session.label), \(session.createdAt), \(session.lastUsedAt), \(session.expiresAt), \(session.revokedAt))
                 """)
+            return true
         }
+    }
+
+    private func lockedPassword(userID: String, connection: PostgresConnection) async throws -> String? {
+        let rows = try await connection.query(
+            "SELECT password_hash FROM reva_users WHERE user_id = \(userID) FOR UPDATE", logger: logger)
+        var passwordHash: String?
+        for try await hash in rows.decode(String.self) { passwordHash = hash }
+        return passwordHash
     }
 
     public func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)? {

@@ -113,7 +113,7 @@ The new public auth routes are the exception to older “all `/v1` routes requir
 
 ## Storage, providers and configuration
 
-Existing PostgreSQL tables store owner snapshots (`reva_owner_state`), original attachments (`reva_attachments`) and mutations (`reva_mutations`). Migration `002_accounts.sql` adds `reva_users` and `reva_sessions`. The account store protocol is implemented by local-file and PostgreSQL adapters with bounded operations. Local account persistence uses `accounts.json`; database migrations are ordered and transactional. Live Tiger migration/round-trip verification is still a separate gate.
+Existing PostgreSQL tables store owner snapshots (`reva_owner_state`), original attachments (`reva_attachments`) and mutations (`reva_mutations`). Migration `002_accounts.sql` adds `reva_users` and `reva_sessions`. The account store protocol is implemented by local-file and PostgreSQL adapters with bounded operations. Local account persistence uses `.accounts.json`; database migrations are ordered and transactional. Live Tiger migration/round-trip verification is still a separate gate.
 
 | Existing connector/API boundary | Function and authority |
 | --- | --- |

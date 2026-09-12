@@ -57,8 +57,10 @@ public protocol AccountStore: Sendable {
     func user(email: String) async throws -> UserRecord?
     func user(id: String) async throws -> UserRecord?
     func updatePassword(userID: String, hash: String, at: Date) async throws
+    func changePassword(userID: String, verifiedPasswordHash: String, newHash: String, keepingSessionID: UUID, at: Date) async throws -> Bool
     func deleteUser(id: String) async throws                         // removes sessions and the owner's state/attachments/audit
     func createSession(_ session: SessionRecord) async throws        // enforces the 20-per-user cap
+    func createSession(_ session: SessionRecord, verifiedPasswordHash: String) async throws -> Bool
     func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)?   // nil when revoked or expired
     func touchSession(id: UUID, at: Date) async throws
     func revokeSession(id: UUID) async throws
@@ -66,13 +68,17 @@ public protocol AccountStore: Sendable {
 }
 ```
 
-`LocalFileStore` and `PostgresStore` conform. `BoundedStore` wraps the account operations with the same deadline. `configure(_:configuration:store:geminiTransport:)` gains `accounts: (any AccountStore)? = nil` and `passwordCost: Int = 12` (tests use a low cost); nil accounts → no auth routes. `session.label` is the sanitized `User-Agent` (printable ASCII, ≤120 chars, empty when absent).
+`LocalFileStore` and `PostgresStore` conform. `BoundedAccountStore` wraps the account operations with the same deadline. `configure(_:configuration:store:geminiTransport:)` gains `accounts: (any AccountStore)? = nil` and `passwordCost: Int = 12` (tests use a low cost); nil accounts → no auth routes. `session.label` is the sanitized `User-Agent` (printable ASCII, ≤120 chars, empty when absent).
 
 Middleware: `BearerMiddleware(tokens:accounts:)` first performs the existing constant-time static match; otherwise, when the token has the `rs_` prefix and 46 characters, it hashes it, calls `accounts.session(tokenHash:)`, rejects expired/revoked sessions, touches `lastUsedAt` when older than 5 minutes, and logs `OwnerIdentity(id: user.id, session: session, user: user)`. Static identities carry `session: nil, user: nil`.
 
 ## 5. Local file store
 
-`accounts.json` in the data directory (mode 0600, same temp-file + fsync + rename commit as owner documents): `{ "formatVersion": 1, "users": [UserRecord], "sessions": [SessionRecord] }`. Bounds: 10,000 users, 100,000 session rows; revoked or expired sessions older than 30 days are pruned on write. `deleteUser` also removes `<owner>.json`.
+`.accounts.json` in the data directory (mode 0600, same temp-file + fsync + rename commit as owner documents): `{ "formatVersion": 1, "users": [UserRecord], "sessions": [SessionRecord] }`. Bounds: 10,000 users, 100,000 session rows; revoked or expired sessions older than 30 days are pruned on write. `deleteUser` also removes `<owner>.json`.
+
+A legacy `accounts.json` is moved to `.accounts.json` only after its shape is validated as an account registry. A static owner named `accounts` keeps its existing owner document. Mixed or malformed legacy files fail closed.
+
+Password changes compare the verified hash and presenting live session, replace the hash, and revoke other sessions in one actor commit or PostgreSQL transaction. Session issuance compares the verified hash under the same user lock, preventing a login verified against an old password from completing after a password change. The HTTP contract stays unchanged.
 
 ## 6. PostgreSQL
 
