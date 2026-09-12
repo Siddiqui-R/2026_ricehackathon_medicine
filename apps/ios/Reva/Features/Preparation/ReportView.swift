@@ -37,6 +37,9 @@ struct ReportView: View {
                             Text(section.title).font(.headline)
                             Text(section.body).font(.subheadline).textSelection(.enabled)
                             ForEach(section.sources) { source in
+                                if let notice = source.omissionNotice {
+                                    Text(notice).font(.caption).foregroundStyle(.secondary)
+                                }
                                 NavigationLink {
                                     RecordDetailView(id: source.recordID, sourcePage: source.page)
                                 } label: {
@@ -52,8 +55,10 @@ struct ReportView: View {
                         Text("Questions to bring").font(.headline)
                         ForEach(Array(report.questions.enumerated()), id: \.offset) { index, question in
                             HStack(alignment: .top, spacing: 10) {
-                                Text("\(index + 1)").font(.caption.bold()).foregroundStyle(RevaTheme.accent)
-                                    .frame(width: 24, height: 24).background(RevaTheme.soft, in: Circle())
+                                Text("\(index + 1)").font(.caption.bold()).foregroundStyle(
+                                    RevaTheme.accentText
+                                )
+                                .frame(width: 24, height: 24).background(RevaTheme.soft, in: Circle())
                                 Text(question).font(.subheadline)
                             }
                         }
@@ -101,6 +106,9 @@ struct ReportView: View {
                 PDFSection(
                     title: section.title,
                     body: section.body
+                        + (section.sources.compactMap(\.omissionNotice).isEmpty
+                            ? ""
+                            : "\n\n" + section.sources.compactMap(\.omissionNotice).joined(separator: "\n"))
                         + (section.sources.isEmpty
                             ? ""
                             : "\n\nSource: "
