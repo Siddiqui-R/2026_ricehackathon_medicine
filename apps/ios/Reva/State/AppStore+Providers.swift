@@ -3,10 +3,10 @@
 // Outputs: ProviderClient or published service capability information.
 // Side effects: GET service configuration; saves only the server URL to user defaults.
 
-import Foundation
-
 // MARK: - Configured client creation
 // Reuse the shared transport validation for URL and token handling.
+import Foundation
+
 extension AppStore {
     func providerClient() throws -> ProviderClient {
         try ProviderClient(url: connectionURL, token: connectionToken)
@@ -14,11 +14,20 @@ extension AppStore {
     // MARK: - Service discovery
     // Read configuration flags and models; this operation does not test provider credentials.
     func checkProviders() async {
+        let requestID = UUID()
+        providerDiscoveryID = requestID
+        let connection = connectionGeneration
+        let url = connectionURL
+        let token = connectionToken
         do {
-            providerStatus = try await providerClient().status()
-            UserDefaults.standard.set(connectionURL, forKey: "serverURL")
+            let status = try await ProviderClient(url: url, token: token).status()
+            guard connection == connectionGeneration, requestID == providerDiscoveryID else { return }
+            try Task.checkCancellation()
+            providerStatus = status
+            UserDefaults.standard.set(url, forKey: "serverURL")
             notice = "Service configuration checked. Only configured connections can be used."
         } catch {
+            guard connection == connectionGeneration, requestID == providerDiscoveryID else { return }
             providerStatus = nil
             errorMessage = error.localizedDescription
         }

@@ -3,10 +3,10 @@
 // Outputs: Restored snapshots, saved files or filesystem/validation errors.
 // Side effects: Atomic snapshot/backup writes and bounded attachment writes on disk.
 
-import Foundation
-
 // MARK: - Local persistence boundary
 // Keep original attachments separate from the atomic JSON state and one recovery checkpoint.
+import Foundation
+
 final class LocalRepository {
     let directory: URL
     var attachmentDirectory: URL { directory.appendingPathComponent("attachments", isDirectory: true) }
@@ -61,5 +61,29 @@ final class LocalRepository {
         guard AppSnapshot.safeFilename(filename) else { return nil }
         let url = attachmentDirectory.appendingPathComponent(filename)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+    // MARK: - Pull staging without replacing original evidence
+    // Return true only for a newly created file; callers roll these back if snapshot commit fails.
+    func stagePullAttachment(_ data: Data, filename: String, existingOriginal: URL?) throws -> Bool {
+        guard AppSnapshot.safeFilename(filename), data.count <= 16 * 1024 * 1024 else {
+            throw RevaError.invalid("The attachment is invalid or larger than 16 MB.")
+        }
+        if let original = attachment(filename) ?? existingOriginal {
+            guard try Data(contentsOf: original, options: .mappedIfSafe) == data else {
+                throw RevaError.invalid(
+                    "A downloaded file conflicts with an existing original: \(filename). The pull was stopped to preserve both active and backup sources. Import the changed source with a new filename before syncing."
+                )
+            }
+            return false
+        }
+        _ = try storeAttachment(data, filename: filename)
+        return true
+    }
+    func discardPullAttachments(_ filenames: [String]) {
+        // Only filenames returned as newly staged by this pull may be passed here.
+        // A cleanup failure leaves an unreferenced file, never a changed active snapshot.
+        for filename in filenames where AppSnapshot.safeFilename(filename) {
+            try? FileManager.default.removeItem(at: attachmentDirectory.appendingPathComponent(filename))
+        }
     }
 }

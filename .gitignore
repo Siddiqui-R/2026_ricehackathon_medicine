@@ -1,5 +1,10 @@
 .env
-.env.local
+.env.*
+!.env.example
+# Local credential files. Commit only placeholder examples.
+secrets/
+*.key
+*.pem
 .build/
 build/
 DerivedData/
