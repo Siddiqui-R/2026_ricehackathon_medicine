@@ -1,18 +1,28 @@
-"""Generate Reva.xcodeproj using only Python; no global tooling install required."""
+"""Generate Reva.xcodeproj using only Python; no global tooling install required.
+
+Purpose: Keep the single native app target synchronized with checked-in source and resource files.
+Inputs: Supported file types under apps/ios/Reva and the build settings defined below.
+Outputs: Deterministic project.pbxproj and shared Reva scheme entries using path-derived identifiers.
+Side effects: Creates/overwrites generated Xcode project files at module execution, including import.
+Boundary: This generates build configuration only; it does not compile, install, or launch the app.
+"""
 from pathlib import Path
 import hashlib
 
+# --- Locate the native tree and generated project destination ---
 root = Path(__file__).resolve().parents[1]
 app = root / "apps/ios/Reva"
 project = root / "Reva.xcodeproj"
 project.mkdir(exist_ok=True)
 
+# --- Deterministic identifiers and project-format escaping ---
 def ident(value): return hashlib.sha1(value.encode()).hexdigest()[:24].upper()
 def quote(value): return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"') + '"'
 def seq(items): return '(' + ', '.join(items) + ', )' if items else '()'
 
 objects = []
 def obj(key, body): objects.append(f'{ident(key)} = {{ {body} }};'); return ident(key)
+# --- Discover supported native sources/resources and assign build membership ---
 source_refs, source_builds, resource_refs, resource_builds = [], [], [], []
 for path in sorted(app.rglob('*')):
     if not path.is_file() or path.name.startswith('.') or path.suffix not in ['.swift', '.json', '.txt', '.pdf', '.wav', '.m4a', '.png']:
@@ -23,12 +33,14 @@ for path in sorted(app.rglob('*')):
     build = obj('build:'+rel, f'isa = PBXBuildFile; fileRef = {ref};')
     if path.suffix == '.swift': source_refs.append(ref); source_builds.append(build)
     else: resource_refs.append(ref); resource_builds.append(build)
+# --- Assemble target groups and build phases ---
 product = obj('product','isa = PBXFileReference; explicitFileType = wrapper.application; path = Reva.app; sourceTree = BUILT_PRODUCTS_DIR;')
 main_group = obj('group',f'isa = PBXGroup; children = {seq(source_refs+resource_refs+[ident("products")])}; sourceTree = "<group>";')
 products = obj('products',f'isa = PBXGroup; children = ({product}, ); name = Products; sourceTree = "<group>";')
 sources = obj('sources',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {seq(source_builds)}; runOnlyForDeploymentPostprocessing = 0;')
 resources = obj('resources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {seq(resource_builds)}; runOnlyForDeploymentPostprocessing = 0;')
 frameworks = obj('frameworks','isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
+# --- Define Debug/Release settings for the one iPhone target ---
 config_ids = []
 for configuration in ['Debug','Release']:
     settings = {
@@ -45,6 +57,7 @@ for configuration in ['Debug','Release']:
 config = obj('configList',f'isa = XCConfigurationList; buildConfigurations = {seq(config_ids)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;')
 target = obj('target',f'isa = PBXNativeTarget; buildConfigurationList = {config}; buildPhases = ({sources}, {frameworks}, {resources}, ); buildRules = (); dependencies = (); name = Reva; productName = Reva; productReference = {product}; productType = "com.apple.product-type.application";')
 project_id = obj('project',f'isa = PBXProject; attributes = {{ LastUpgradeCheck = 2640; }}; buildConfigurationList = {config}; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = {main_group}; productRefGroup = {products}; projectDirPath = ""; projectRoot = ""; targets = ({target}, );')
+# --- Write the generated project and shared launch scheme ---
 (project/'project.pbxproj').write_text('// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n'+'\n'.join(objects)+f'\n}}; rootObject = {project_id}; }}\n')
 scheme_dir = project/'xcshareddata/xcschemes'; scheme_dir.mkdir(parents=True,exist_ok=True)
 reference=f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="Reva.app" BlueprintName="Reva" ReferencedContainer="container:Reva.xcodeproj"/>'

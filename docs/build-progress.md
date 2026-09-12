@@ -115,3 +115,12 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Verified the technology/feature inventory against source and package locks. Distinguishes local behavior, configurable providers, manual setup, Medical profile quick-reference data, and symptom records that participate in preparation.
 - Corrected stale README/team-guide palette roles and README root test count; preserved earlier test-run chronology. No application code changed and no tests or paid integrations were rerun for this documentation task.
 - Rendered the PDF with Poppler and inspected all seven pages. Tables/diagrams fit, numbering is correct, and the final PDF contains no blank overflow page. QA renders remain ignored under output/qa.
+
+
+## Code organization and writing standard — September 12, 09:30 CDT
+
+- User requested functional code blocks and comments describing each chunk. Source checkpoint `30bd762` separates mixed screens/editors, pure booking rules, provider wire values, and AI/transcription/live-call state operations. Closely coupled private helpers keep their existing ownership.
+- All 71 production Swift files now have Purpose/Inputs/Outputs/Side effects contracts and named logical sections. Test, package, Python and SQL boundaries are also documented. `.swift-format` expands compressed code and supplies a consistent four-space layout.
+- Added a [project coding standard](coding-standard.md), a read-only structure check, and the current ownership map. The standard adapts clarity, bounded-work and explicit-boundary principles to Swift; it does not claim NASA certification.
+- Verification: native simulator build passed; 43 root tests and 29 backend tests passed, with one gate skipped in each suite. Strict formatting lint, 71-file structure check, 13 Python syntax checks and Git whitespace check passed. See [code-organization verification](verification/code-organization.md) for exact scope and comparison evidence.
+- Updated the current stack/source diagram before the documentation checkpoint and push. Historical review worktrees, fixtures, original palette, API configuration and the baseline overview PDF are preserved. No live API or new device/UI interaction was performed in this structural revision.

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Start RevaAPI using root .env without shell evaluation or extra dependencies."""
+"""Start RevaAPI using root .env without shell evaluation or extra dependencies.
+
+Purpose: Launch the configured server while keeping provider secrets out of command-line expansion.
+Inputs: Optional dotenv path, --build flag, exported environment, and the local Swift server source/binary.
+Outputs: A running RevaAPI process, or a configuration/build/missing-binary error.
+Side effects: Optionally builds server artifacts, changes into server/, and replaces this process with RevaAPI.
+Precedence: Exported variables override file values. Parsing never executes shell substitutions or prints values.
+"""
 import argparse
 import os
 from pathlib import Path
@@ -8,9 +15,11 @@ import shlex
 import subprocess
 import sys
 
+# --- Resolve paths relative to the repository, not the caller directory ---
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# --- Parse dotenv assignments as data without shell evaluation ---
 def read_environment(path: Path) -> dict[str, str]:
     values = {}
     if not path.exists():
@@ -34,6 +43,7 @@ def read_environment(path: Path) -> dict[str, str]:
     return values
 
 
+# --- Resolve command options and environment precedence ---
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env', type=Path, default=ROOT / '.env')
@@ -46,6 +56,7 @@ def main() -> None:
     # Explicit shell environment overrides the optional file; values are never printed.
     environment = {**config, **os.environ}
     server = ROOT / 'server'
+    # --- Optionally build, then hand process ownership to the server ---
     if args.build:
         subprocess.run(['swift', 'build', '-j', '6'], cwd=server, env=environment, check=True)
     binary = server / '.build' / 'debug' / 'RevaAPI'

@@ -45,3 +45,8 @@ python3 scripts/check_provider_api.py
 Build the server first. The Python checks own and clean up temporary localhost processes and synthetic data. The local UI fixture is optional: `python3 scripts/mock_provider_server.py` exposes only synthetic Gemini-shaped responses at localhost8082 and never calls a provider. Restore localhost8080 and reset the demo afterward.
 
 Physical iPhone signing, camera input, microphone input and hardware interruption behavior remain manual checks. Live Gemini/OpenAI/ElevenLabs/Tiger credentials, agent prompt/number setup and credentialed smoke checks remain manual prerequisites. Broader device/text-size polish and repeated reviews were deferred by the user's deadline revision.
+
+
+## Code organization follow-up
+
+The [September 12 source-organization verification](code-organization.md) records the focused file split, block contracts, formatter, structure check, native build and regression results at source checkpoint `30bd762`.

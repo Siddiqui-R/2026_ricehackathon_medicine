@@ -3,6 +3,12 @@
 
 No private data, external service, model inference, or clinical advice is used.
 Requires reportlab, pypdf, Pillow. Run from any working directory.
+
+Purpose: Reproduce source documents, native seed data, and evidence expectations from one fictional content definition.
+Inputs: Authored facts below, local fonts, ReportLab/pypdf/Pillow, or existing outputs for --verify-only.
+Outputs: Demo PDFs/text/scan, seed/transcript/manifest/evidence JSON, bundled resource copies, and verification metadata.
+Side effects: Generation overwrites demo/sources, demo JSON, app Resources copies, and demo/qa/verification.json.
+Boundary: --verify-only reads existing artifacts. Fixture checks do not claim successful native OCR or clinical accuracy.
 """
 from __future__ import annotations
 
@@ -27,6 +33,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph
 
+# --- Output locations, stable fictional identities, dates, and document design ---
 ROOT = Path(__file__).resolve().parent.parent
 DEMO = ROOT / "demo"
 SOURCES = DEMO / "sources"
@@ -49,6 +56,7 @@ GOLD = colors.HexColor("#C8A07D")
 rl_config.invariant = 1
 
 
+# --- Stable record identifiers and flat source filenames ---
 def rid(suffix: str) -> str:
     return "demo-record-" + suffix
 
@@ -57,6 +65,7 @@ def source(suffix: str, ext: str = "pdf") -> str:
     return "reva-synthetic-" + suffix + "." + ext
 
 
+# --- Authored fictional source facts used by rendered PDFs ---
 # Source facts are authored here once. PDF record text is extracted from the
 # final PDF bytes, so content and page boundaries cannot drift independently.
 DOCUMENTS = [
@@ -132,6 +141,7 @@ DOCUMENTS = [
                  ("Demonstration purpose", "The record intentionally represents a less relevant historical episode. It should remain searchable and available when a user explicitly chooses to include it in visit preparation.")]]),
 ]
 
+# --- Plain-text historical context fixture ---
 ASTHMA_BODY = """SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD
 Asthma history and medication context
 Jordan Avery (Synthetic) | DOB: 1991-04-16
@@ -155,6 +165,7 @@ no attribution of symptoms to a medicine and no separate symptom assessment.
 Invented for Reva software demonstration. Not a real patient record or medical advice.
 """
 
+# --- Reference transcription for the deliberately ambiguous scan ---
 DIARY_TEXT = """SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD
 Patient symptom diary
 Jordan Avery (Synthetic) | DOB: 1991-04-16
@@ -185,6 +196,7 @@ Invented for Reva software demonstration. Not a real patient record or medical a
 SYNTHETIC SCAN | 1 page | no real patient data
 """
 
+# --- Unseeded manual-import fixture with a distinct source purpose ---
 IMPORT_TEXT = """SYNTHETIC DEMO - FICTIONAL PATIENT PREPARATION NOTE
 Jordan Avery (Synthetic) | Source date: 2026-09-12
 
@@ -202,6 +214,7 @@ not a clinical recommendation or a real patient document.
 """
 
 
+# --- Render factual PDF content and reject footer overflow ---
 def paragraph(c: canvas.Canvas, content: str, x: float, y: float, width: float,
               font_size: float = 10.8, leading: float = 15, color=INK) -> float:
     style = ParagraphStyle("body", fontName="DemoSans", fontSize=font_size,
@@ -254,6 +267,7 @@ def create_pdf(doc: dict) -> None:
     c.save()
 
 
+# --- Choose an installed font for reproducible document and scan rendering ---
 def find_font(bold: bool = False) -> str:
     candidates = (["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
                   if bold else ["/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"])
@@ -263,6 +277,7 @@ def find_font(bold: bool = False) -> str:
     raise RuntimeError("Install Arial or DejaVu Sans to regenerate the synthetic scan.")
 
 
+# --- Create an image-only scan that preserves an unreadable date digit ---
 def create_diary() -> None:
     # A clean, high-resolution raster with one deliberately obscured date digit.
     # This is a generated document scan, not a captured patient document.
@@ -328,6 +343,7 @@ def create_diary() -> None:
     scan_pdf.save()
 
 
+# --- Derive source-page text from the final PDF bytes ---
 def record(doc: dict) -> dict:
     pages = [p.extract_text().strip() for p in PdfReader(SOURCES / doc["filename"]).pages]
     return dict(id=doc["id"], title=doc["title"], kind=doc["kind"], provider=doc["provider"],
@@ -338,6 +354,7 @@ def record(doc: dict) -> dict:
                 isDemo=True, version=1)
 
 
+# --- Assemble the native snapshot and keep uncertain extraction marked for review ---
 def make_seed() -> dict:
     records = [record(doc) for doc in DOCUMENTS]
     records.extend([
@@ -400,6 +417,7 @@ def make_seed() -> dict:
         ], bookings=[], recordings=[])
 
 
+# --- Text-only sample transcript tied to its actual completed fictional visit ---
 def make_recording() -> dict:
     utterances = [
         (0, 12, "Narrator (Synthetic)", "This is a fictional Reva demonstration transcript. No real patient conversation or recorded audio is represented."),
@@ -421,6 +439,7 @@ def make_recording() -> dict:
                 isSample=True, status="ready")
 
 
+# --- Declare source-selection, explicit-pinning, and ambiguity acceptance scenarios ---
 def make_expectations() -> dict:
     return dict(synthetic=True, description="Source-selection acceptance fixtures, not medical guidance.",
                 schemaVersion=1, scenarios=[
@@ -445,6 +464,7 @@ def make_expectations() -> dict:
                                 forbiddenBehavior="Guessing the obscured digit or claiming OCR has been verified from the seeded reference transcription."))
 
 
+# --- Stable JSON serialization and source-byte hashing ---
 def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -453,6 +473,7 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# --- Map each original source to its hash, type, pages, and seed relationship ---
 def make_manifest(seed: dict) -> dict:
     mapping = {r["sourceFilename"]: r for r in seed["records"]}
     entries = []
@@ -472,6 +493,7 @@ def make_manifest(seed: dict) -> dict:
                 description=DISCLAIMER, profileID=PROFILE_ID, sources=entries)
 
 
+# --- Check fixture contracts, relationships, and original-source fidelity ---
 def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> dict:
     assert set(seed) == {"schemaVersion", "profile", "records", "visits", "bookings", "recordings"}
     assert seed["schemaVersion"] == 1 and seed["profile"]["isDemo"] is True
@@ -511,6 +533,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
     for segment in recording["segments"]:
         assert previous_end <= segment["start"] < segment["end"] <= recording["duration"]
         previous_end = segment["end"]
+    # --- Verify byte-identical resource copies and evidence references ---
     for entry in manifest["sources"]:
         p = SOURCES / entry["filename"]
         assert entry["sha256"] == sha256(p)
@@ -522,6 +545,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
         assert set(scenario["mustInclude"] + scenario["mustExclude"] + scenario["mayInclude"]) == set(records)
         for check in scenario["sourceChecks"]:
             assert check["contains"] in records[check["recordID"]]["pageTexts"][check["page"] - 1]
+    # --- Keep the scan raster-only and the seeded reference separate from an OCR claim ---
     scan_text = "".join(p.extract_text() for p in PdfReader(SOURCES / source("symptom-diary-image-only")).pages)
     assert not scan_text.strip(), "Image-only PDF unexpectedly has embedded text."
     assert records[rid("symptom-diary")]["status"] == "needsReview"
@@ -539,6 +563,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
                         "PDF visual inspection is recorded separately in the dataset task specification."])
 
 
+# --- Separate read-only verification from explicit artifact regeneration ---
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify-only", action="store_true", help="Check current generated files without modifying them.")
@@ -548,6 +573,7 @@ def main() -> None:
                           ["seed.json", "sample-transcript.json", "fixture-manifest.json", "expected-evidence.json"]])
         print(json.dumps(result, indent=2))
         return
+    # --- Regenerate sources, mirror bundle resources, then verify the written artifacts ---
     for path in (SOURCES, RESOURCES, QA):
         path.mkdir(parents=True, exist_ok=True)
     pdfmetrics.registerFont(TTFont("DemoSans", find_font()))

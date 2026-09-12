@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""SYNTHETIC DEMO ONLY. Render fixture PDFs for manual visual QA with Poppler."""
+"""SYNTHETIC DEMO ONLY. Render fixture PDFs for manual visual QA with Poppler.
+
+Purpose: Produce page previews and a contact sheet for visual inspection of generated fictional sources.
+Inputs: demo/sources PDFs, a Poppler pdftoppm executable, Pillow, and optional output path.
+Outputs: Rendered PNG pages and contact-sheet.png in the selected output directory.
+Side effects: Runs Poppler and writes preview/font-cache files without modifying source PDFs.
+Boundary: Rendering supports manual layout review; it does not assert extraction accuracy or clinical correctness.
+"""
 import argparse
 import os
 from pathlib import Path
@@ -8,9 +15,11 @@ import subprocess
 
 from PIL import Image, ImageDraw, ImageFont
 
+# --- Resolve the synthetic PDF source library ---
 ROOT = Path(__file__).resolve().parent
 
 
+# --- Resolve renderer/output paths and use a task-local font configuration ---
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default="/private/tmp/reva-demo-qa")
@@ -30,11 +39,13 @@ def main():
         config.write_text(f'<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">'
                           f'<fontconfig><dir>{fonts}</dir><cachedir>{cache}</cachedir></fontconfig>')
         env["FONTCONFIG_FILE"] = str(config)
+    # --- Render each source with a finite Poppler timeout ---
     for pdf in sorted((ROOT / "sources").glob("*.pdf")):
         result = subprocess.run([args.pdftoppm, "-scale-to", "1500", "-png", str(pdf), str(output / pdf.stem)],
                                 env=env, capture_output=True, text=True, timeout=45)
         if result.returncode:
             raise RuntimeError(f"Rendering failed for {pdf.name}: {result.stderr[-2000:]}")
+    # --- Assemble a labelled contact sheet for manual visual review ---
     pages = sorted(output.glob("reva-synthetic-*.png"))
     thumb_w, thumb_h, label_h = 380, 492, 55
     sheet = Image.new("RGB", (3 * thumb_w, ((len(pages) + 2) // 3) * (thumb_h + label_h)), "#e1ecee")

@@ -61,11 +61,11 @@ See the [full-stack architecture and flow diagrams](docs/architecture.md) for th
 
 ## Project overview packet
 
-The [seven-page PDF packet](output/pdf/reva-project-overview-packet.pdf) covers existing worktrees, proposed team ownership, technologies, data flows, functionality, API setup, and verification. The [editable Markdown source](docs/project-overview-packet.md) records the same baseline. Rebuild both with `scripts/build_overview_packet.py` in a Python environment with ReportLab and the documented macOS fonts.
+The [seven-page PDF packet](output/pdf/reva-project-overview-packet.pdf) covers existing worktrees, proposed team ownership, technologies, data flows, functionality, API setup, and verification. The [editable Markdown source](docs/project-overview-packet.md) records the same `d0af1df` baseline; use the current team workflow and coding standard for the later file split. Rebuild both with `scripts/build_overview_packet.py` in a Python environment with ReportLab and the documented macOS fonts.
 
 ## Work in parallel
 
-The [three-person workflow](docs/team-workflow.md) assigns exact files, safe worktrees, shared-contract ownership and integration steps:
+The [three-person workflow](docs/team-workflow.md) assigns exact files, safe worktrees, shared-contract ownership and integration steps. The [coding standard](docs/coding-standard.md) describes focused source blocks, leading responsibility comments, formatting and the structure check:
 
 | Area | Source |
 | --- | --- |
@@ -76,7 +76,7 @@ The [three-person workflow](docs/team-workflow.md) assigns exact files, safe wor
 
 ## Verification and limits
 
-Latest native follow-up: **43 root tests passed, 1 gated test skipped.** The earlier backend checkpoint recorded **29 server tests passed, 1 live PostgreSQL test skipped**; these were separate runs. A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [current Medical profile screenshot](docs/verification/screenshots/medical-profile.png) and [follow-up checks](docs/verification/profile-symptoms.md). Explicit demo reset and relaunch restored the clean fictional fixture set.
+Latest code-organization verification: **43 root tests passed, 1 gated test skipped; 29 server tests passed, 1 live PostgreSQL test skipped.** Native compilation and the structure/formatting checks passed; see the [revision evidence](docs/verification/code-organization.md). A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [current Medical profile screenshot](docs/verification/screenshots/medical-profile.png) and [follow-up checks](docs/verification/profile-symptoms.md). Explicit demo reset and relaunch restored the clean fictional fixture set.
 
 ```sh
 swift test -j 6

@@ -1,10 +1,10 @@
 # Reva — as-built MVP stack
 
-**September 12, 2026 · latest implementation checkpoint `ffcbf6c` · diagram updated immediately before the follow-up GitHub push.**
+**September 12, 2026 · source organization checkpoint `30bd762` · current diagram updated before the documentation push.**
 
 Reva is a native SwiftUI iPhone app with a working local demo and a Swift server. Provider adapters are implemented and tested with mocks; their accounts/credentials and a live Tiger database remain manual setup. The app never needs provider keys to demonstrate the local patient journey. The [revised MVP goal](mvp-goal.md), [setup guide](../README.md), [API contract](task-specs/mvp-api-contract.md), and [verification evidence](verification/README.md) define the delivered scope.
 
-For a shareable teammate handoff, use the [seven-page project overview packet](../output/pdf/reva-project-overview-packet.pdf) or its [editable source](project-overview-packet.md). It adds the inspected worktree inventory, proposed ownership split, functionality matrix, and setup guide to the flows below.
+For a shareable teammate handoff, use the [seven-page project overview packet](../output/pdf/reva-project-overview-packet.pdf) or its [editable source](project-overview-packet.md). It records the inspected worktree inventory, proposed ownership split, functionality matrix, and setup guide at baseline `d0af1df`. The [coding standard](coding-standard.md) and current team guide describe the later source-file split.
 
 ## Full stack at a glance
 
@@ -190,8 +190,8 @@ Server snapshot push uses a base revision. Conflict resolution is explicit. Atta
 
 ```mermaid
 flowchart LR
-    P1["Person1 / records and preparation"] --> R["Features/Records + Preparation; AppStore Records + Symptoms + Visits"]
-    P2["Person2 / booking and visit memory"] --> V["Features/Visits; AppStore Bookings + Recordings; device services"]
+    P1["Person1 / records and preparation"] --> R["Features/Records + Preparation; AppStore Records + Symptoms + Visits + AI"]
+    P2["Person2 / booking and visit memory"] --> V["Features/Visits; AppStore Bookings + Recordings + LiveCalls + Transcription; audio"]
     P3["Person3 / server and providers"] --> S["server modules / SQL / HTTP / Gemini / Whisper / ElevenLabs"]
     CAP["Integration captain"] --> SHARED["Core DTOs/models; Shared UI/theme; AppStore Providers + Sync; project generator"]
     R --> CONTRACT["Versioned wire contract and coordinated shared edits"]
@@ -202,7 +202,7 @@ flowchart LR
     class P1,P2,P3,R,V,S,CAP,SHARED,CONTRACT reva;
 ```
 
-The [team guide](team-workflow.md) assigns exact files, worktree commands and starter tasks. Feature modules remain one Swift target to keep the MVP simple; separation is by owned folders and focused state extensions. Shared model/wire changes and Xcode project regeneration have one integration owner.
+The [team guide](team-workflow.md) assigns exact files, worktree commands and starter tasks. Feature modules remain one Swift target to keep the MVP simple; separation is by owned folders and focused state extensions. Shared model/wire changes and Xcode project regeneration have one integration owner. Screens/editors now occupy separate files; `BookingEngine` is separate from `ReportEngine`, and provider wire values live in `ProviderContracts`. Every production Swift file has a leading responsibility contract and named logical sections, checked by `scripts/check_code_structure.py`; see the [coding standard and block diagram](coding-standard.md).
 
 ## Ready now and manual next steps
 

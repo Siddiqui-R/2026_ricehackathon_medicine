@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Check real provider route registration with every provider deliberately unconfigured."""
+"""Check real provider route registration with every provider deliberately unconfigured.
+
+Purpose: Verify real HTTP provider wiring and fail-closed unconfigured responses without paid requests.
+Inputs: An already-built RevaAPI executable and an available loopback port.
+Outputs: Assertions for discovery, six authenticated routes, four 503 responses, and absent call receipts.
+Side effects: Starts a temporary local server, sends synthetic HTTP requests, and removes its process/data afterward.
+Isolation: All provider, database, and Reva configuration is removed before private test settings are supplied.
+"""
 from datetime import datetime, timedelta, timezone
 import io
 import json
@@ -19,6 +26,7 @@ import wave
 from test_client_server import BINARY, ROOT, stop
 
 
+# --- Require the built server and strip provider configuration ---
 def main():
     if not BINARY.is_file():
         raise SystemExit("Build the API first: python3 scripts/run_server.py --build")
@@ -36,6 +44,7 @@ def main():
                            REVA_DATA_DIRECTORY=str(data_directory),
                            REVA_TOKENS=json.dumps({token: "synthetic-provider-smoke"}))
 
+        # --- Send raw or JSON HTTP requests while retaining expected error responses ---
         def request(method, path, body=None, authorized=True, extra_headers=None):
             headers = {"Authorization": "Bearer " + token} if authorized else {}
             headers.update(extra_headers or {})
@@ -50,6 +59,7 @@ def main():
             with response:
                 return response.status, response.read()
 
+        # --- Own the isolated server process and bounded readiness wait ---
         with open(Path(temporary) / "server.log", "w+") as log:
             try:
                 server = subprocess.Popen([str(BINARY)], cwd=ROOT / "server", env=environment,
@@ -66,6 +76,7 @@ def main():
                 else:
                     raise RuntimeError("Provider smoke server did not become ready.")
 
+                # --- Verify exact public discovery keys without exposing the token ---
                 status, raw = request("GET", "/v1/providers")
                 assert status == 200, (status, raw)
                 configuration = json.loads(raw)
@@ -77,6 +88,7 @@ def main():
                 assert configuration["liveCallsEnabled"] is False
                 assert token.encode() not in raw
 
+                # --- Build valid synthetic inputs so configuration gates are tested deliberately ---
                 summary = {"recordID": "synthetic-record", "title": "Synthetic source", "text": "This is a fictional provider smoke document."}
                 preparation = {"visit": {"id": "synthetic-visit", "type": "Primary care", "concern": "Review fictional source",
                                           "goal": "Organize discussion questions", "questions": []},
@@ -98,12 +110,14 @@ def main():
                 posts = [("/v1/ai/summarize", summary, {}), ("/v1/ai/prepare", preparation, {}),
                          ("/v1/audio/transcribe", audio.getvalue(), audio_headers), ("/v1/booking/call", call, {})]
 
+                # --- Require authentication consistently across all six provider routes ---
                 for method, path, body, extra in [("GET", "/v1/providers", None, {}),
                                                    ("GET", "/v1/booking/call/synthetic-call", None, {})] + [
                                                        ("POST", path, body, extra) for path, body, extra in posts]:
                     status, _ = request(method, path, body, authorized=False, extra_headers=extra)
                     assert status == 401, f"Unauthenticated {method} {path}: expected 401, got {status}"
 
+                # --- Unconfigured operations must return safe errors without creating call intent ---
                 for path, body, extra in posts:
                     status, raw = request("POST", path, body, extra_headers=extra)
                     assert status == 503, f"Unconfigured POST {path}: expected 503, got {status}: {raw!r}"
@@ -112,6 +126,7 @@ def main():
                     assert token.encode() not in raw
                 assert not (data_directory / "voice-call-receipts").exists(), "Disabled call created a receipt unexpectedly"
                 print("PASS: real HTTP provider status, all six route auth checks, and four unconfigured 503 responses; no provider credentials or outbound calls.")
+            # --- Preserve local diagnostics, then stop only the owned server ---
             except BaseException:
                 log.flush()
                 log.seek(0)
@@ -121,6 +136,7 @@ def main():
                 stop(server)
 
 
+# --- Turn termination into the same cleanup path as interruption ---
 if __name__ == "__main__":
     def interrupted(_signal, _frame):
         raise KeyboardInterrupt

@@ -2,6 +2,12 @@
 
 Requires reportlab; run with the bundled Codex Python runtime or an environment
 that already has reportlab. The baseline is a documented snapshot, not live Git.
+
+Purpose: Maintain matching readable PDF and editable Markdown handoff artifacts from the authored page definitions.
+Inputs: The fixed baseline/content below, ReportLab, and the installed macOS Arial font files.
+Outputs: output/pdf/reva-project-overview-packet.pdf and docs/project-overview-packet.md.
+Side effects: Registers fonts at import and overwrites both artifacts when main runs.
+Boundary: Worktree/status prose is a dated authored snapshot. Regeneration does not inspect Git or refresh its facts.
 """
 from pathlib import Path
 from html import escape
@@ -14,6 +20,7 @@ from reportlab.lib.colors import HexColor, black, white
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+# --- Artifact destinations, dated baseline, palette, and font registration ---
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output/pdf/reva-project-overview-packet.pdf"
 MD = ROOT / "docs/project-overview-packet.md"
@@ -27,6 +34,7 @@ for key, file in [("Arial", "Arial.ttf"), ("Arial-Bold", "Arial Bold.ttf"), ("Ar
     pdfmetrics.registerFont(TTFont(key, str(FONTS / file)))
 pdfmetrics.registerFontFamily("Arial", normal="Arial", bold="Arial-Bold", italic="Arial-Italic", boldItalic="Arial-Bold")
 
+# --- Shared typography for PDF prose, code, and comparison tables ---
 styles = {
     "body": ParagraphStyle("body", fontName="Arial", fontSize=10, leading=14.2, textColor=black, spaceAfter=9),
     "small": ParagraphStyle("small", fontName="Arial", fontSize=8.7, leading=12.1, textColor=MUTED, spaceAfter=7),
@@ -38,6 +46,7 @@ styles = {
     "code": ParagraphStyle("code", fontName="Courier", fontSize=8.3, leading=11.7, textColor=black, spaceAfter=9),
 }
 
+# --- Escape source text before applying the limited inline presentation markup ---
 def rich(s):
     s = escape(s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
@@ -47,6 +56,7 @@ def rich(s):
 def para(text, style="body"):
     return Paragraph(rich(text), styles[style])
 
+# --- Draw the three bounded stack, worktree, and record-memory diagrams ---
 class Diagram(Flowable):
     def __init__(self, kind):
         super().__init__(); self.kind = kind; self.width = WIDTH
@@ -95,6 +105,7 @@ class Diagram(Flowable):
             c.setStrokeColor(TEAL); c.line(80,87,436,87); arrow(258,87,258,69)
             box(81,5,354,64,"Versioned MedicalRecords", "Search + relevant selection + exact source quotes\nVisitReport -> review -> PDF export")
 
+# --- Page-content helpers shared by the PDF and Markdown renderers ---
 pages = []
 def page(title, subtitle=None, cover=False):
     p=[]; pages.append(p); p.append(("title" if cover else "h1", title))
@@ -104,6 +115,7 @@ def t(p,headers,rows,widths): p.append(("table",headers,rows,widths))
 def b(p,text): p.append(("body",text))
 def h(p,text): p.append(("h2",text))
 
+# --- Authored handoff content at the declared baseline ---
 p=page("Reva project overview packet", "Team handoff | September 12 2026 | Code baseline d0af1df", True)
 b(p,"Reva is a native iPhone MVP that brings records, symptom observations and visit memories together to prepare a useful conversation with a clinician. This packet explains the current code, the local worktrees, team ownership, and how data moves through the app and optional services.")
 b(p,"**The local demo is working.** Provider adapters are implemented and tested with mocks; credentials, live provider checks and the optional Tiger database still require setup. No production web app or MyChart connection is included.")
@@ -114,6 +126,7 @@ t(p,["Pages","What you will find"],[["2-3","Existing worktrees, branch safety an
 b(p,"The phone saves locally first. Server sync is an explicit transfer; AI and call requests are separate operations. Provider secrets belong on the server. The app never talks directly to PostgreSQL.")
 p.append(("small", "Repository: " + REPO + "\nProduct domain: revamed.health. This packet does not claim a deployed site."))
 
+# --- Historical checkout inventory and team ownership guidance ---
 p=page("Existing worktrees", "Inventory inspected at d0af1df before this documentation update")
 b(p,"A Git worktree is a separate folder with its own branch, checked-out files and uncommitted changes, sharing one repository's commit history. Worktrees support parallel editing on one machine. They are not separate services, environments deployed to users, or copies that sync automatically.")
 p.append(("diagram","worktrees"))
@@ -143,6 +156,7 @@ h(p,"How changes come back together")
 b(p,"Each person edits only their assigned checkout, makes small commits and sends the captain the SHA, changed files, tests and any contract change. The captain reviews and merges one branch at a time, resolves shared edits deliberately, regenerates the Xcode project when needed, checks the integrated build and pushes main.")
 b(p,"On separate computers, use separate clones and exchange pushed commits. Keep one owner for simulator verification on a shared Mac: two checkouts using the same app bundle can overwrite the same demo state. Worktrees reduce file conflicts; they do not coordinate shared DTOs, build outputs or runtime data for you.")
 
+# --- Current domain interactions, feature status, and API setup ---
 p=page("Data and component interactions")
 p.append(("diagram","memory"))
 h(p,"From a source to a visit brief")
@@ -213,12 +227,14 @@ h(p,"Where to go next")
 b(p,"Assign owners and create agreed feature branches. Test configured providers with synthetic data. Verify signing, camera and microphone on a physical iPhone; use manual feedback for focused revisions.")
 p.append(("small", "Source map at baseline d0af1df: docs/architecture.md; docs/team-workflow.md; docs/verification/profile-symptoms.md; docs/verification/README.md; docs/task-specs/mvp-api-contract.md; server/README.md; Core/Models.swift; Core/ProviderClient.swift; server/Package.resolved. All app-relative source paths start at apps/ios/Reva/."))
 
+# --- Markdown equivalents of the native PDF diagrams ---
 DIAGRAM_MD = {
  "stack": "```mermaid\nflowchart TD\n  UI[SwiftUI iPhone app] --> LOCAL[AppStore and local JSON files]\n  UI --> API[URLSession to Vapor server]\n  API --> GEMINI[Gemini summaries and preparation]\n  API --> VOICE[Whisper and ElevenLabs with Twilio]\n  API --> STORE[Local files or PostgresNIO to PostgreSQL]\n```",
  "worktrees": "```mermaid\nflowchart TD\n  G[Shared Git history] --> MAIN[main at d0af1df]\n  G --> IMPLEMENT[review implementation at eb2ec3a]\n  G --> REVIEW[review final at d9ec87c]\n```",
  "memory": "```mermaid\nflowchart TD\n  DOC[Documents and OCR] --> RECORD[Versioned MedicalRecords]\n  SYM[Structured symptom entries] --> RECORD\n  AUDIO[Transcript memories] --> RECORD\n  RECORD --> PREP[Relevant selection and exact quotes]\n  PREP --> PDF[Visit report and PDF]\n```",
 }
 
+# --- Render repeated table headers and dated page furniture ---
 def render_table(headers,rows,widths):
     cells=[[para(x,"head") for x in headers]]+[[para(x,"cell") for x in row] for row in rows]
     result=Table(cells,colWidths=widths,hAlign="LEFT",repeatRows=1)
@@ -239,6 +255,7 @@ def footer(c,doc):
     c.drawRightString(564,25,str(doc.page)+" / "+str(len(pages)))
     c.restoreState()
 
+# --- Serialize the same page definitions to PDF flowables and editable Markdown ---
 def main():
     OUT.parent.mkdir(parents=True,exist_ok=True)
     story=[]; md=[]

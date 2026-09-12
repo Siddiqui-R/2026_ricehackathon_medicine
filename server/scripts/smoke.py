@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Real localhost HTTP/restart smoke test. Uses temporary synthetic data only."""
+"""Real localhost HTTP/restart smoke test using temporary synthetic data only.
+
+Purpose: Check authentication, owner separation, exact bytes, revisions, and restart durability.
+Inputs: An already-built server/.build/debug/RevaAPI executable and an available loopback port.
+Outputs: A PASS message, or an assertion/timeout when the real server contract differs.
+Side effects: Starts/restarts one local child server and writes synthetic temporary storage/logs.
+Cleanup: The main scenario stops its child in finally and removes its temporary directory.
+No provider endpoints are invoked. This is separate from the opt-in live database test.
+"""
 import json
 import os
 from pathlib import Path
@@ -10,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 
+# --- Fixed executable and synthetic owner fixtures ---
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / ".build/debug/RevaAPI"
 TOKEN_A = "smoke-owner-a-token-123456789"
@@ -19,6 +28,7 @@ SNAPSHOT = {"schemaVersion": 1, "profile": {"id": "owner-b", "name": "Synthetic 
 
 
 def main():
+    # --- Isolate storage, choose loopback, and replace inherited storage/owner settings ---
     with tempfile.TemporaryDirectory(prefix="reva-http-smoke-") as temporary:
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
@@ -30,6 +40,7 @@ def main():
                            REVA_DATA_DIRECTORY=str(Path(temporary) / "state"),
                            REVA_TOKENS=json.dumps({TOKEN_A: "owner-a", TOKEN_B: "owner-b"}))
 
+        # --- Preserve raw bytes and expose negative HTTP responses to assertions ---
         def request(method, path, body=None, token=TOKEN_A, extra=None):
             headers = {"Authorization": f"Bearer {token}"} if token else {}
             headers.update(extra or {})
@@ -44,6 +55,7 @@ def main():
             with response:
                 return response.status, dict(response.headers), response.read()
 
+        # --- Own the child process and wait a bounded time for real HTTP readiness ---
         with open(Path(temporary) / "server.log", "w+") as log:
             def start():
                 process = subprocess.Popen([str(BINARY)], cwd=ROOT, env=environment, stdout=log, stderr=log)
@@ -62,6 +74,7 @@ def main():
 
             process = start()
             try:
+                # --- Authentication, compare-and-swap ownership, and original attachment bytes ---
                 assert request("GET", "/v1/state", token=None)[0] == 401
                 assert request("PUT", "/v1/state", {"baseRevision": 0, "snapshot": SNAPSHOT})[0] == 200
                 assert request("GET", "/v1/state", token=TOKEN_B)[0] == 404
@@ -71,6 +84,7 @@ def main():
                                extra={"Content-Type": "application/pdf", "X-Filename": "Synthetic source.pdf"})[0] == 204
                 assert request("GET", "/v1/attachments/source")[2] == source
                 assert request("GET", "/v1/attachments/source", token=TOKEN_B)[0] == 404
+                # --- Restart against the same directory, then verify deletion tombstones ---
                 process.terminate()
                 process.wait(timeout=5)
                 process = start()
@@ -83,6 +97,7 @@ def main():
                 assert request("PUT", "/v1/state", {"baseRevision": 1, "snapshot": SNAPSHOT})[0] == 409
                 assert request("PUT", "/v1/state", {"baseRevision": 2, "snapshot": SNAPSHOT})[0] == 200
             finally:
+                # --- Release only the process created by this script ---
                 if process.poll() is None:
                     process.terminate()
                 process.wait(timeout=5)

@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Synthetic-only UI transport fixture. This does not call Gemini, OpenAI, or ElevenLabs."""
+"""Synthetic-only UI transport fixture. This does not call Gemini, OpenAI, or ElevenLabs.
+
+Purpose: Exercise native provider discovery/summary/preparation UI with explicitly labelled fake responses.
+Inputs: Loopback HTTP requests using the public demo token and an optional --port value.
+Outputs: Deterministic mock-transport-only JSON or fixture-specific authentication/input errors.
+Side effects: Binds a local HTTP listener until stopped. It does not persist records or contact providers.
+Boundary: This is a synthetic UI fixture, not the production API or a model-quality test.
+"""
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 
+# --- Explicit fixture provenance, never a real provider model ---
 MODEL = 'mock-transport-only'
 
+# --- Local fixture response transport and public-demo-token gate ---
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Never log bodies, records, or tokens.
@@ -24,6 +33,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
+    # --- Discovery reports only synthetic Gemini UI availability ---
     def do_GET(self):
         if not self.authenticated():
             return
@@ -34,6 +44,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {'reason': 'No fixture for this route.'})
 
+    # --- Bound input and return deterministic summary/preparation fixtures ---
     def do_POST(self):
         if not self.authenticated():
             return
@@ -54,6 +65,7 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError):
             self.send_json(400, {'reason': 'Malformed fixture request.'})
 
+# --- Bind loopback only and serve until explicitly stopped ---
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8082)
