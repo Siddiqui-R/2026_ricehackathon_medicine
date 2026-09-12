@@ -87,7 +87,11 @@ describe('atomic imported source saving', () => {
     const record = imported(0);
     const original = new Blob(['Unchanged original']);
     const put = IDBObjectStore.prototype.put;
-    const failure = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (value, key) {
+    const failure = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value,
+      key,
+    ) {
       if (this.name === 'snapshots') throw new DOMException('Storage is full', 'QuotaExceededError');
       return put.call(this, value, key);
     });
