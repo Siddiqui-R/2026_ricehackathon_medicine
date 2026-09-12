@@ -65,4 +65,6 @@ Saved-record originals and the import comparison now use the existing PDF.js ren
 - [x] Actual browser import of the image-only PDF produces 1,077 OCR characters and displays its original page in the comparison panel.
 - [x] All 244 browser tests, production build, formatting and source structure checks pass after integrating concurrent homepage/visit changes.
 
-These browser checks used the local production build. Deployment and the same example-account record must also be checked on the live site after publishing.
+- [x] Vercel deployment `dc943e1` reached Ready in Production with `revamed.health` assigned. After loading fresh assets, the same example-account **Scan example — image-only PDF** rendered visibly in Chrome with page 1 of 1 and the original download link. [Live preview evidence](screenshots/pdf-original-fixed.png).
+
+The example account and its records were retained unchanged. Existing open tabs must refresh to load the replacement viewer.
