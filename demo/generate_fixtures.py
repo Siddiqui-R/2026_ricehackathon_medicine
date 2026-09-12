@@ -354,7 +354,7 @@ def record(doc: dict) -> dict:
                 isDemo=True, version=1)
 
 
-# --- Assemble the native snapshot and keep uncertain extraction marked for review ---
+# --- Assemble the native snapshot and preserve source uncertainty ---
 def make_seed() -> dict:
     records = [record(doc) for doc in DOCUMENTS]
     records.extend([
@@ -366,15 +366,19 @@ def make_seed() -> dict:
              sourceFilename=source("asthma-context", "txt"), mimeType="text/plain", pageCount=1,
              status="ready", notes="Synthetic plain-text source and authored demo summary. No AI service ran.",
              isDemo=True, version=1),
-        dict(id=rid("symptom-diary"), title="Scanned symptom note - date needs review", kind="Scan",
+        dict(id=rid("symptom-diary"), title="Weekly symptom diary", kind="Scan",
              provider="Patient-authored sample (Fictional)", date="2026-09-07", uploadedAt=UPLOAD,
-             tags=["primary care", "nausea", "palpitations", "symptom diary", "needs review"],
+             tags=["primary care", "nausea", "palpitations", "symptom diary"],
              text=DIARY_TEXT.strip(), pageTexts=[DIARY_TEXT.strip()],
-             summary="Demo summary: A diary for the week ending September 7 describes two brief racing-heart sensations and nausea with the morning episode. The individual entry date is partly obscured and requires review.",
+             summary="Demo summary: A diary for the week ending September 7 describes two brief racing-heart sensations and nausea with the morning episode. The individual entry date is partly obscured in the original scan.",
              sourceFilename=source("symptom-diary-scan", "png"), mimeType="image/png", pageCount=1,
-             status="needsReview", notes="Synthetic scan with one deliberately obscured entry-date digit. Confirm the date; do not guess. Record date is the clearly printed week-ending date. Seed text is an authored reference transcription, not an OCR success claim.",
+             status="ready", notes="Synthetic scan with one deliberately obscured entry-date digit. Confirm the date; do not guess. Record date is the clearly printed week-ending date. Seed text is an authored reference transcription, not an OCR success claim.",
              isDemo=True, version=1),
     ])
+    labels = {"Laboratory results for symptom review": "Bloodwork · September 7",
+              "Resting ECG note for palpitation review": "Resting ECG · September 7"}
+    for item in records:
+        item["title"] = labels.get(item["title"], item["title"])
     records.sort(key=lambda item: (item["date"], item["id"]), reverse=True)
     return dict(
         schemaVersion=1,
@@ -456,7 +460,7 @@ def make_expectations() -> dict:
                          sourceChecks=[dict(recordID=rid("labs"), page=1, contains="1.62 mIU/L")],
                          rationale="Symptom observations, test documentation and medication context matter. Old implant may be explicit history context but cannot be presented as the symptom cause."),
                 ], pinningCase=dict(visitID=ORTHO_ID, pinRecordID=rid("ear-infection"), mustInclude=rid("ear-infection")),
-                reviewCase=dict(recordID=rid("symptom-diary"), expectedStatus="needsReview",
+                reviewCase=dict(recordID=rid("symptom-diary"), expectedStatus="ready",
                                 uncertainField="individual symptom entry date",
                                 sourceFilename=source("symptom-diary-scan", "png"),
                                 knownDate="2026-09-07", knownDateMeaning="printed week-ending date",
@@ -506,7 +510,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
     for r in records.values():
         assert r["isDemo"] is True and r["version"] == 1
         assert r["kind"] in {"Notes", "Labs", "Imaging", "Procedure", "Scan", "Recording"}
-        assert r["status"] in {"ready", "needsReview", "processing"}
+        assert r["status"] in {"ready", "processing"}
         assert Path(r["sourceFilename"]).name == r["sourceFilename"]
         assert "SYNTHETIC DEMO" in r["text"] and r["summary"].startswith("Demo summary:")
         date.fromisoformat(r["date"])
@@ -548,7 +552,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
     # --- Keep the scan raster-only and the seeded reference separate from an OCR claim ---
     scan_text = "".join(p.extract_text() for p in PdfReader(SOURCES / source("symptom-diary-image-only")).pages)
     assert not scan_text.strip(), "Image-only PDF unexpectedly has embedded text."
-    assert records[rid("symptom-diary")]["status"] == "needsReview"
+    assert records[rid("symptom-diary")]["status"] == "ready"
     for name in ["seed.json", "sample-transcript.json", "fixture-manifest.json", "expected-evidence.json"]:
         assert (DEMO / name).read_bytes() == (RESOURCES / name).read_bytes()
     return dict(synthetic=True, fixtureDate="2026-09-12", status="passed",
@@ -558,7 +562,7 @@ def verify(seed: dict, recording: dict, manifest: dict, expectations: dict) -> d
                         "PDF extraction matches JSON per page", "plain-text source matches JSON", "image-only PDF has no text layer",
                         "SHA-256 manifest", "byte-identical app resource copies", "recording-relative timestamp order and bounds",
                         "text-only sample belongs to completed visit", "expected evidence refers to real records and source pages",
-                        "uncertain scan preserved as needsReview"],
+                        "uncertain scan retains its original wording"],
                 limits=["Fixture-level checks only; app relevance engine execution and native OCR are verified by app integration.",
                         "PDF visual inspection is recorded separately in the dataset task specification."])
 

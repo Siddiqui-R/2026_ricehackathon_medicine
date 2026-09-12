@@ -247,11 +247,16 @@ struct ServerTests {
         #expect(throws: ConfigurationError.self) {
             try ServerConfiguration(environment: [:], arguments: ["serve", "--hostname", "0.0.0.0"])
         }
+        // A non-loopback listener without REVA_TOKENS is accepted only while accounts are enabled.
         for environment in [
             ["REVA_STORAGE": "unknown"], ["REVA_STORAGE": "postgres"],
             ["DATABASE_URL": "postgres://not-used"], ["REVA_PORT": "0"],
-            ["REVA_TOKENS": "{}"], ["REVA_TOKENS": "{\"short\":\"owner\"}"], ["REVA_HOST": "0.0.0.0"],
+            ["REVA_TOKENS": "{}"], ["REVA_TOKENS": "{\"short\":\"owner\"}"],
+            ["REVA_HOST": "0.0.0.0", "REVA_ACCOUNTS": "disabled"],
         ] { #expect(throws: ConfigurationError.self) { try ServerConfiguration(environment: environment) } }
+        let accountsOnly = try ServerConfiguration(environment: ["REVA_HOST": "0.0.0.0"])
+        #expect(accountsOnly.tokens.isEmpty)
+        #expect(!accountsOnly.isDemo)
         let tokens = "{\"\(tokenA)\":\"owner-a\"}"
         #expect(throws: ConfigurationError.self) {
             try ServerConfiguration(environment: [

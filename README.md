@@ -51,7 +51,7 @@ The Swift server, native client, and browser entry points are implemented. **No 
 
 | Feature | Implemented behavior |
 | --- | --- |
-| Gemini | Document summaries and visit preparation; configurable model, default `gemini-2.5-flash`. Selected IDs are validated; original-source citations come from local records. |
+| Gemini | Document summaries and visit preparation; configurable model, default `gemini-3.8-flash`. Selected IDs are validated; original-source citations come from local records. |
 | OpenAI Whisper | Saved-audio transcription using `whisper-1`, with recording-relative segment times and generic speaker labels; no diarization claim. |
 | ElevenLabs / Twilio | Outbound call through a configured ElevenLabs agent and imported Twilio number, followed by status/transcript polling. Durable intent/receipts prevent automatic duplicate attempts. A call's completion never confirms an appointment; the user reviews and confirms details manually. |
 | Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, simulated booking, recording/playback and sample memory work without provider setup. |
@@ -70,6 +70,8 @@ Local defaults are `http://127.0.0.1:8080` and the public demo token `reva-local
 The phone stays locally authoritative between explicit server push/pull actions. The server provides owner-scoped revisions and conflict errors. Attachment transfers and snapshot commits are separate transactions, so a failed transfer may leave files already copied. Call receipts need persistent server storage even when snapshots use PostgreSQL. Details and limits are in the [server guide](server/README.md).
 
 See the [full-stack architecture and flow diagrams](docs/architecture.md) for the implemented client, server, database, provider boundaries, and data journeys.
+
+Accounts and hosted persistence: the browser's `/signup`, `/login`, and `/app` pages use the API's `POST /v1/auth/signup`, `POST /v1/auth/login`, `GET /v1/auth/session`, `POST /v1/auth/logout`, `POST /v1/auth/logout-all`, `PUT /v1/auth/password`, and `DELETE /v1/auth/account` routes, with each account's data in Tiger Cloud PostgreSQL when `REVA_STORAGE=postgres`. The [Tiger setup guide](docs/tiger-setup.md) covers the free shared service (`scripts/tiger_provision.py`), `server/Dockerfile`, the Vercel `VITE_REVA_API_ORIGIN` setting, and a verification checklist; the [accounts architecture section](docs/architecture.md#accounts-and-tiger-persistence) shows the flows. Configured, not live-verified.
 
 ## Project overview packet
 

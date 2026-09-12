@@ -66,12 +66,28 @@ import Foundation
                     notice = "Recovered the last valid checkpoint. Your original files remain available."
                 }
                 do {
-                    // Rename only the untouched demo label. Preserve scanned wording, originals, and user edits.
-                    if var sample = snapshot?.records.first(where: {
-                        $0.id == "demo-record-symptom-diary"
-                            && $0.title == "Nausea and palpitation diary - date needs review"
-                    }) {
-                        sample.title = "Scanned symptom note - date needs review"
+                    // Refresh only untouched bundled labels; preserve user edits and original source wording.
+                    let labels: [String: ([String], String)] = [
+                        "demo-record-symptom-diary": (
+                            [
+                                "Nausea and palpitation diary - date needs review",
+                                "Scanned symptom note - date needs review",
+                            ], "Weekly symptom diary"
+                        ),
+                        "demo-record-labs": (
+                            ["Laboratory results for symptom review"], "Bloodwork · September 7"
+                        ),
+                        "demo-record-ecg": (
+                            ["Resting ECG note for palpitation review"], "Resting ECG · September 7"
+                        ),
+                    ]
+                    for var sample in snapshot?.records ?? [] {
+                        guard sample.isDemo, sample.version == 1,
+                            let label = labels[sample.id], label.0.contains(sample.title)
+                        else { continue }
+                        sample.title = label.1
+                        sample.status = "ready"
+                        sample.tags.removeAll { $0 == "needs review" }
                         try save(sample)
                     }
                     if snapshot?.bookings.contains(where: {

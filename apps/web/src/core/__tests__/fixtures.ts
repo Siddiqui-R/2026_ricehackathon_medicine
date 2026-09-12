@@ -1,6 +1,6 @@
 // Purpose: Supply fictional fixtures and deterministic injectable boundaries for core tests.
 // Inputs: Checked-in synthetic demo JSON and test-controlled responses.
-// Outputs: Isolated snapshots, repositories, transports and deferred promises.
+// Outputs: Isolated snapshots, repositories, transports, a fake Storage, a test user and deferred promises.
 // Side effects: None outside test memory; never contacts a provider or writes real workspace data.
 import seedJSON from '../../../public/demo/seed.json';
 import sampleJSON from '../../../public/demo/sample-transcript.json';
@@ -8,6 +8,8 @@ import type { AppSnapshot, ProviderStatus, VisitRecording } from '../models.ts';
 import type { SnapshotRepository, StoredSnapshot } from '../repository.ts';
 import { LocalConflictError } from '../repository.ts';
 import { APIError } from '../api.ts';
+import type { AuthTransport } from '../auth.ts';
+import type { SessionUser, StorageLike } from '../session.ts';
 import type { APITransport } from '../store.ts';
 
 // MARK: - Every caller receives a fresh fictional snapshot.
@@ -62,6 +64,46 @@ export class MemoryRepository implements SnapshotRepository {
   async getAttachment(filename: string) {
     return this.attachments.get(filename) ?? new Blob(['synthetic original'], { type: 'application/pdf' });
   }
+  destroyed = false;
+  async destroy() {
+    this.saved = null;
+    this.attachments.clear();
+    this.destroyed = true;
+  }
+}
+
+// MARK: - Account-mode boundaries: an in-memory Storage and an auth transport that fails closed.
+export function fakeStorage(
+  entries: Record<string, string> = {},
+): StorageLike & { data: Map<string, string> } {
+  const data = new Map(Object.entries(entries));
+  return {
+    data,
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => void data.set(key, String(value)),
+    removeItem: (key) => void data.delete(key),
+  };
+}
+export const testUser: SessionUser = {
+  id: 'u_0123456789abcdef01234567',
+  email: 'synthetic.person@example.test',
+  name: 'Synthetic Person',
+  createdAt: '2026-09-12T10:00:00Z',
+};
+export function authTransport(overrides: Partial<AuthTransport> = {}): AuthTransport {
+  const unavailable = async (): Promise<never> => {
+    throw new Error('Unexpected auth operation in test.');
+  };
+  return {
+    signup: unavailable,
+    login: unavailable,
+    session: unavailable,
+    logout: async () => {},
+    logoutAll: async () => {},
+    changePassword: async () => {},
+    deleteAccount: async () => {},
+    ...overrides,
+  };
 }
 
 // MARK: - Unspecified provider operations fail closed so a test cannot make a hidden live request.

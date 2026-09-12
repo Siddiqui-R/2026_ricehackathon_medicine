@@ -18,7 +18,7 @@ struct VisitEditorView: View {
     @State private var provider = ""
     @State private var clinic = ""
     @State private var date = Date().addingTimeInterval(86400 * 3)
-    @State private var zone = "America/Chicago"
+    @State private var zone = RevaDate.defaultTimeZoneIdentifier
     @State private var concern = ""
     @State private var goal = ""
     @State private var questions = ""
@@ -41,7 +41,7 @@ struct VisitEditorView: View {
                 TextField("Provider", text: $provider)
                 TextField("Clinic", text: $clinic)
                 DatePicker("Date & time", selection: $date).environment(
-                    \.timeZone, TimeZone(identifier: zone) ?? .current)
+                    \.timeZone, TimeZone(identifier: zone) ?? RevaDate.defaultTimeZone)
                 Picker("Time zone", selection: $zone) {
                     ForEach(
                         [

@@ -10,7 +10,7 @@ import Foundation
 // Keep the original occurrence instant/zone separate from the derived record calendar day.
 struct SymptomEntry: Codable, Equatable {
     var observedAt: String = RevaDate.now
-    var timeZone: String = TimeZone.current.identifier
+    var timeZone: String = RevaDate.defaultTimeZoneIdentifier
     var symptom: String = ""
     var severity: String? = nil
     var duration: String = ""

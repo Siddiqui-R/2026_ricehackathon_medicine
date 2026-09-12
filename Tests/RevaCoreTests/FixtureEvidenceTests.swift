@@ -1,6 +1,6 @@
 // Purpose: Verify report selection and citations against the checked-in synthetic acceptance scenarios.
-// Inputs: demo/seed.json and demo/expected-evidence.json, including page and review expectations.
-// Outputs: XCTest assertions for allowed evidence, exact source pages, pinning, and review caveats.
+// Inputs: demo/seed.json and demo/expected-evidence.json, including page and source uncertainty expectations.
+// Outputs: XCTest assertions for allowed evidence, exact source pages, pinning, and source uncertainty.
 // Side effects: Reads fixture files and generates reports in memory; no files or network state are changed.
 
 import XCTest
@@ -9,6 +9,18 @@ import XCTest
 
 /// Executes the checked-in synthetic acceptance scenarios against the real engine.
 final class FixtureEvidenceTests: XCTestCase {
+    // MARK: - Shared browser/native signatures for the refreshed fixture
+    func testDemoSignaturesMatchBrowserGoldenValues() throws {
+        let snapshot = try load("seed.json", as: AppSnapshot.self)
+        XCTAssertEqual(
+            snapshot.visits.map { ReportEngine.signature(visit: $0, records: snapshot.records) },
+            [
+                "937429cbe44f6a68bfc00a8a478d96fe15cd1d5ccad14f706f11bbf6c2410838",
+                "2e7fcfea03b2755a34e4ca33a88d3ba7ff21377d2cbeb72b5efec1d530591e22",
+                "94fce266a8ea02ac6a60dcbe6b8268ab949b6756b320daee89e2c07157206caf",
+            ])
+    }
+
     // MARK: - Acceptance fixture schema
 
     private struct Expectations: Decodable {
@@ -64,16 +76,16 @@ final class FixtureEvidenceTests: XCTestCase {
     func testSourceRuleVersionSignatureGoldens() throws {
         let snapshot = try load("seed.json", as: AppSnapshot.self)
         let expected = [
-            "527ef9c5bd17610165587b1ee17ef5e78a6d5937922ece737eed0c7830855e11",
-            "296a24acd853c35b53a9864894170716ba93650899330020e4aabc6e43f9dcb3",
-            "9868130528caaa4118306c0c7c825c3ab6dad7d33a6e1857df1a97cb05cffde3",
+            "937429cbe44f6a68bfc00a8a478d96fe15cd1d5ccad14f706f11bbf6c2410838",
+            "2e7fcfea03b2755a34e4ca33a88d3ba7ff21377d2cbeb72b5efec1d530591e22",
+            "94fce266a8ea02ac6a60dcbe6b8268ab949b6756b320daee89e2c07157206caf",
         ]
         XCTAssertEqual(
             snapshot.visits.map { ReportEngine.signature(visit: $0, records: snapshot.records) }, expected)
         var visit = snapshot.visits[0]
         visit.report = ReportEngine.generate(visit: visit, records: snapshot.records)
         XCTAssertFalse(ReportEngine.isStale(visit, records: snapshot.records))
-        visit.report?.sourceSignature = "b2437a79a5c1570e95aa2b950dcfab9c4902cae100e345b3a916e46416b67731"
+        visit.report?.sourceSignature = "cbfd98f0df80c54187ca88eed7c6cd439c7fd643b86a5a56f0bbea9a13326ee0"
         XCTAssertTrue(ReportEngine.isStale(visit, records: snapshot.records))
     }
 
@@ -173,13 +185,12 @@ final class FixtureEvidenceTests: XCTestCase {
         XCTAssertTrue(pinned.sections.flatMap(\.sources).contains { $0.recordID == pin.mustInclude })
     }
 
-    func testAmbiguousScanRetainsItsKnownDateAndVisibleReviewCaveat() throws {
+    func testAmbiguousScanRetainsItsKnownDateAndSourceUncertainty() throws {
         let snapshot = try load("seed.json", as: AppSnapshot.self)
         let expected = try load("expected-evidence.json", as: Expectations.self)
         let review = expected.reviewCase
         let record = try XCTUnwrap(snapshot.records.first { $0.id == review.recordID })
         XCTAssertEqual(record.status, review.expectedStatus)
-        XCTAssertTrue(record.needsReview)
         XCTAssertEqual(record.date, review.knownDate)
         XCTAssertEqual(record.sourceFilename, review.sourceFilename)
         XCTAssertTrue(record.text.contains(review.expectedText))
@@ -189,8 +200,8 @@ final class FixtureEvidenceTests: XCTestCase {
             let section = try XCTUnwrap(
                 report.sections.first { $0.sources.contains { $0.recordID == review.recordID } })
             XCTAssertTrue(
-                section.body.contains("Needs review"),
-                "Ambiguous source was presented without its review warning.")
+                section.body.contains(review.expectedText),
+                "Ambiguous source must retain the unclear date in its excerpt.")
         }
     }
 }

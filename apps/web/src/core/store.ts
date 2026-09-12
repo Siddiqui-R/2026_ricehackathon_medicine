@@ -1,8 +1,17 @@
 // Purpose: Coordinate durable browser state, source-aware edits and deliberate connected actions.
-// Inputs: UI intents, an injectable repository/API factory and reviewed provider requests.
+// Inputs: UI intents, an injectable repository/API factory, reviewed provider requests and, in account
+//         mode, the signed-in session (token, user) with injectable storage/redirect boundaries.
 // Outputs: Observable state with durable snapshots, notices, capability flags and explicit failures.
-// Side effects: Serial IndexedDB writes and explicit same-origin sync/provider requests; no automatic calls.
-import type { AppSnapshot, BookingRequest, MedicalRecord, ProviderStatus, Visit } from './models.ts';
+// Side effects: Serial IndexedDB writes; explicit sync/provider requests in demo mode; in account mode a
+//               debounced push after each local commit, and a cleared session plus redirect on HTTP 401.
+import type {
+  AppSnapshot,
+  BookingRequest,
+  MedicalRecord,
+  ProviderStatus,
+  ServerState,
+  Visit,
+} from './models.ts';
 import {
   currentSummary,
   generateReport,
@@ -13,6 +22,10 @@ import {
 } from './domain.ts';
 import { reconcileMemory, upsertRecord, validateBooking } from './mutations.ts';
 import { APIError, RevaAPI } from './api.ts';
+import { AuthAPI, type AuthTransport } from './auth.ts';
+import { emptyPersonalSnapshot } from './account.ts';
+import { browserStorage, clearSession, type SessionUser, type StorageLike } from './session.ts';
+import { clearSyncMarker, readSyncMarker, writeSyncMarker } from './syncMarker.ts';
 import { repository, type SnapshotRepository, type StoredSnapshot } from './repository.ts';
 
 // MARK: - Observable values deliberately exclude credentials from durable snapshot state.
@@ -26,6 +39,8 @@ export interface RevaState {
   connectedAI: boolean;
   token: string;
   serverRevision: number | null;
+  mode: 'demo' | 'account';
+  account: { user: SessionUser; expiresAt: string | null } | null;
 }
 export type APITransport = Pick<
   RevaAPI,
@@ -41,6 +56,24 @@ export type APITransport = Pick<
   | 'startCall'
   | 'callStatus'
 >;
+// Demo mode keeps the public local token and manual sync; account mode binds one signed-in session.
+export interface DemoOptions {
+  mode?: 'demo';
+}
+export interface AccountOptions {
+  mode: 'account';
+  token: string;
+  user: SessionUser;
+  expiresAt?: string | null;
+  storage?: StorageLike | null;
+  redirect?: (path: string) => void;
+  authFactory?: (token: string) => AuthTransport;
+  syncDelay?: number;
+}
+export type StoreOptions = DemoOptions | AccountOptions;
+export const SESSION_ENDED_PATH = '/login?reason=session';
+export const SESSION_ENDED_NOTICE = 'Your session ended. Log in again to continue.';
+export const SERVER_DIFFERS_NOTICE = 'The server copy differs; pull to review it.';
 function message(error: unknown): string {
   return error instanceof Error
     ? error.message
@@ -81,6 +114,8 @@ export class RevaStore {
     connectedAI: false,
     token: 'reva-local-demo-token',
     serverRevision: null,
+    mode: 'demo',
+    account: null,
   };
   private listeners = new Set<() => void>();
   private localRevision = 0;
@@ -88,10 +123,37 @@ export class RevaStore {
   private initialization?: Promise<void>;
   private identity = 0;
   private mustPull = false;
+  private readonly account: AccountOptions | null;
+  private readonly storage: StorageLike | null;
+  private readonly redirect: (path: string) => void;
+  private readonly authFactory: (token: string) => AuthTransport;
+  private readonly syncDelay: number;
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private syncPending = false;
+  private sessionEnded = false;
+  private uploaded = new Set<string>();
   constructor(
     private readonly persistence: SnapshotRepository = repository,
     private readonly apiFactory: (token: string) => APITransport = (token) => new RevaAPI(token),
-  ) {}
+    options: StoreOptions = {},
+  ) {
+    this.account = options.mode === 'account' ? options : null;
+    this.storage = this.account
+      ? this.account.storage === undefined
+        ? browserStorage()
+        : this.account.storage
+      : null;
+    this.redirect = this.account?.redirect ?? ((path) => location.replace(path));
+    this.authFactory = this.account?.authFactory ?? ((token) => new AuthAPI(token));
+    this.syncDelay = this.account?.syncDelay ?? 1500;
+    if (this.account)
+      this.state = {
+        ...this.state,
+        token: this.account.token,
+        mode: 'account',
+        account: { user: this.account.user, expiresAt: this.account.expiresAt ?? null },
+      };
+  }
   getState = (): RevaState => this.state;
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -125,14 +187,16 @@ export class RevaStore {
         await change(draft);
         this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision, attachments));
       });
+      this.scheduleSync();
     } catch (error) {
       this.reportError(error);
       throw error;
     }
   }
-  private async action(work: () => Promise<void>): Promise<void> {
+  // Quiet actions (auto-sync) keep the current notice; a failure still reaches the error banner.
+  private async action(work: () => Promise<void>, quiet = false): Promise<void> {
     if (this.state.busy) throw new Error('Another connected action is still running. Wait for it to finish.');
-    this.publish({ busy: true, error: null, notice: null });
+    this.publish(quiet ? { busy: true } : { busy: true, error: null, notice: null });
     try {
       await work();
     } catch (error) {
@@ -140,6 +204,7 @@ export class RevaStore {
       throw error;
     } finally {
       this.publish({ busy: false });
+      if (this.syncPending) this.scheduleSync();
     }
   }
   private assertIdentity(identity: number): void {
@@ -150,37 +215,74 @@ export class RevaStore {
   // MARK: - Startup distinguishes absent state from corruption and never replays interrupted work.
   initialize = (): Promise<void> => {
     if (!this.initialization)
-      this.initialization = (async () => {
-        try {
-          const existing = await this.persistence.load();
-          this.adopt(existing ?? (await this.persistence.commit(await this.persistence.seed(), 0)));
-          if (
-            this.state.snapshot?.bookings.some((request) =>
-              request.isLive ? request.status === 'starting' : ['queued', 'calling'].includes(request.status),
-            )
-          ) {
-            await this.edit((draft) =>
-              draft.bookings.forEach((request) => {
-                if (request.isLive && request.status === 'starting') request.status = 'unknown';
-                else if (!request.isLive && ['queued', 'calling'].includes(request.status))
-                  request.status = 'needsUser';
-              }),
-            );
-          }
-        } catch (error) {
-          this.reportError(error);
-        } finally {
-          this.publish({ loading: false });
-        }
-      })();
+      this.initialization = this.account ? this.initializeAccount() : this.initializeDemo();
     return this.initialization;
   };
+  private async initializeDemo(): Promise<void> {
+    try {
+      const existing = await this.persistence.load();
+      this.adopt(existing ?? (await this.persistence.commit(await this.persistence.seed(), 0)));
+      await this.refreshDemoLabels();
+      await this.recoverInterruptedCalls();
+    } catch (error) {
+      this.reportError(error);
+    } finally {
+      this.publish({ loading: false });
+    }
+  }
+  // Update only untouched bundled samples; edited records and original source wording stay intact.
+  private async refreshDemoLabels(): Promise<void> {
+    const labels: Record<string, [string[], string]> = {
+      'demo-record-symptom-diary': [
+        ['Nausea and palpitation diary - date needs review', 'Scanned symptom note - date needs review'],
+        'Weekly symptom diary',
+      ],
+      'demo-record-labs': [['Laboratory results for symptom review'], 'Bloodwork · September 7'],
+      'demo-record-ecg': [['Resting ECG note for palpitation review'], 'Resting ECG · September 7'],
+    };
+    for (const record of this.state.snapshot?.records ?? []) {
+      const label = labels[record.id];
+      if (!record.isDemo || record.version !== 1 || !label?.[0].includes(record.title)) continue;
+      await this.saveRecord(
+        {
+          ...record,
+          title: label[1],
+          status: 'ready',
+          tags: record.tags.filter((tag) => tag !== 'needs review'),
+        },
+        record.version,
+      );
+    }
+  }
+  private async recoverInterruptedCalls(): Promise<void> {
+    if (
+      this.state.snapshot?.bookings.some((request) =>
+        request.isLive ? request.status === 'starting' : ['queued', 'calling'].includes(request.status),
+      )
+    ) {
+      await this.edit((draft) =>
+        draft.bookings.forEach((request) => {
+          if (request.isLive && request.status === 'starting') request.status = 'unknown';
+          else if (!request.isLive && ['queued', 'calling'].includes(request.status))
+            request.status = 'needsUser';
+        }),
+      );
+    }
+  }
   notify = (notice: string): void => this.publish({ notice, error: null });
-  reportError = (error: unknown): void => this.publish({ error: message(error), notice: null });
+  // In account mode an HTTP 401 means the session is gone: clear it, say so, and leave the workspace.
+  reportError = (error: unknown): void => {
+    if (this.account && error instanceof APIError && error.status === 401) {
+      this.endSession(SESSION_ENDED_NOTICE, SESSION_ENDED_PATH);
+      return;
+    }
+    this.publish({ error: message(error), notice: null });
+  };
   clearFeedback = (): void => this.publish({ notice: null, error: null });
   mutate = (change: (draft: AppSnapshot) => void): Promise<void> => this.edit(change);
   resetDemo = (): Promise<void> =>
     this.action(async () => {
+      if (this.account) throw new Error('The demo is not available inside an account workspace.');
       const seed = await this.persistence.seed();
       await this.queue(async () => {
         this.adopt(await this.persistence.reset(seed));
@@ -191,6 +293,10 @@ export class RevaStore {
     });
   setToken = (token: string): void => {
     if (token === this.state.token) return;
+    if (this.account) {
+      this.reportError(new Error('Your account session is the workspace token; log out to switch accounts.'));
+      return;
+    }
     if (this.state.busy) {
       this.reportError(
         new Error('Wait for the current action to finish before changing the workspace token.'),
@@ -208,6 +314,192 @@ export class RevaStore {
     }
     this.publish({ connectedAI });
   };
+
+  // MARK: - Account startup: local first, then reconcile with the server without discarding either copy.
+  private async initializeAccount(): Promise<void> {
+    let existing: StoredSnapshot | null = null;
+    try {
+      existing = await this.persistence.load();
+      if (existing) this.adopt(existing);
+    } catch (error) {
+      this.reportError(error);
+      this.publish({ loading: false });
+      return;
+    }
+    try {
+      await this.reconcileWithServer(existing);
+    } catch (error) {
+      this.reportError(error);
+    }
+    try {
+      if (this.state.snapshot) await this.recoverInterruptedCalls();
+    } catch {
+      /* Chunk: The failed status write was already reported; durable intent still prevents a replay. */
+    } finally {
+      this.publish({ loading: false });
+    }
+  }
+  private async reconcileWithServer(existing: StoredSnapshot | null): Promise<void> {
+    const account = this.account!,
+      identity = this.identity,
+      api = this.apiFactory(this.state.token),
+      found = await this.discover(api);
+    this.assertIdentity(identity);
+    this.publish({ providers: found.providers });
+    if (existing) {
+      this.positionAgainstServer(found);
+      return;
+    }
+    if (found.remote) {
+      await this.applyRemote(api, found.remote, identity, 0);
+      this.notify('Your account data was downloaded to this browser.');
+      return;
+    }
+    const empty = emptyPersonalSnapshot(account.user);
+    await this.queue(async () => {
+      this.assertIdentity(identity);
+      this.adopt(await this.persistence.commit(empty, 0));
+    });
+    const localRevision = this.localRevision;
+    this.publish({ serverRevision: found.revision });
+    const next = await api.push(empty, found.revision);
+    this.assertIdentity(identity);
+    this.publish({ serverRevision: next });
+    this.rememberSync(next, localRevision);
+  }
+  // With a local copy present, the remembered in-sync revision decides whether pushing is safe.
+  private positionAgainstServer(found: Discovery): void {
+    const marker = readSyncMarker(this.account!.user.id, this.storage);
+    if (!found.remote) {
+      this.publish({ serverRevision: found.revision });
+      this.scheduleSync();
+      return;
+    }
+    if (marker && marker.serverRevision === found.remote.revision) {
+      this.publish({ serverRevision: found.remote.revision });
+      if (marker.localRevision !== this.localRevision) this.scheduleSync();
+      return;
+    }
+    this.mustPull = true;
+    this.publish({ serverRevision: found.remote.revision });
+    this.notify(SERVER_DIFFERS_NOTICE);
+  }
+  private rememberSync(serverRevision: number, localRevision: number): void {
+    if (this.account) writeSyncMarker(this.account.user.id, { serverRevision, localRevision }, this.storage);
+  }
+  private endSession(notice: string | null, path: string): void {
+    if (this.sessionEnded) return;
+    this.sessionEnded = true;
+    this.cancelSync();
+    clearSession(this.storage);
+    if (notice) this.publish({ notice, error: null });
+    this.redirect(path);
+  }
+
+  // MARK: - Auto-sync: a debounced quiet push after local commits, never while busy or behind the server.
+  private scheduleSync(): void {
+    if (!this.account || this.sessionEnded) return;
+    this.syncPending = true;
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      void this.autoSync();
+    }, this.syncDelay);
+  }
+  private cancelSync(): void {
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = null;
+    this.syncPending = false;
+  }
+  private async autoSync(): Promise<void> {
+    if (!this.account || this.sessionEnded || this.mustPull) {
+      this.syncPending = false;
+      return;
+    }
+    if (this.state.busy) return;
+    this.syncPending = false;
+    try {
+      await this.action(async () => {
+        if (this.state.serverRevision === null) {
+          const identity = this.identity,
+            api = this.apiFactory(this.state.token),
+            found = await this.discover(api);
+          this.assertIdentity(identity);
+          this.publish({
+            providers: found.providers,
+            connectedAI: this.state.connectedAI && found.providers.gemini.configured,
+          });
+          this.positionAgainstServer(found);
+          if (this.mustPull) return;
+        }
+        await this.push(true);
+      }, true);
+    } catch {
+      /* Chunk: The action already showed the error banner; the local snapshot is untouched. */
+    }
+  }
+
+  // MARK: - Account actions revoke sessions on the server before leaving the workspace.
+  accountUser = (): SessionUser | null => this.account?.user ?? null;
+  private requireAuth(): AuthTransport {
+    if (!this.account) throw new Error('Account actions are available only in a signed-in workspace.');
+    return this.authFactory(this.state.token);
+  }
+  private async flushBeforeLeaving(): Promise<void> {
+    if (!this.syncPending || this.mustPull || this.state.serverRevision === null) return;
+    this.cancelSync();
+    try {
+      await this.push(true);
+    } catch {
+      /* Chunk: Unsent edits stay in the local copy; the next login pushes them. */
+    }
+  }
+  private async revoke(everywhere: boolean): Promise<void> {
+    const auth = this.requireAuth();
+    await this.writes;
+    await this.flushBeforeLeaving();
+    try {
+      if (everywhere) await auth.logoutAll();
+      else await auth.logout();
+    } catch (error) {
+      if (!(error instanceof APIError && error.status === 401)) throw error;
+    }
+    this.endSession(null, '/');
+  }
+  logout = (): Promise<void> => this.action(() => this.revoke(false));
+  logoutAll = (): Promise<void> => this.action(() => this.revoke(true));
+  changePassword = (currentPassword: string, newPassword: string): Promise<void> =>
+    this.action(async () => {
+      const auth = this.requireAuth();
+      try {
+        await auth.changePassword(currentPassword, newPassword);
+      } catch (error) {
+        if (error instanceof APIError && error.status === 401)
+          throw new Error('The current password is incorrect. Your password was not changed.');
+        throw error;
+      }
+      this.notify('Password changed. Your other sessions were logged out.');
+    });
+  deleteAccount = (password: string): Promise<void> =>
+    this.action(async () => {
+      const auth = this.requireAuth();
+      await this.writes;
+      try {
+        await auth.deleteAccount(password);
+      } catch (error) {
+        if (error instanceof APIError && error.status === 401)
+          throw new Error('The password is incorrect. Your account was not deleted.');
+        throw error;
+      }
+      this.cancelSync();
+      clearSyncMarker(this.account!.user.id, this.storage);
+      try {
+        await this.persistence.destroy?.();
+      } catch {
+        /* Chunk: The server copy is gone; a lingering local database only holds this user's own data. */
+      }
+      this.endSession(null, '/');
+    });
 
   // MARK: - Source and visit editing retain exact user-authored questions, notes and versions.
   // Imports publish their original in the same transaction as the source, including on retry.
@@ -506,85 +798,117 @@ export class RevaStore {
     });
 
   // MARK: - Discovery cannot silently advance a revision that has already become stale.
+  // Health, providers and the current server revision (or the empty-state tombstone revision) in one pass.
+  private async discover(api: APITransport): Promise<Discovery> {
+    const health = await api.health(),
+      providers = await api.providers();
+    try {
+      const remote = await api.pull();
+      return { health, providers, remote, revision: remote.revision };
+    } catch (error) {
+      if (!(error instanceof APIError) || error.status !== 404 || error.revision === null) throw error;
+      return { health, providers, remote: null, revision: error.revision };
+    }
+  }
   checkServer = (): Promise<void> =>
     this.action(async () => {
       const identity = this.identity,
-        api = this.apiFactory(this.state.token);
-      const health = await api.health(),
-        providers = await api.providers();
-      let remoteRevision: number;
-      try {
-        remoteRevision = (await api.pull()).revision;
-      } catch (error) {
-        if (!(error instanceof APIError) || error.status !== 404 || error.revision === null) throw error;
-        remoteRevision = error.revision;
-      }
+        api = this.apiFactory(this.state.token),
+        found = await this.discover(api);
       this.assertIdentity(identity);
       const known = this.state.serverRevision;
-      this.publish({ providers, connectedAI: this.state.connectedAI && providers.gemini.configured });
-      if (this.mustPull || (known !== null && known !== remoteRevision)) {
+      this.publish({
+        providers: found.providers,
+        connectedAI: this.state.connectedAI && found.providers.gemini.configured,
+      });
+      if (this.mustPull || (known !== null && known !== found.revision)) {
         this.mustPull = true;
-        this.notify(`${health}. The server has a different revision; pull and review it before pushing.`);
+        this.notify(
+          `${found.health}. The server has a different revision; pull and review it before pushing.`,
+        );
       } else {
-        this.publish({ serverRevision: remoteRevision });
-        this.notify(`${health}. Provider availability checked.`);
+        this.publish({ serverRevision: found.revision });
+        this.notify(`${found.health}. Provider availability checked.`);
       }
     });
-  pushToServer = (): Promise<void> =>
-    this.action(async () => {
-      if (this.state.serverRevision === null || this.mustPull)
-        throw new Error('Check the connection or pull the server’s latest copy before pushing.');
-      await this.writes;
-      const snapshot = structuredClone(this.requiredSnapshot()),
-        identity = this.identity,
-        revision = this.state.serverRevision,
-        localRevision = this.localRevision,
-        api = this.apiFactory(this.state.token);
-      for (const [filename, type] of originals(snapshot)) {
-        const blob = await this.persistence.getAttachment(filename);
-        this.assertIdentity(identity);
-        await api.uploadAttachment(filename, type ? blob.slice(0, blob.size, type) : blob);
-      }
+  // Originals uploaded earlier in this account session under the same filename and size are skipped.
+  private async push(quiet: boolean): Promise<void> {
+    if (this.state.serverRevision === null || this.mustPull)
+      throw new Error('Check the connection or pull the server’s latest copy before pushing.');
+    await this.writes;
+    const snapshot = structuredClone(this.requiredSnapshot()),
+      identity = this.identity,
+      revision = this.state.serverRevision,
+      localRevision = this.localRevision,
+      api = this.apiFactory(this.state.token);
+    for (const [filename, type] of originals(snapshot)) {
+      const blob = await this.persistence.getAttachment(filename);
+      const key = `${filename}\u0000${blob.size}`;
+      if (this.account && this.uploaded.has(key)) continue;
       this.assertIdentity(identity);
-      try {
-        const next = await api.push(snapshot, revision);
-        this.assertIdentity(identity);
-        this.publish({ serverRevision: next });
+      await api.uploadAttachment(filename, type ? blob.slice(0, blob.size, type) : blob);
+      if (this.account) this.uploaded.add(key);
+    }
+    this.assertIdentity(identity);
+    try {
+      const next = await api.push(snapshot, revision);
+      this.assertIdentity(identity);
+      this.publish({ serverRevision: next });
+      this.rememberSync(next, localRevision);
+      if (!quiet)
         this.notify(
           localRevision === this.localRevision
             ? 'Browser snapshot and originals sent to the server.'
             : 'Captured snapshot sent. Newer browser edits remain local; push again to send them.',
         );
-      } catch (error) {
-        if (error instanceof APIError && error.status === 409 && identity === this.identity)
-          this.mustPull = true;
-        throw error;
-      }
+      else if (localRevision !== this.localRevision) this.scheduleSync();
+    } catch (error) {
+      if (error instanceof APIError && error.status === 409 && identity === this.identity)
+        this.mustPull = true;
+      throw error;
+    }
+  }
+  pushToServer = (): Promise<void> => this.action(() => this.push(false));
+  // Downloads every original first, then replaces the local copy in one transaction.
+  private async applyRemote(
+    api: APITransport,
+    remote: ServerState,
+    identity: number,
+    localRevision: number,
+  ): Promise<void> {
+    const attachments = new Map<string, Blob>();
+    for (const [filename, type] of originals(remote.snapshot)) {
+      this.assertIdentity(identity);
+      const blob = await api.attachment(filename);
+      attachments.set(filename, type ? blob.slice(0, blob.size, type) : blob);
+    }
+    this.assertIdentity(identity);
+    await this.queue(async () => {
+      this.assertIdentity(identity);
+      if (localRevision !== this.localRevision)
+        throw new Error(
+          'You edited this browser workspace during the download. Your edits were kept. Review them before pulling again.',
+        );
+      this.adopt(await this.persistence.commit(remote.snapshot, localRevision, attachments));
+      this.mustPull = false;
+      this.publish({ serverRevision: remote.revision });
+      this.rememberSync(remote.revision, this.localRevision);
     });
+  }
   pullFromServer = (): Promise<void> =>
     this.action(async () => {
       await this.writes;
       const identity = this.identity,
         localRevision = this.localRevision,
         api = this.apiFactory(this.state.token),
-        remote = await api.pull(),
-        attachments = new Map<string, Blob>();
-      for (const [filename, type] of originals(remote.snapshot)) {
-        this.assertIdentity(identity);
-        const blob = await api.attachment(filename);
-        attachments.set(filename, type ? blob.slice(0, blob.size, type) : blob);
-      }
-      this.assertIdentity(identity);
-      await this.queue(async () => {
-        this.assertIdentity(identity);
-        if (localRevision !== this.localRevision)
-          throw new Error(
-            'You edited this browser workspace during the download. Your edits were kept. Review them before pulling again.',
-          );
-        this.adopt(await this.persistence.commit(remote.snapshot, localRevision, attachments));
-        this.mustPull = false;
-        this.publish({ serverRevision: remote.revision });
-      });
+        remote = await api.pull();
+      await this.applyRemote(api, remote, identity, localRevision);
       this.notify('Server snapshot and all originals saved in this browser.');
     });
+}
+interface Discovery {
+  health: string;
+  providers: ProviderStatus;
+  remote: ServerState | null;
+  revision: number;
 }

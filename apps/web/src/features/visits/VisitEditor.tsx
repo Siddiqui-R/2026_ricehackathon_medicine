@@ -7,7 +7,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
 import type { Visit } from '../../core/models';
-import { uid } from '../../core/domain';
+import { defaultTimeZone, uid } from '../../core/domain';
 import { Button, Field, Modal } from '../../components/ui';
 import { dateFieldISO, dateFieldValue, visitTimeZones } from './visitDates';
 import { applyVisitEditorValues, type VisitEditorValues } from './visitEdits';
@@ -18,7 +18,7 @@ export function VisitEditor({ visit, onClose }: { visit?: Visit; onClose: () => 
   const [baseline] = useState(() => (visit ? structuredClone(visit) : undefined));
   const [id] = useState(() => visit?.id ?? uid());
   const inFlight = useRef(false);
-  const initialZone = baseline?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const initialZone = baseline?.timeZone ?? defaultTimeZone;
   const [form, setForm] = useState({
     title: visit?.title ?? '',
     type: visit?.type ?? 'Primary care',

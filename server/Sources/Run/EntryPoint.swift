@@ -40,7 +40,9 @@ enum EntryPoint {
         var postgresTask: Task<Void, Never>?
         do {
             // MARK: - Explicit storage selection and migration gate
+            // The same adapter serves owner state and accounts; accounts are passed only when enabled.
             let store: any RevaStore
+            let accounts: (any AccountStore)?
             if let database = configuration.postgres {
                 let postgres = PostgresStore(configuration: database)
                 postgresTask = Task { await postgres.client.run() }
@@ -48,13 +50,16 @@ enum EntryPoint {
                     throw ConfigurationErrorForStartup()
                 }
                 store = BoundedStore(base: postgres)
+                accounts = configuration.accountsEnabled ? BoundedAccountStore(base: postgres) : nil
             } else {
-                store = try LocalFileStore(directory: configuration.directory)
+                let local = try LocalFileStore(directory: configuration.directory)
+                store = local
+                accounts = configuration.accountsEnabled ? local : nil
             }
             // MARK: - Listener lifetime after storage is ready
-            configure(app, configuration: configuration, store: store)
+            configure(app, configuration: configuration, store: store, accounts: accounts)
             app.logger.notice(
-                "Reva storage=\(configuration.mode), demo=\(configuration.isDemo). Local mode is for fictional development data only."
+                "Reva storage=\(configuration.mode), demo=\(configuration.isDemo), accounts=\(configuration.accountsEnabled), signupOpen=\(configuration.signupOpen). Local mode is for fictional development data only."
             )
             try await app.execute()
             try await app.asyncShutdown()

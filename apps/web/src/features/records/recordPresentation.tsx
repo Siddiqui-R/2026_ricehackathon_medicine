@@ -1,10 +1,11 @@
 // Purpose: Keep record icons, dates, and source ordering consistent across Records screens.
-// Inputs: Native-compatible MedicalRecord values and browser-local calendar dates.
+// Inputs: Native-compatible MedicalRecord values and dates for Central calendar-day defaults.
 // Outputs: Pure presentation helpers and an accessible decorative source icon.
 // Side effects: None.
 
 import { FileText, FlaskConical, Image, NotebookPen, ScanLine, Stethoscope, AudioLines } from 'lucide-react';
 import type { MedicalRecord } from '../../core/models';
+export { calendarDay as localDay } from '../../core/dates';
 
 // MARK: - Source categories and stable occurrence ordering
 export function RecordSymbol({ record, size = 22 }: { record: MedicalRecord; size?: number }) {
@@ -27,9 +28,6 @@ export function newestRecords(records: MedicalRecord[]) {
       ) ||
       a.id.localeCompare(b.id),
   );
-}
-export function localDay(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 export function queryParameter(name: string) {
   return new URLSearchParams(location.hash.split('?')[1] ?? '').get(name);

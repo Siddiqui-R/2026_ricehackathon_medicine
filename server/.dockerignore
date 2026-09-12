@@ -1,0 +1,15 @@
+# Purpose: Limit the Docker build context to what SwiftPM needs (manifest, lockfile, Sources, Tests).
+# Inputs: Paths under server/ at `docker build` time.
+# Outputs: A smaller, credential-free context; excluded paths never reach the image or its cache.
+# Side effects: None. Tests/ stays in the context because the manifest declares that target directory.
+.build/
+.swiftpm/
+.local-data/
+.env
+.env.*
+*.log
+.DS_Store
+scripts/
+README.md
+Dockerfile
+.dockerignore

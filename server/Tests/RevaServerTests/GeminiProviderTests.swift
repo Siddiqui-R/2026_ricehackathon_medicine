@@ -90,7 +90,7 @@ struct GeminiProviderTests {
                 #expect(response.status == .ok)
                 let status = try response.content.decode(ProviderStatus.self)
                 #expect(status.gemini.configured)
-                #expect(status.gemini.model == "gemini-2.5-flash")
+                #expect(status.gemini.model == "gemini-3.8-flash")
                 #expect(status.transcription.configured)
                 #expect(status.transcription.model == "whisper-1")
                 #expect(status.booking.configured)
@@ -165,7 +165,7 @@ struct GeminiProviderTests {
                     #expect(response.status == .ok)
                     let summary = try response.content.decode(GeminiSummaryResponse.self)
                     #expect(summary.summary == "The synthetic source records hemoglobin 12.8 g/dL.")
-                    #expect(summary.model == "gemini-2.5-flash")
+                    #expect(summary.model == "gemini-3.8-flash")
                 })
         }
         let recorded = await requests.values
@@ -174,7 +174,7 @@ struct GeminiProviderTests {
         #expect(request.httpMethod == "POST")
         #expect(
             request.url?.absoluteString
-                == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")
+                == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent")
         #expect(request.url?.query == nil)
         #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == fakeGeminiKey)
         let requestBody = try #require(request.httpBody)
@@ -197,7 +197,7 @@ struct GeminiProviderTests {
             return .init(status: 200, data: body)
         }
         try await withGeminiServer(
-            environment: ["GEMINI_API_KEY": fakeGeminiKey, "GEMINI_MODEL": "gemini-2.5-flash-lite"],
+            environment: ["GEMINI_API_KEY": fakeGeminiKey, "GEMINI_MODEL": "gemini-3.5-flash-lite"],
             transport: mock
         ) { app, _ in
             try await app.testing().test(
@@ -210,7 +210,7 @@ struct GeminiProviderTests {
                     let prepared = try response.content.decode(GeminiPreparationResponse.self)
                     #expect(prepared.selectedRecordIDs == ["synthetic-record"])
                     #expect(prepared.questions == ["What remains undocumented?"])
-                    #expect(prepared.model == "gemini-2.5-flash-lite")
+                    #expect(prepared.model == "gemini-3.5-flash-lite")
                 })
         }
         #expect(await requests.values.count == 1)

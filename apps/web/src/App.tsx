@@ -1,7 +1,8 @@
 // Purpose: Coordinate responsive navigation, global record search, and shared status feedback.
-// Inputs: Browser hash routes and the current Reva context.
-// Outputs: Desktop sidebar, tablet/mobile navigation, and the selected functional screen.
-// Side effects: Changes routes, announces operation feedback, and moves focus after navigation.
+// Inputs: Browser hash routes and the current Reva context (demo or signed-in account mode).
+// Outputs: Desktop sidebar, tablet/mobile navigation, a Log out item in account mode, and the selected screen.
+// Side effects: Changes routes, announces operation feedback, moves focus after navigation, and in account
+//               mode asks the store to revoke the session on Log out.
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
   ChevronRight,
   FileText,
   LayoutDashboard,
+  LogOut,
   Search,
   Settings,
   ShieldCheck,
@@ -88,6 +90,10 @@ export function App() {
     );
   const profile = store.snapshot.profile;
   const navTitle = navigation.find((item) => item.id === route.section)?.title ?? 'Settings';
+  const account = store.mode === 'account';
+  const demo = store.mode === 'demo' && profile.isDemo;
+  // The store reports a failed revoke in the feedback banner; a successful one leaves this page.
+  const logout = () => void store.logout().catch(() => undefined);
 
   // MARK: - Desktop navigation and phone tabs share the same active route and labels
   return (
@@ -144,6 +150,19 @@ export function App() {
             <Settings size={19} />
             <span>Settings & connections</span>
           </a>
+          {account && (
+            <button
+              type="button"
+              className="nav-item nav-button"
+              aria-label="Log out"
+              title="Log out"
+              onClick={logout}
+              disabled={store.busy}
+            >
+              <LogOut size={19} />
+              <span>Log out</span>
+            </button>
+          )}
           <div className="sidebar-divider" />
           <a
             href="#/profile"
@@ -153,11 +172,11 @@ export function App() {
             <span className="avatar">{profile.initials}</span>
             <span>
               <strong>{demoLabel(profile.name, profile.isDemo)}</strong>
-              <small>{profile.isDemo ? 'Demo profile' : 'Your medical profile'}</small>
+              <small>{account || !profile.isDemo ? 'Your medical profile' : 'Demo profile'}</small>
             </span>
             <ChevronRight size={16} />
           </a>
-          {profile.isDemo && <DemoSwitcher disabled={store.busy} />}
+          {demo && <DemoSwitcher disabled={store.busy} />}
         </div>
       </aside>
       <div className="workspace">
@@ -184,15 +203,28 @@ export function App() {
           <a
             href="#/settings"
             className="workspace-status"
-            aria-label={profile.isDemo ? 'Demo settings' : 'Browser storage settings'}
+            aria-label={
+              account ? 'Account settings' : profile.isDemo ? 'Demo settings' : 'Browser storage settings'
+            }
           >
             <ShieldCheck size={17} />
-            <span>{profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
+            <span>{account ? 'Your account' : profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
           </a>
-          {profile.isDemo && <DemoSwitcher disabled={store.busy} className="mobile-demo-switch" />}
+          {demo && <DemoSwitcher disabled={store.busy} className="mobile-demo-switch" />}
           <a href="#/settings" className="mobile-settings icon-button" aria-label="Settings">
             <Settings size={21} />
           </a>
+          {account && (
+            <button
+              type="button"
+              className="mobile-settings mobile-logout icon-button"
+              onClick={logout}
+              disabled={store.busy}
+              aria-label="Log out"
+            >
+              <LogOut size={21} />
+            </button>
+          )}
         </header>
         <main ref={content} id="main-content" className="main-content" tabIndex={-1}>
           {route.section === 'records' ? (
@@ -227,7 +259,7 @@ export function App() {
             <span>
               reva<span aria-hidden="true"> · </span>Making every appointment count.
             </span>
-            <span>{profile.isDemo ? 'Demo workspace' : 'Your sources. Your questions. Your next step.'}</span>
+            <span>{demo ? 'Demo workspace' : 'Your sources. Your questions. Your next step.'}</span>
           </footer>
         </main>
       </div>

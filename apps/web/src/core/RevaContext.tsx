@@ -1,6 +1,6 @@
 // Purpose: Expose the durable Reva store through the agreed React feature contract.
-// Inputs: Child components and an optional injectable store for browser integration tests.
-// Outputs: Reactive snapshot, feedback, connection values and bound store actions.
+// Inputs: Child components and an optional injectable store (demo by default, or an account-mode store).
+// Outputs: Reactive snapshot, feedback, connection values, account identity and bound store actions.
 // Side effects: Initializes browser persistence once; subscriptions clean up on unmount.
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { RevaStore } from './store.ts';
@@ -42,5 +42,10 @@ export function useReva() {
     checkServer: store.checkServer,
     pushToServer: store.pushToServer,
     pullFromServer: store.pullFromServer,
+    accountUser: state.account?.user ?? null,
+    logout: store.logout,
+    logoutAll: store.logoutAll,
+    changePassword: store.changePassword,
+    deleteAccount: store.deleteAccount,
   };
 }

@@ -1,7 +1,7 @@
-// Purpose: Implement RevaStore using owner-locked PostgreSQL transactions and the bundled versioned schema.
-// Inputs: PostgreSQL configuration, authenticated owner IDs, snapshots, attachment bytes, and revisions.
-// Outputs: Stored aggregate data or typed conflict/missing/quota errors plus propagated database failures.
-// Side effects: Opens database queries, migrates schema, and commits snapshot/attachment/audit mutations.
+// Purpose: Implement RevaStore and AccountStore using PostgreSQL transactions and the bundled ordered schema migrations.
+// Inputs: PostgreSQL configuration, authenticated owner IDs, snapshots, attachment bytes, revisions, and account records.
+// Outputs: Stored aggregate/account data or typed conflict/missing/quota/account errors plus propagated database failures.
+// Side effects: Opens database queries, migrates schema, and commits snapshot/attachment/audit/account mutations.
 // Ownership: Runtime values are bound parameters. Each mutation commits separately, not as one full sync transaction.
 
 import Foundation
@@ -9,7 +9,7 @@ import PostgresNIO
 import Vapor
 
 // MARK: - Database client ownership and health
-public struct PostgresStore: RevaStore {
+public struct PostgresStore: RevaStore, AccountStore {
     public let client: PostgresClient
     private let logger = Logger(label: "reva.postgres")
 
@@ -22,16 +22,23 @@ public struct PostgresStore: RevaStore {
         for try await _ in rows {}
     }
 
-    // MARK: - Versioned migration under a database advisory lock
-    /// Migration source contains only checked-in SQL, never request data.
+    // MARK: - Ordered migrations under a database advisory lock
+    /// Migration source contains only checked-in SQL, never request data. Every version above the recorded
+    /// maximum runs in order inside one transaction; a recorded version above this list fails startup.
+    static let migrations: [(version: Int, name: String)] = [(1, "001_snapshot"), (2, "002_accounts")]
+
     public func migrate() async throws {
-        guard
-            let url = Bundle.module.url(
-                forResource: "001_snapshot", withExtension: "sql", subdirectory: "Migrations")
-        else {
-            throw ConfigurationError("Missing embedded PostgreSQL migration.")
+        var sources: [(version: Int, sql: String)] = []
+        for migration in Self.migrations {
+            guard
+                let url = Bundle.module.url(
+                    forResource: migration.name, withExtension: "sql", subdirectory: "Migrations")
+            else {
+                throw ConfigurationError("Missing embedded PostgreSQL migration.")
+            }
+            sources.append((migration.version, try String(contentsOf: url, encoding: .utf8)))
         }
-        let sql = try String(contentsOf: url, encoding: .utf8)
+        let latest = Self.migrations.map(\.version).max() ?? 0
         try await client.withConnection { connection in
             try await execute(connection, "BEGIN")
             do {
@@ -44,17 +51,18 @@ public struct PostgresStore: RevaStore {
                     "SELECT COALESCE(MAX(version), 0) FROM reva_schema_migrations", logger: logger)
                 var version = 0
                 for try await value in rows.decode(Int.self) { version = value }
-                guard version <= 1 else {
+                guard version <= latest else {
                     throw ConfigurationError("Database schema is newer than this server.")
                 }
-                if version == 0 {
-                    for statement in sql.split(separator: ";") {
+                for source in sources where source.version > version {
+                    for statement in source.sql.split(separator: ";") {
                         let trimmed = statement.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !trimmed.isEmpty {
                             try await execute(connection, PostgresQuery(unsafeSQL: trimmed))
                         }
                     }
-                    try await execute(connection, "INSERT INTO reva_schema_migrations (version) VALUES (1)")
+                    try await execute(
+                        connection, "INSERT INTO reva_schema_migrations (version) VALUES (\(source.version))")
                 }
                 try await execute(connection, "COMMIT")
             } catch {
@@ -160,6 +168,174 @@ public struct PostgresStore: RevaStore {
         }
     }
 
+    // MARK: - Users
+    /// Emails arrive normalized; the unique index plus DO NOTHING turns a duplicate into AccountError.emailTaken.
+    public func createUser(_ user: UserRecord) async throws {
+        guard Validation.safeID(user.id) else { throw StoreError.corrupt }
+        let email = user.email.lowercased()
+        let rows = try await client.query(
+            """
+            INSERT INTO reva_users (user_id, email, display_name, password_hash, password_updated_at, created_at)
+            VALUES (\(user.id), \(email), \(user.name), \(user.passwordHash), \(user.passwordUpdatedAt), \(user.createdAt))
+            ON CONFLICT (email) DO NOTHING RETURNING user_id
+            """, logger: logger)
+        var inserted = false
+        for try await _ in rows { inserted = true }
+        guard inserted else { throw AccountError.emailTaken }
+    }
+
+    public func user(email: String) async throws -> UserRecord? {
+        let rows = try await client.query(
+            "SELECT user_id, email, display_name, password_hash, created_at, password_updated_at FROM reva_users WHERE email = \(email.lowercased())",
+            logger: logger)
+        for try await row in rows.decode(UserRow.self) { return Self.user(from: row) }
+        return nil
+    }
+
+    public func user(id: String) async throws -> UserRecord? {
+        let rows = try await client.query(
+            "SELECT user_id, email, display_name, password_hash, created_at, password_updated_at FROM reva_users WHERE user_id = \(id)",
+            logger: logger)
+        for try await row in rows.decode(UserRow.self) { return Self.user(from: row) }
+        return nil
+    }
+
+    public func updatePassword(userID: String, hash: String, at date: Date) async throws {
+        let rows = try await client.query(
+            "UPDATE reva_users SET password_hash = \(hash), password_updated_at = \(date) WHERE user_id = \(userID) RETURNING user_id",
+            logger: logger)
+        var updated = false
+        for try await _ in rows { updated = true }
+        guard updated else { throw AccountError.userMissing }
+    }
+
+    /// One transaction removes the owner aggregate (attachments and audit cascade) and the user (sessions cascade).
+    public func deleteUser(id: String) async throws {
+        guard Validation.safeID(id) else { throw StoreError.corrupt }
+        try await transaction { connection in
+            try await execute(connection, "DELETE FROM reva_owner_state WHERE owner_id = \(id)")
+            let rows = try await connection.query(
+                "DELETE FROM reva_users WHERE user_id = \(id) RETURNING user_id", logger: logger)
+            var deleted = false
+            for try await _ in rows { deleted = true }
+            guard deleted else { throw AccountError.userMissing }
+        }
+    }
+
+    // MARK: - Sessions
+    /// The user row lock serializes concurrent log-ins so the 20-live-session cap holds.
+    public func createSession(_ session: SessionRecord) async throws {
+        try await transaction { connection in
+            let users = try await connection.query(
+                "SELECT user_id FROM reva_users WHERE user_id = \(session.userID) FOR UPDATE", logger: logger)
+            var exists = false
+            for try await _ in users { exists = true }
+            guard exists else { throw AccountError.userMissing }
+            let keep = AccountPolicy.maximumLiveSessions - 1
+            try await execute(
+                connection,
+                """
+                UPDATE reva_sessions SET revoked_at = \(session.createdAt) WHERE session_id IN (
+                    SELECT session_id FROM reva_sessions
+                    WHERE user_id = \(session.userID) AND revoked_at IS NULL AND expires_at > \(session.createdAt)
+                    ORDER BY created_at DESC, session_id DESC OFFSET \(keep))
+                """)
+            try await execute(
+                connection,
+                """
+                INSERT INTO reva_sessions (session_id, token_hash, user_id, label, created_at, last_used_at, expires_at, revoked_at)
+                VALUES (\(session.id), \(session.tokenHash), \(session.userID), \(session.label), \(session.createdAt), \(session.lastUsedAt), \(session.expiresAt), \(session.revokedAt))
+                """)
+        }
+    }
+
+    public func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)? {
+        let rows = try await client.query(
+            """
+            SELECT s.session_id, s.token_hash, s.user_id, s.label, s.created_at, s.last_used_at, s.expires_at, s.revoked_at,
+                   u.user_id, u.email, u.display_name, u.password_hash, u.created_at, u.password_updated_at
+            FROM reva_sessions s JOIN reva_users u ON u.user_id = s.user_id
+            WHERE s.token_hash = \(tokenHash) AND s.revoked_at IS NULL AND s.expires_at > now()
+            """, logger: logger)
+        for try await (
+            sessionID, hash, userID, label, created, used, expires, revoked, id, email, name, password,
+            userCreated, passwordUpdated
+        ) in rows.decode(
+            (
+                UUID, String, String, String, Date, Date, Date, Date?, String, String, String, String, Date,
+                Date
+            )
+            .self)
+        {
+            return (
+                SessionRecord(
+                    id: sessionID, tokenHash: hash, userID: userID, label: label, createdAt: created,
+                    lastUsedAt: used, expiresAt: expires, revokedAt: revoked),
+                Self.user(from: (id, email, name, password, userCreated, passwordUpdated))
+            )
+        }
+        return nil
+    }
+
+    public func touchSession(id: UUID, at date: Date) async throws {
+        let rows = try await client.query(
+            "UPDATE reva_sessions SET last_used_at = \(date) WHERE session_id = \(id) RETURNING session_id",
+            logger: logger)
+        var updated = false
+        for try await _ in rows { updated = true }
+        guard updated else { throw AccountError.sessionMissing }
+    }
+
+    public func revokeSession(id: UUID) async throws {
+        let rows = try await client.query(
+            "UPDATE reva_sessions SET revoked_at = COALESCE(revoked_at, now()) WHERE session_id = \(id) RETURNING session_id",
+            logger: logger)
+        var updated = false
+        for try await _ in rows { updated = true }
+        guard updated else { throw AccountError.sessionMissing }
+    }
+
+    public func revokeSessions(userID: String, except: UUID?) async throws {
+        if let except {
+            try await execute(
+                client,
+                "UPDATE reva_sessions SET revoked_at = now() WHERE user_id = \(userID) AND revoked_at IS NULL AND session_id != \(except)"
+            )
+        } else {
+            try await execute(
+                client,
+                "UPDATE reva_sessions SET revoked_at = now() WHERE user_id = \(userID) AND revoked_at IS NULL"
+            )
+        }
+    }
+
+    // MARK: - Row decoding for users
+    private typealias UserRow = (String, String, String, String, Date, Date)
+
+    private static func user(from row: UserRow) -> UserRecord {
+        UserRecord(
+            id: row.0, email: row.1, name: row.2, passwordHash: row.3, createdAt: row.4,
+            passwordUpdatedAt: row.5)
+    }
+
+    // MARK: - Generic transaction with rollback on failure
+    private func transaction<T: Sendable>(_ operation: @Sendable (PostgresConnection) async throws -> T)
+        async throws -> T
+    {
+        try await client.withConnection { connection in
+            try await execute(connection, "BEGIN")
+            do {
+                try await execute(connection, "SET LOCAL statement_timeout = '15s'")
+                let result = try await operation(connection)
+                try await execute(connection, "COMMIT")
+                return result
+            } catch {
+                try? await execute(connection, "ROLLBACK")
+                throw error
+            }
+        }
+    }
+
     // MARK: - Serialize owner mutations with rollback on failure
     // The row lock covers revision/quota checks and their corresponding writes in the same transaction.
     private func ownerTransaction<T: Sendable>(
@@ -192,6 +368,11 @@ public struct PostgresStore: RevaStore {
     // MARK: - Drain queries and retain bounded metadata-only audit history
     private func execute(_ connection: PostgresConnection, _ query: PostgresQuery) async throws {
         let rows = try await connection.query(query, logger: logger)
+        for try await _ in rows {}
+    }
+
+    private func execute(_ client: PostgresClient, _ query: PostgresQuery) async throws {
+        let rows = try await client.query(query, logger: logger)
         for try await _ in rows {}
     }
 

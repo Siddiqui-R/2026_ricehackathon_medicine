@@ -268,6 +268,10 @@ test(
         ['/v1/state', 'OPTIONS', 405],
         ['/v1/attachments/a.b', 'GET', 404],
         ['/v1/booking/call/a/b', 'GET', 404],
+        ['/v1/auth/unknown', 'POST', 404],
+        ['/v1/auth/login', 'GET', 405],
+        ['/v1/auth/session', 'POST', 405],
+        ['/v1/auth/account', 'GET', 405],
       ])
         assert.equal((await send(webPort, target, { method })).status, status, `${method} ${target}`);
       assert.equal(requests.length, before);
@@ -281,8 +285,25 @@ test(
         ['/v1/booking/call', 'POST'],
         ['/v1/booking/call/synthetic_id', 'GET'],
         ['/v1/attachments/synthetic_id', 'DELETE'],
+        ['/v1/auth/signup', 'POST'],
+        ['/v1/auth/login', 'POST'],
+        ['/v1/auth/session', 'GET'],
+        ['/v1/auth/logout', 'POST'],
+        ['/v1/auth/logout-all', 'POST'],
+        ['/v1/auth/password', 'PUT'],
+        ['/v1/auth/account', 'DELETE'],
       ])
         assert.equal((await send(webPort, target, { method })).status, 200, `${method} ${target}`);
+      assert.equal(
+        (
+          await send(webPort, '/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Length': String(16 * 1024 + 1) },
+          })
+        ).status,
+        413,
+      );
+      assert.equal((await send(webPort, '/v1/auth/logout', { method: 'POST', body: 'x' })).status, 413);
     });
     await t.test('rejects declared and chunked excess bodies before forwarding any bytes', async () => {
       const before = requests.length;
@@ -336,6 +357,12 @@ test(
     await t.test('serves only public compiled/demo assets with safe types and HEAD behavior', async () => {
       for (const [target, type] of [
         ['/', 'text/html; charset=utf-8'],
+        ['/demo', 'text/html; charset=utf-8'],
+        ['/demo/', 'text/html; charset=utf-8'],
+        ['/login', 'text/html; charset=utf-8'],
+        ['/signup', 'text/html; charset=utf-8'],
+        ['/app', 'text/html; charset=utf-8'],
+        ['/app/', 'text/html; charset=utf-8'],
         ['/assets/app.js', 'text/javascript'],
         ['/demo/seed.json', 'application/json'],
         ['/ocr/core/fixture.wasm', 'application/wasm'],
@@ -352,6 +379,9 @@ test(
       assert.equal(head.bytes.length, 0);
       assert.ok(Number(head.headers['content-length']) > 0);
       for (const target of [
+        '/account',
+        '/app/records',
+        '/demo/records',
         '/private-settings.txt',
         '/assets/.hidden.txt',
         '/assets/app.js.map',

@@ -1,5 +1,5 @@
 // Purpose: Guide document intake from original file through local extraction, review, and durable saving.
-// Inputs: User-selected text/PDF/image bytes, source metadata, and explicit extraction review.
+// Inputs: User-selected text/PDF/image bytes, source metadata, and optional text corrections.
 // Outputs: A versioned MedicalRecord plus its unchanged original attachment in the local repository.
 // Side effects: Reads locally, manages cancellable workers/object URLs, and optionally requests a configured summary after save.
 
@@ -29,7 +29,6 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState('');
   const [date, setDate] = useState(localDay());
   const [text, setText] = useState('');
-  const [reviewed, setReviewed] = useState(false);
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState('');
@@ -66,7 +65,6 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setTitle(chosen.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
     setProvider('');
     setText('');
-    setReviewed(false);
     setError('');
     setExtraction(null);
     setReading(true);
@@ -137,7 +135,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         mimeType: type,
         pageCount: extraction.pageCount,
         pageTexts: text === extraction.text && extraction.pageTexts.length ? extraction.pageTexts : null,
-        status: reviewed && text.trim() && !extraction.incomplete ? 'ready' : 'needsReview',
+        status: 'ready',
         notes: extraction.warnings.join('\n'),
         isDemo: false,
         version: 1,
@@ -288,23 +286,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                       value={text}
                       onChange={(event) => {
                         setText(event.target.value);
-                        setReviewed(false);
                       }}
                       placeholder="Add a transcription if the text could not be read."
                     />
                   </Field>
-                  <label className="checkbox-field">
-                    <input
-                      type="checkbox"
-                      checked={reviewed}
-                      onChange={(event) => setReviewed(event.target.checked)}
-                      disabled={!text.trim() || extraction.incomplete}
-                    />
-                    <span>
-                      I reviewed the text against the original
-                      {extraction.incomplete ? ' · partial reading remains marked for review' : ''}
-                    </span>
-                  </label>
                   <details>
                     <summary>Preview the local excerpt</summary>
                     <p className="prose">

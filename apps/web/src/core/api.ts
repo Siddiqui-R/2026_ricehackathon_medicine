@@ -1,7 +1,7 @@
-// Purpose: Exchange bounded native-compatible payloads with the same-origin Swift API.
-// Inputs: A session-only owner token, reviewed snapshots, sources and call requests.
-// Outputs: Validated responses or explicit HTTP, empty-state and conflict failures.
-// Side effects: Same-origin HTTP only; never stores credentials or resolves a conflict automatically.
+// Purpose: Exchange bounded native-compatible payloads with the Swift API at one configured origin.
+// Inputs: A bearer token (static workspace or account session), reviewed snapshots, sources and call requests.
+// Outputs: Validated responses or explicit HTTP, empty-state and conflict failures with the server's reason.
+// Side effects: HTTP to the same origin or VITE_REVA_API_ORIGIN only; never stores credentials or merges.
 import type {
   AISummary,
   AIPreparation,
@@ -16,9 +16,41 @@ import type {
 } from './models.ts';
 import { safeFilename, sha256, validateSnapshot } from './domain.ts';
 
+// MARK: - One API origin: same-origin by default, or a validated VITE_REVA_API_ORIGIN.
+// Only https:// or a loopback http:// origin is accepted, so a bearer token can never leak over
+// plain HTTP to a remote host. An invalid value fails at startup rather than at the first request.
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+export function resolveAPIOrigin(value: string | undefined | null): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error('VITE_REVA_API_ORIGIN must be an absolute https:// origin or a loopback http:// origin.');
+  }
+  const loopback = url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname);
+  if (
+    (url.protocol !== 'https:' && !loopback) ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  )
+    throw new Error('VITE_REVA_API_ORIGIN must be an absolute https:// origin or a loopback http:// origin.');
+  return url.origin;
+}
+export const API_ORIGIN = resolveAPIOrigin(import.meta.env.VITE_REVA_API_ORIGIN);
+export function apiURL(path: string, origin: string = API_ORIGIN): string {
+  if (!path.startsWith('/') || path.startsWith('//')) throw new Error('API paths must be origin-relative.');
+  return origin + path;
+}
+
 // MARK: - Shared transfer limits, attachment identity and portable metadata.
 export const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
 export const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
+export const MAX_ERROR_BODY_BYTES = 4 * 1024;
 export const attachmentID = sha256;
 export function attachmentMetadataName(filename: string): string {
   const name = Array.from(filename, (scalar) => (/^[a-zA-Z0-9 ._()\-]$/.test(scalar) ? scalar : '_'))
@@ -49,24 +81,66 @@ export function uploadContentType(type?: string | null): string {
     ? normalized
     : 'application/octet-stream';
 }
+// A server `reason` (from the `{ error, reason }` body) replaces the generic text when present;
+// the status-based fallbacks stay for bodies the server did not or could not describe.
+export function defaultReason(status: number, retryAfter: number | null = null): string {
+  switch (status) {
+    case 400:
+      return 'The server rejected this request. Check the entered values and try again.';
+    case 401:
+      return 'The server did not accept this workspace token.';
+    case 403:
+      return 'This action is not allowed on this server.';
+    case 404:
+      return 'This server identity has no saved state or the requested item is unavailable.';
+    case 409:
+      return 'The server changed. Your browser copy was kept. Pull and review its latest copy before pushing again.';
+    case 429:
+      return retryAfter
+        ? `Too many attempts. Try again in about ${Math.ceil(retryAfter / 60)} minute${retryAfter > 60 ? 's' : ''}.`
+        : 'Too many attempts. Wait a few minutes before trying again.';
+    case 503:
+      return 'This connected service is not configured or is unavailable. Your saved data was kept.';
+    default:
+      return `The server returned HTTP ${status}. Your saved data was kept.`;
+  }
+}
 export class APIError extends Error {
   readonly status: number;
   readonly revision: number | null;
-  constructor(status: number, revision: number | null = null) {
-    super(
-      status === 409
-        ? 'The server changed. Your browser copy was kept. Pull and review its latest copy before pushing again.'
-        : status === 404
-          ? 'This server identity has no saved state or the requested item is unavailable.'
-          : status === 401
-            ? 'The server did not accept this workspace token.'
-            : status === 503
-              ? 'This connected service is not configured or is unavailable. Your saved data was kept.'
-              : `The server returned HTTP ${status}. Your saved data was kept.`,
-    );
+  readonly retryAfter: number | null;
+  constructor(
+    status: number,
+    revision: number | null = null,
+    reason: string | null = null,
+    retryAfter: number | null = null,
+  ) {
+    super(reason?.trim() || defaultReason(status, retryAfter));
     this.name = 'APIError';
     this.status = status;
     this.revision = revision;
+    this.retryAfter = retryAfter;
+  }
+}
+export function headerRetryAfter(value: string | null): number | null {
+  return value !== null && /^\d{1,6}$/.test(value.trim()) ? Number(value.trim()) : null;
+}
+// Reads a bounded JSON error body and returns its `reason` text when the shape matches SafeErrors.
+export async function errorReason(response: Response): Promise<string | null> {
+  try {
+    if (!/^application\/json\b/i.test(response.headers.get('Content-Type') ?? '')) {
+      await response.body?.cancel();
+      return null;
+    }
+    const bytes = await boundedBytes(response, MAX_ERROR_BODY_BYTES);
+    const body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+    const reason = (body as Record<string, unknown>).reason;
+    return typeof reason === 'string' && reason.trim() && reason.length <= 500 && !/[\r\n]/.test(reason)
+      ? reason.trim()
+      : null;
+  } catch {
+    return null;
   }
 }
 function object(value: unknown): Record<string, unknown> {
@@ -127,6 +201,7 @@ export async function boundedBytes(response: Response, limit: number): Promise<U
 }
 
 // MARK: - One authenticated request boundary with timeouts and no credential redirects.
+// Every path goes through apiURL, so a configured remote origin applies to state, originals and providers.
 export class RevaAPI {
   private readonly token: string;
   private readonly fetcher: typeof fetch;
@@ -146,7 +221,7 @@ export class RevaAPI {
     const controller = new AbortController(),
       timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const response = await this.fetcher(path, {
+      const response = await this.fetcher(apiURL(path), {
         method,
         body,
         headers: { Authorization: `Bearer ${this.token}`, ...headers },
@@ -155,10 +230,13 @@ export class RevaAPI {
         cache: 'no-store',
         redirect: 'error',
       });
-      if (!response.ok) {
-        await response.body?.cancel();
-        throw new APIError(response.status, headerRevision(response.headers.get('X-State-Revision')));
-      }
+      if (!response.ok)
+        throw new APIError(
+          response.status,
+          headerRevision(response.headers.get('X-State-Revision')),
+          await errorReason(response),
+          headerRetryAfter(response.headers.get('Retry-After')),
+        );
       return { bytes: await boundedBytes(response, limit), headers: response.headers };
     } catch (error) {
       if (controller.signal.aborted)

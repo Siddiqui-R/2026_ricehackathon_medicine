@@ -42,7 +42,7 @@ struct BookingEditorView: View {
                 DatePicker("Latest", selection: $latest, in: earliest...)
                 Text(visit.timeZone).font(.caption).foregroundStyle(.secondary)
                 TextField("Preferences and constraints", text: $preferences, axis: .vertical).lineLimit(2...4)
-            }.environment(\.timeZone, TimeZone(identifier: visit.timeZone) ?? .current)
+            }.environment(\.timeZone, TimeZone(identifier: visit.timeZone) ?? RevaDate.defaultTimeZone)
             Section {
                 Picker("Demo outcome", selection: $scenario) {
                     ForEach(["Appointment available", "Clinic needs details", "No answer"], id: \.self) {

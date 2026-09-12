@@ -135,6 +135,50 @@ final class DomainTests: XCTestCase {
             XCTAssertEqual(RevaDate.day(RevaDate.parse(value)), value)
         }
     }
+    // MARK: - Central time defaults and explicit-zone preservation
+
+    func testNewVisitsAndSymptomsDefaultToCentralTime() {
+        let visit = Visit(
+            title: "Follow-up", type: "Primary care", provider: "Fictional clinician", clinic: "Demo clinic",
+            date: "2026-01-15T14:00:00Z", concern: "Review", goal: "Prepare")
+        XCTAssertEqual(visit.timeZone, "America/Chicago")
+        XCTAssertEqual(SymptomEntry().timeZone, "America/Chicago")
+    }
+
+    func testDefaultDisplayUsesCentralDateAndHonorsExplicitZones() {
+        let instant = "2026-01-15T05:30:00Z"
+        XCTAssertEqual(RevaDate.display(instant), RevaDate.display("2026-01-14"))
+        XCTAssertEqual(RevaDate.display(instant, zone: "invalid/zone"), RevaDate.display("2026-01-14"))
+        XCTAssertEqual(RevaDate.display(instant, zone: "Asia/Tokyo"), RevaDate.display("2026-01-15"))
+        XCTAssertEqual(
+            RevaDate.display(instant, time: true),
+            RevaDate.display(instant, time: true, zone: "America/Chicago"))
+        XCTAssertNotEqual(
+            RevaDate.display(instant, time: true),
+            RevaDate.display(instant, time: true, zone: "America/New_York"))
+    }
+
+    func testCentralTodayFollowsStandardAndDaylightTimeWithoutChangingDateOnlyStorage() {
+        XCTAssertEqual(RevaDate.today(at: RevaDate.parse("2026-01-15T05:59:00Z")), "2026-01-14")
+        XCTAssertEqual(RevaDate.today(at: RevaDate.parse("2026-01-15T06:00:00Z")), "2026-01-15")
+        XCTAssertEqual(RevaDate.today(at: RevaDate.parse("2026-07-15T04:59:00Z")), "2026-07-14")
+        XCTAssertEqual(RevaDate.today(at: RevaDate.parse("2026-07-15T05:00:00Z")), "2026-07-15")
+        XCTAssertEqual(
+            RevaDate.defaultTimeZone.secondsFromGMT(for: RevaDate.parse("2026-01-15T12:00:00Z")), -21_600)
+        XCTAssertEqual(
+            RevaDate.defaultTimeZone.secondsFromGMT(for: RevaDate.parse("2026-07-15T12:00:00Z")), -18_000)
+        let today = RevaDate.today(at: RevaDate.parse("2026-01-15T05:59:00Z"))
+        XCTAssertEqual(RevaDate.day(RevaDate.parse(today)), "2026-01-14")
+        XCTAssertEqual(RevaDate.iso(RevaDate.parse("2026-01-15T05:59:00Z")), "2026-01-15T05:59:00Z")
+    }
+
+    func testExistingSymptomZoneAndInstantSurviveRoundtrip() throws {
+        let original = SymptomEntry(
+            observedAt: "2026-09-12T01:30:00Z", timeZone: "Pacific/Honolulu", symptom: "Headache")
+        let restored = try JSONDecoder().decode(SymptomEntry.self, from: JSONEncoder().encode(original))
+        XCTAssertEqual(restored.timeZone, "Pacific/Honolulu")
+        XCTAssertEqual(restored.observedAt, original.observedAt)
+    }
     // MARK: - Retrieval beyond the opening excerpt
 
     func testLongGenericImportFindsEvidenceBeyondOpeningSummary() throws {

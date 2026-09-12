@@ -16,7 +16,7 @@ struct RecordsView: View {
     @State private var adding = false
     @State private var loggingSymptoms = false
     let filters = [
-        "All", "Symptoms", "Needs review", "Notes", "Labs", "Imaging", "Procedure", "Scan", "Recording",
+        "All", "Symptoms", "Notes", "Labs", "Imaging", "Procedure", "Scan", "Recording",
     ]
     // MARK: - Derived display and validation
     var filtered: [MedicalRecord] {
@@ -24,7 +24,7 @@ struct RecordsView: View {
             (filter == "All"
                 || (filter == "Symptoms"
                     ? record.symptomEntry != nil
-                    : filter == "Needs review" ? record.needsReview : record.kind == filter))
+                    : record.kind == filter))
                 && (query.isEmpty
                     || ([
                         record.title, record.provider, record.tags.joined(separator: " "), record.text,

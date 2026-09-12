@@ -83,7 +83,7 @@ Each client remains locally authoritative between sync operations. Its server sn
 | Native HTTP | Foundation URLSession; explicit bearer token; HTTPS except loopback; provider secrets stay on server | [ServerClient](../apps/ios/Reva/Core/ServerClient.swift), [ProviderClient](../apps/ios/Reva/Core/ProviderClient.swift) |
 | Swift backend | Vapor4.122.1, bounded authenticated routes, safe errors and owner-scoped data access | [HTTP.swift](../server/Sources/RevaServer/HTTP.swift), [server package](../server/Package.swift) |
 | Database | PostgresNIO1.33.1, TLS verification, migration001; JSONB snapshots, BYTEA originals and mutation audit | [PostgresStore](../server/Sources/RevaServer/PostgresStore.swift), [SQL](../server/Sources/RevaServer/Migrations/001_snapshot.sql) |
-| Document/visit AI | Gemini Developer API `generateContent`; default `gemini-2.5-flash`, configurable `GEMINI_MODEL`; structured JSON validation | [Gemini provider files](../server/Sources/RevaServer/Providers/GeminiService.swift) |
+| Document/visit AI | Gemini Developer API `generateContent`; default `gemini-3.8-flash`, configurable `GEMINI_MODEL`; structured JSON validation | [Gemini provider files](../server/Sources/RevaServer/Providers/GeminiService.swift) |
 | Speech AI | OpenAI `whisper-1`, multipart `verbose_json`, segment timestamps and generic speaker labels | [Whisper adapter](../server/Sources/RevaServer/Providers/VoiceTranscription.swift) |
 | Calling | ElevenLabs Twilio outbound endpoint and conversation status API; durable replay receipts; no automatic appointment confirmation | [VoiceCalls.swift](../server/Sources/RevaServer/Providers/VoiceCalls.swift) |
 | Configuration | Root `.env` delivered empty and ignored; optional safe dotenv launcher; exported environment overrides file values | [run_server.py](../scripts/run_server.py), [example](../.env.example), [provider setup](../server/README.md#configurable-mvp-providers) |
@@ -139,6 +139,8 @@ flowchart TD
 ```
 
 The medical profile is editable quick-reference data, separate from historical source documents. Optional `surgeriesAndImplants` and `careNotes` fields preserve earlier snapshots. The preparation contract currently uses records, so profile edits do not silently rewrite evidence. User symptom entries contain their structured observation and exact labelled source text; edits preserve identity and creation time while the usual source versioning marks prior briefs stale. Full ISO occurrence time and time zone are preserved, and the record list uses the observation's local calendar day.
+
+Both clients default new visits, symptom observations, unspecified display zones, and “today” fields to US Central time (`America/Chicago`, following CST/CDT daylight-saving changes). Existing explicit time zones remain authoritative. Date-only record dates and birthdays keep their calendar date; UTC remains their neutral encoding and the wire format for absolute timestamps. Native defaults live in `RevaDate`; browser defaults and wall-time conversion live in `core/dates.ts`.
 
 Both clients now use exact blush ivory `#FBF7F5`, white outlined cards, and heart-red `#B84250` actions. Small labels on petal use deep red `#8C2F3B`. The [browser verification](verification/web-client.md) records the current responsive pass. The [earlier native follow-up](verification/profile-symptoms.md) preserves historical teal-palette evidence.
 
@@ -224,3 +226,87 @@ The [team guide](team-workflow.md) assigns exact files, worktree commands and st
 The native build, local journeys, provider request/response mocks, real local-server auth/persistence checks and native provider-fixture UI have passed. The [verification sheet](verification/README.md) records exact counts and limitations. Before using live integrations, configure private tokens, keys/model access, the ElevenLabs agent and imported Twilio number, a persistent server directory, HTTPS hosting for a physical phone, and Tiger credentials if selecting PostgreSQL; then run a credentialed smoke check with synthetic data. No such live activation was performed here.
 
 The browser extension is implemented and verified locally. MyChart import, custom password encryption, production medical-data deployment and extensive post-MVP polish remain outside this deadline. Checkpoint history and the manual feedback workflow are preserved for the next revisions.
+
+## Accounts and Tiger persistence
+
+**Configured, not live-verified.** The pieces below exist in source and documentation: the server accounts contract (bcrypt users, hashed session tokens, CORS), the browser `/signup`, `/login`, and `/app` pages, [`server/Dockerfile`](../server/Dockerfile), [`scripts/tiger_provision.py`](../scripts/tiger_provision.py), and the [Tiger setup guide](tiger-setup.md). No Tiger Cloud service, deployed API host, or Docker image build was exercised during this build. Petal nodes are implemented code paths; the white node is the static host configuration; dashed nodes are the hosted database objects that the first deployment creates.
+
+```mermaid
+flowchart LR
+    subgraph BROWSER["Browser"]
+        PAGES["/ landing · /signup · /login forms"]
+        WORKSPACE["/app workspace · session in localStorage reva.session.v1 · debounced auto-sync"]
+        DEMO["/demo · fictional data · unchanged"]
+    end
+    subgraph VERCEL["Vercel static site · apps/web dist"]
+        STATIC["index.html + hashed assets · VITE_REVA_API_ORIGIN baked at build time"]
+    end
+    subgraph HOST["API host · server/Dockerfile · Vapor on 0.0.0.0:8080 behind platform HTTPS"]
+        CORS["CORS for REVA_ALLOWED_ORIGINS exact origins"]
+        AUTH["/v1/auth signup · login · session · logout · logout-all · password · account"]
+        BEARER["BearerMiddleware: constant-time static token, else rs_ token → SHA-256 lookup"]
+        STATE["/v1/state · /v1/attachments · provider routes · owner = user id"]
+        MIGRATE["Start-up migrations 001 → 002 under advisory lock"]
+    end
+    subgraph TIGER["Tiger Cloud PostgreSQL · free shared · us-east-1 · TLS"]
+        USERS[("reva_users · bcrypt hash")]
+        SESSIONS[("reva_sessions · token hash · expiry · revocation")]
+        OWNER[("reva_owner_state · reva_attachments · reva_mutations")]
+        VERSIONS[("reva_schema_migrations")]
+    end
+    PAGES -->|"GET static"| STATIC
+    WORKSPACE -->|"GET static"| STATIC
+    DEMO -->|"GET static"| STATIC
+    PAGES -->|"POST JSON ≤ 16 KiB"| CORS
+    WORKSPACE -->|"Authorization: Bearer rs_…"| CORS
+    CORS --> AUTH
+    CORS --> BEARER
+    BEARER --> STATE
+    AUTH -.-> USERS
+    AUTH -.-> SESSIONS
+    BEARER -.->|"lookup · touch lastUsedAt ≤ once per 5 min"| SESSIONS
+    STATE -.-> OWNER
+    MIGRATE -.-> VERSIONS
+    classDef local fill:#FAE6E5,stroke:#B84250,color:#342B2C;
+    classDef adapter fill:#FFFFFF,stroke:#B84250,color:#342B2C;
+    classDef external fill:#FBF7F5,stroke:#DBCBC9,color:#342B2C,stroke-dasharray:5 5;
+    class PAGES,WORKSPACE,DEMO,CORS,AUTH,BEARER,STATE,MIGRATE local;
+    class STATIC adapter;
+    class USERS,SESSIONS,OWNER,VERSIONS external;
+```
+
+Sign-up, log-in, and the bearer flow as configured:
+
+```mermaid
+sequenceDiagram
+    participant B as Browser (/signup → /app)
+    participant V as Vercel static site
+    participant A as API host (Vapor)
+    participant T as Tiger PostgreSQL
+    B->>V: GET /signup
+    V-->>B: static page; API origin from VITE_REVA_API_ORIGIN
+    B->>A: POST /v1/auth/signup {email, password, name}
+    A->>A: normalize email · check policy · bcrypt cost 12 off the event loop
+    A->>T: INSERT reva_users · INSERT reva_sessions (SHA-256 of rs_ token)
+    A-->>B: 201 {token rs_…, expiresAt, user}
+    B->>B: store reva.session.v1 · location.assign('/app')
+    B->>A: GET /v1/state · Authorization: Bearer rs_…
+    A->>T: SELECT session by token hash JOIN user · reject expired/revoked
+    A->>T: SELECT reva_owner_state WHERE owner_id = user id
+    A-->>B: 404 + X-State-Revision: 0 on first use
+    B->>A: PUT /v1/state {baseRevision: 0, empty personal snapshot}
+    A->>T: lock owner row · write snapshot revision 1 · audit row
+    A-->>B: {revision: 1}
+    Note over B,A: Log-in repeats with POST /v1/auth/login; 8 failures per email in 15 min → 429 Retry-After
+    Note over A,T: REVA_STORAGE=postgres · DATABASE_URL sslmode=require · no local fallback
+```
+
+| Setting | Where | Value |
+| --- | --- | --- |
+| `REVA_STORAGE`, `DATABASE_URL` | API host | `postgres`, the Tiger connection string printed once by `scripts/tiger_provision.py create` |
+| `REVA_ACCOUNTS`, `REVA_SIGNUP`, `REVA_SESSION_DAYS` | API host | `enabled`, `open`, `30` by default |
+| `REVA_ALLOWED_ORIGINS` | API host | exact `https://<vercel-domain>` origins; never `*` |
+| `VITE_REVA_API_ORIGIN` | Vercel project | `https://<api-host>`; rebuilt into the bundle on redeploy |
+| `connect-src` in `vercel.json` | Vercel | must add the API origin before cross-origin requests can leave the page |
+
+Static `REVA_TOKENS` identities keep working beside accounts for the iOS developer path. The demo at `/demo` still uses the local demo token and manual sync. The setup guide's checklist (health, sign-up, log-in, session, state round trip, CORS preflight, `SELECT count(*) FROM reva_users;`) is the acceptance test for the first real deployment; until it runs, this section describes configuration, not observed behaviour.

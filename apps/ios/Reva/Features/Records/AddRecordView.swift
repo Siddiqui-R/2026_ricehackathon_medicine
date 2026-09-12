@@ -26,8 +26,7 @@ struct AddRecordView: View {
     @State private var importError: String?
     @State private var title = ""
     @State private var text = ""
-    @State private var recordDate = Date()
-    @State private var verified = false
+    @State private var recordDate = RevaDate.parse(RevaDate.today())
     @State private var manual = false
     @State private var loggingSymptoms = false
     private let importer = DocumentImportService()
@@ -230,7 +229,6 @@ struct AddRecordView: View {
             of: "." + (item.filename as NSString).pathExtension, with: ""
         ).replacingOccurrences(of: "-", with: " ")
         text = item.text
-        verified = false
     }
     // MARK: - Review and save
     /// Save original bytes with the reviewed text; request connected AI only after the record exists.
@@ -240,7 +238,7 @@ struct AddRecordView: View {
             RevaCard {
                 TextField("Title", text: $title).font(.headline)
                 DatePicker("Record date", selection: $recordDate, displayedComponents: .date).environment(
-                    \.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
+                    \.timeZone, RevaDate.calendarDayTimeZone)
                 Text("Choose the date shown on your record.").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(item.warnings, id: \.self) { warning in
@@ -250,7 +248,6 @@ struct AddRecordView: View {
             RevaCard {
                 Text("Extracted text").font(.headline)
                 TextEditor(text: $text).frame(minHeight: 220)
-                Toggle("I reviewed the text against the source", isOn: $verified)
             }
             RevaCard {
                 Text("Local excerpt").font(.headline)
@@ -277,7 +274,7 @@ struct AddRecordView: View {
                         provider: "Manually added", date: RevaDate.day(recordDate), text: text,
                         summary: ReportEngine.localExcerpt(text), sourceFilename: name,
                         mimeType: item.mimeType, pageCount: item.pageCount,
-                        status: verified && !text.isEmpty ? "ready" : "needsReview",
+                        status: "ready",
                         notes: item.warnings.joined(separator: "\n"),
                         pageTexts: text == item.text ? item.pageTexts : nil)
                     try store.save(record)

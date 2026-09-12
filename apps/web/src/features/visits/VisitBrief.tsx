@@ -207,8 +207,8 @@ export function VisitBrief({ visit }: { visit: Visit }) {
             </p>
           </section>
           <p className="muted small report-footer">
-            Prepared to help you discuss your history with your clinician. Review the original sources and any
-            items marked “Needs review.”
+            Prepared to help you discuss your history with your clinician. Check the original sources for
+            details and context.
           </p>
         </article>
       )}

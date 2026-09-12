@@ -57,7 +57,6 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
         default: return "doc.text"
         }
     }
-    var needsReview: Bool { status == "needsReview" }
     var summaryLabel: String {
         summaryModel.map { "AI summary · " + $0 }
             ?? (symptomEntry != nil ? "Your entry" : isDemo ? "Demo summary" : "Local excerpt")
@@ -117,7 +116,7 @@ struct Visit: Codable, Identifiable, Equatable {
     var provider: String
     var clinic: String
     var date: String
-    var timeZone: String = "America/Chicago"
+    var timeZone: String = RevaDate.defaultTimeZoneIdentifier
     var concern: String
     var goal: String
     var questions: [String] = []
@@ -214,8 +213,13 @@ enum RevaError: LocalizedError {
     }
 }
 // MARK: - Date and duration conventions
-// Normalize calendar days in UTC and display actual instants in the supplied zone.
+// Default actual instants to US Central; keep date-only values independent of time zones.
 enum RevaDate {
+    static let defaultTimeZoneIdentifier = "America/Chicago"
+    static let defaultTimeZone = TimeZone(identifier: defaultTimeZoneIdentifier)!
+    // UTC is only a neutral carrier for calendar-only values such as record dates and birthdays.
+    static let calendarDayTimeZone = TimeZone(secondsFromGMT: 0)!
+
     static var now: String { ISO8601DateFormatter().string(from: Date()) }
     static func parse(_ text: String) -> Date {
         if let date = ISO8601DateFormatter().date(from: text) { return date }
@@ -229,20 +233,22 @@ enum RevaDate {
         return day.date(from: text) ?? .distantPast
     }
     static func iso(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
-    static func day(_ date: Date) -> String {
+    static func day(_ date: Date, zone: TimeZone = calendarDayTimeZone) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.timeZone = zone
         return f.string(from: date)
     }
+    static func today(at date: Date = Date()) -> String { day(date, zone: defaultTimeZone) }
+
     static func display(_ text: String, time: Bool = false, zone: String? = nil) -> String {
         let f = DateFormatter()
         f.dateStyle = .medium
         let dateOnly = text.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
         f.timeStyle = time && !dateOnly ? .short : .none
         f.timeZone =
-            dateOnly ? TimeZone(secondsFromGMT: 0) : (zone.flatMap(TimeZone.init(identifier:)) ?? .current)
+            dateOnly ? calendarDayTimeZone : (zone.flatMap(TimeZone.init(identifier:)) ?? defaultTimeZone)
         return f.string(from: parse(text))
     }
     static func duration(_ seconds: Double) -> String {

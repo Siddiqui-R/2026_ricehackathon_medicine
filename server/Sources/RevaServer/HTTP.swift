@@ -1,28 +1,42 @@
-// Purpose: Expose storage/provider routes behind owner authentication and consistent safe errors.
-// Inputs: HTTP requests, validated server settings, a store, and an optional mock Gemini transport.
+// Purpose: Expose storage/provider/account routes behind owner authentication, optional CORS, and consistent safe errors.
+// Inputs: HTTP requests, validated server settings, a store, an optional account store, and an optional mock Gemini transport.
 // Outputs: Bounded JSON/binary responses with no-store headers and explicit revision/conflict metadata.
 // Side effects: Registers routes/middleware, then delegates storage changes and configured provider requests.
 // Ownership: The bearer mapping chooses the owner. Client snapshot contents cannot choose another owner.
 
 import Vapor
 
-// MARK: - Authenticated identity and bearer matching
-struct OwnerIdentity: Authenticatable { let id: String }
-
-private struct BearerMiddleware: AsyncMiddleware {
+// MARK: - Bearer matching for static tokens and account sessions
+/// Static tokens are compared in constant time first; otherwise a well-formed rs_ token is looked up by its SHA-256 hex.
+struct BearerMiddleware: AsyncMiddleware {
     let tokens: [String: String]
+    let accounts: (any AccountStore)?
 
     func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
-        guard let supplied = request.headers.bearerAuthorization?.token,
-            supplied.utf8.count <= 256,
-            let owner = tokens.first(where: { constantTimeEqual($0.key, supplied) })?.value
-        else {
-            throw Abort(
-                .unauthorized, headers: ["WWW-Authenticate": "Bearer"],
-                reason: "A valid bearer token is required.")
+        guard let supplied = request.headers.bearerAuthorization?.token, supplied.utf8.count <= 256 else {
+            throw Self.unauthorized
         }
-        request.auth.login(OwnerIdentity(id: owner))
+        if let owner = tokens.first(where: { constantTimeEqual($0.key, supplied) })?.value {
+            request.auth.login(OwnerIdentity(id: owner))
+            return try await next.respond(to: request)
+        }
+        guard let accounts, SessionToken.isWellFormed(supplied),
+            let (session, user) = try await accounts.session(tokenHash: SessionToken.hash(supplied))
+        else { throw Self.unauthorized }
+        let now = Date()
+        guard session.isLive(at: now), Validation.safeID(user.id) else { throw Self.unauthorized }
+        // Update lastUsedAt at most once per five minutes so reads do not rewrite the session on every request.
+        if now.timeIntervalSince(session.lastUsedAt) > AccountPolicy.sessionTouchInterval {
+            try await accounts.touchSession(id: session.id, at: now)
+        }
+        request.auth.login(OwnerIdentity(id: user.id, session: session, user: user))
         return try await next.respond(to: request)
+    }
+
+    private static var unauthorized: Abort {
+        Abort(
+            .unauthorized, headers: ["WWW-Authenticate": "Bearer"],
+            reason: "A valid bearer token is required.")
     }
 
     private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
@@ -34,6 +48,38 @@ private struct BearerMiddleware: AsyncMiddleware {
                 (index < left.count ? left[index] : 0) ^ (index < right.count ? right[index] : 0))
         }
         return difference == 0
+    }
+}
+
+// MARK: - Exact-origin CORS for the browser client
+/// Only configured origins are echoed; there is no wildcard and no credentials flag because bearer tokens are used.
+struct CORSPolicyMiddleware: AsyncMiddleware {
+    let origins: Set<String>
+
+    func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
+        guard let origin = request.headers.first(name: .origin), origins.contains(origin) else {
+            return try await next.respond(to: request)
+        }
+        if request.method == .OPTIONS, request.headers.contains(name: .accessControlRequestMethod) {
+            let response = Response(status: .noContent)
+            apply(origin: origin, to: response)
+            response.headers.replaceOrAdd(
+                name: .accessControlAllowMethods, value: "GET, PUT, POST, DELETE, OPTIONS")
+            response.headers.replaceOrAdd(
+                name: .accessControlAllowHeaders, value: "Authorization, Content-Type, X-Filename")
+            response.headers.replaceOrAdd(name: .accessControlMaxAge, value: "600")
+            response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
+            return response
+        }
+        let response = try await next.respond(to: request)
+        apply(origin: origin, to: response)
+        return response
+    }
+
+    private func apply(origin: String, to response: Response) {
+        response.headers.replaceOrAdd(name: .accessControlAllowOrigin, value: origin)
+        response.headers.replaceOrAdd(name: .accessControlExpose, value: "X-State-Revision, X-Filename")
+        response.headers.add(name: .vary, value: "Origin")
     }
 }
 
@@ -61,6 +107,15 @@ private struct SafeErrors: AsyncMiddleware {
             case StoreError.quota:
                 status = .payloadTooLarge
                 reason = "Owner attachment limit is 64 MiB and 128 files."
+            case AccountError.emailTaken:
+                status = .conflict
+                reason = "An account with this email already exists."
+            case AccountError.userMissing:
+                status = .notFound
+                reason = "Account not found."
+            case AccountError.sessionMissing:
+                status = .unauthorized
+                reason = "Session not found."
             case let abort as any AbortError:
                 status = abort.status
                 reason = abort.reason
@@ -83,15 +138,22 @@ private struct SafeErrors: AsyncMiddleware {
 }
 
 // MARK: - Compose listener, middleware, and routes
+/// Accounts are active only when a store is supplied and REVA_ACCOUNTS is enabled; otherwise no auth routes exist
+/// and session tokens are rejected. Tests lower passwordCost; production keeps bcrypt cost 12.
 public func configure(
     _ app: Application, configuration: ServerConfiguration, store: any RevaStore,
-    geminiTransport: GeminiHTTPTransport? = nil
+    geminiTransport: GeminiHTTPTransport? = nil, accounts: (any AccountStore)? = nil, passwordCost: Int = 12
 ) {
     app.http.server.configuration.hostname = configuration.hostname
     app.http.server.configuration.port = configuration.port
     app.routes.defaultMaxBodySize = "4mb"
     app.middleware = Middlewares()
+    // CORS wraps error mapping so browsers can read error bodies from allowed origins.
+    if !configuration.allowedOrigins.isEmpty {
+        app.middleware.use(CORSPolicyMiddleware(origins: Set(configuration.allowedOrigins)))
+    }
     app.middleware.use(SafeErrors())
+    let activeAccounts = configuration.accountsEnabled ? accounts : nil
 
     // MARK: - Public storage health
     // The health endpoint checks the chosen store without granting access to any owner data.
@@ -101,7 +163,13 @@ public func configure(
     }
 
     // MARK: - Authenticated provider and snapshot operations
-    let secured = app.grouped(BearerMiddleware(tokens: configuration.tokens)).grouped("v1")
+    let secured = app.grouped(BearerMiddleware(tokens: configuration.tokens, accounts: activeAccounts))
+        .grouped("v1")
+    if let activeAccounts {
+        registerAccountRoutes(
+            app, secured: secured, configuration: configuration, accounts: activeAccounts,
+            hasher: PasswordHasher(cost: passwordCost, threadPool: app.threadPool))
+    }
     registerProviderRoutes(
         secured, configuration: configuration.providers, directory: configuration.directory,
         geminiTransport: geminiTransport ?? .live)

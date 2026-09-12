@@ -65,7 +65,7 @@
   },
   "reviewCase": {
     "recordID": "demo-record-symptom-diary",
-    "expectedStatus": "needsReview",
+    "expectedStatus": "ready",
     "uncertainField": "individual symptom entry date",
     "sourceFilename": "reva-synthetic-symptom-diary-scan.png",
     "knownDate": "2026-09-07",

@@ -1,5 +1,5 @@
-// Purpose: Apply a shared cancellation deadline to database acquisition and store operations.
-// Inputs: A Sendable asynchronous operation, or a RevaStore to wrap.
+// Purpose: Apply a shared cancellation deadline to database acquisition, store, and account-store operations.
+// Inputs: A Sendable asynchronous operation, or a RevaStore / AccountStore to wrap.
 // Outputs: The operation result/error, or DatabaseDeadlineExceeded when the timer wins.
 // Side effects: Starts a 20-second timer task and cancels the losing task. Underlying work must honor cancellation.
 
@@ -49,5 +49,42 @@ public struct BoundedStore: RevaStore {
     }
     public func deleteAttachment(owner: String, id: String) async throws {
         try await withDatabaseDeadline { try await base.deleteAttachment(owner: owner, id: id) }
+    }
+}
+
+// MARK: - Apply the same deadline to the account-store interface
+/// Wraps the PostgreSQL account operations so sign-up/log-in cannot wait forever on connection acquisition.
+public struct BoundedAccountStore: AccountStore {
+    public let base: any AccountStore
+    public init(base: any AccountStore) { self.base = base }
+    public func createUser(_ user: UserRecord) async throws {
+        try await withDatabaseDeadline { try await base.createUser(user) }
+    }
+    public func user(email: String) async throws -> UserRecord? {
+        try await withDatabaseDeadline { try await base.user(email: email) }
+    }
+    public func user(id: String) async throws -> UserRecord? {
+        try await withDatabaseDeadline { try await base.user(id: id) }
+    }
+    public func updatePassword(userID: String, hash: String, at date: Date) async throws {
+        try await withDatabaseDeadline { try await base.updatePassword(userID: userID, hash: hash, at: date) }
+    }
+    public func deleteUser(id: String) async throws {
+        try await withDatabaseDeadline { try await base.deleteUser(id: id) }
+    }
+    public func createSession(_ session: SessionRecord) async throws {
+        try await withDatabaseDeadline { try await base.createSession(session) }
+    }
+    public func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)? {
+        try await withDatabaseDeadline { try await base.session(tokenHash: tokenHash) }
+    }
+    public func touchSession(id: UUID, at date: Date) async throws {
+        try await withDatabaseDeadline { try await base.touchSession(id: id, at: date) }
+    }
+    public func revokeSession(id: UUID) async throws {
+        try await withDatabaseDeadline { try await base.revokeSession(id: id) }
+    }
+    public func revokeSessions(userID: String, except: UUID?) async throws {
+        try await withDatabaseDeadline { try await base.revokeSessions(userID: userID, except: except) }
     }
 }

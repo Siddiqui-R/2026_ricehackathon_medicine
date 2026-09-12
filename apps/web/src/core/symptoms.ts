@@ -4,6 +4,19 @@
 // Side effects: Generates an ID/time for new records only; version increments belong to saveRecord.
 import type { MedicalRecord, SymptomEntry } from './models';
 import { nowISO, uid, validZone } from './domain';
+import { dateFieldISO, dateFieldValue, displayTimeZone } from './dates';
+
+// MARK: - Keep precise source instants when occurrence fields have not changed
+export function editedSymptomOccurrence(
+  initial: Pick<SymptomEntry, 'observedAt' | 'timeZone'>,
+  fieldValue: string,
+): Pick<SymptomEntry, 'observedAt' | 'timeZone'> {
+  const zone = displayTimeZone(initial.timeZone);
+  if (fieldValue === dateFieldValue(initial.observedAt, zone)) {
+    return { observedAt: initial.observedAt, timeZone: initial.timeZone };
+  }
+  return { observedAt: dateFieldISO(fieldValue, zone), timeZone: zone };
+}
 
 // MARK: - Strict observation validation and calendar-day checks.
 export function validateSymptomEntry(input: SymptomEntry, now = new Date()): SymptomEntry {

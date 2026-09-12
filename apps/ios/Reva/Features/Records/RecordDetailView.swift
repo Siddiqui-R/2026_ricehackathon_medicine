@@ -33,13 +33,6 @@ struct RecordDetailView: View {
                     }
                     DetailLine(
                         symbol: record.symptomEntry == nil ? "building.2" : "person", text: record.provider)
-                    if record.needsReview {
-                        StatusNotice(
-                            title: "Review the source",
-                            message:
-                                "Some text or dates need confirmation. Compare the original before using this record in a visit.",
-                            symbol: "exclamationmark.circle")
-                    }
                     if let entry = record.symptomEntry {
                         SymptomEntryDetailsView(entry: entry)
                     }

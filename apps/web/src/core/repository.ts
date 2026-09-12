@@ -1,7 +1,9 @@
 // Purpose: Durably store one browser snapshot and its original files with atomic local revisions.
-// Inputs: Validated snapshots, safe leaf filenames, original Blobs and expected local revisions.
+// Inputs: Validated snapshots, safe leaf filenames, original Blobs, expected local revisions and a
+//         database name (the shared demo database, or one private database per signed-in account).
 // Outputs: Restored state, preserved originals or explicit corruption/quota/concurrent-tab errors.
-// Side effects: IndexedDB transactions and same-origin reads of explicitly bundled demo assets.
+// Side effects: IndexedDB transactions, whole-database deletion on request, and same-origin reads of
+//               explicitly bundled demo assets.
 import type { AppSnapshot } from './models.ts';
 import { demoDatabaseName, demoSnapshot, selectedDemoPerson, type DemoPersonID } from './demoProfiles';
 import { safeFilename, validateSnapshot } from './validation.ts';
@@ -23,6 +25,8 @@ export interface SnapshotRepository {
   seed(): Promise<AppSnapshot>;
   saveAttachment(filename: string, blob: Blob): Promise<void>;
   getAttachment(filename: string): Promise<Blob>;
+  // Optional: remove this database entirely (account deletion). Absent for repositories that cannot.
+  destroy?(): Promise<void>;
 }
 export class LocalConflictError extends Error {
   constructor() {
@@ -281,6 +285,25 @@ export class IndexedDBRepository implements SnapshotRepository {
   async close(): Promise<void> {
     (await this.database)?.close();
     this.database = undefined;
+  }
+  // Deletes the whole database after closing it. A tab that still holds it open blocks the deletion;
+  // the browser completes it once that tab closes, so a bounded wait resolves instead of hanging.
+  async destroy(): Promise<void> {
+    await this.close();
+    const factory = this.factory;
+    if (!factory) return;
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.deleteDatabase(this.name);
+      const deadline = setTimeout(resolve, 5000);
+      request.onsuccess = () => {
+        clearTimeout(deadline);
+        resolve();
+      };
+      request.onerror = () => {
+        clearTimeout(deadline);
+        reject(request.error ?? new Error('The local copy could not be removed.'));
+      };
+    });
   }
 }
 

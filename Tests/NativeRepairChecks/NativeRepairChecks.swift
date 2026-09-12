@@ -172,7 +172,7 @@ enum ServerFailure: LocalizedError {
             if rename {
                 precondition(
                     retried.record("demo-record-symptom-diary")?.title
-                        == "Scanned symptom note - date needs review")
+                        == "Weekly symptom diary")
             }
         }
         print(
@@ -425,7 +425,7 @@ enum ServerFailure: LocalizedError {
         ProviderClient.duringRequest = nil
         await store.summarizeWithAI(original.id)
         let summarized = store.record(original.id)!
-        try store.saveRecordEdits(draft, original: original, reviewed: false)
+        try store.saveRecordEdits(draft, original: original)
         let saved = store.record(original.id)!
         precondition(saved.summary == summarized.summary && saved.summaryModel == summarized.summaryModel)
         precondition(
@@ -433,18 +433,20 @@ enum ServerFailure: LocalizedError {
                 && saved.pageTexts == original.pageTexts)
         var corrected = saved
         corrected.text = "Corrected source words"
-        try store.saveRecordEdits(corrected, original: saved, reviewed: false)
+        try store.saveRecordEdits(corrected, original: saved)
         let edited = store.record(original.id)!
         precondition(
             edited.summary == ReportEngine.localExcerpt(corrected.text) && edited.summaryModel == nil
-                && edited.pageTexts == nil && edited.status == "needsReview")
+                && edited.pageTexts == nil && edited.status == "ready")
+        var conflicting = draft
+        conflicting.text = "Competing correction from the old source"
         do {
-            try store.saveRecordEdits(draft, original: original, reviewed: true)
-            preconditionFailure("Review of stale source text was accepted")
+            try store.saveRecordEdits(conflicting, original: original)
+            preconditionFailure("Edit of stale source text was accepted")
         } catch {}
         try store.deleteRecord(original.id)
         do {
-            try store.saveRecordEdits(draft, original: original, reviewed: false)
+            try store.saveRecordEdits(draft, original: original)
             preconditionFailure("Editor resurrected deleted record")
         } catch {}
         print(
@@ -500,7 +502,7 @@ enum ServerFailure: LocalizedError {
             try store.save(current)
             let before = store.snapshot
             do {
-                try store.saveRecordEdits(draft, original: original, reviewed: false)
+                try store.saveRecordEdits(draft, original: original)
                 preconditionFailure("Competing editor field was overwritten")
             } catch {}
             precondition(store.snapshot == before)
@@ -516,7 +518,7 @@ enum ServerFailure: LocalizedError {
             let converged = store.record(original.id)!
             var matching = original
             matching[keyPath: field] = draftValue
-            try store.saveRecordEdits(matching, original: original, reviewed: false)
+            try store.saveRecordEdits(matching, original: original)
             precondition(
                 store.record(original.id) == converged, "Converged edit changed newer fields/version")
         }
@@ -527,7 +529,7 @@ enum ServerFailure: LocalizedError {
             if invalid == "identity" { draft.id = "different-record" } else { draft.title = " \n " }
             let before = store.snapshot
             do {
-                try store.saveRecordEdits(draft, original: original, reviewed: false)
+                try store.saveRecordEdits(draft, original: original)
                 preconditionFailure("Invalid editor identity/title accepted")
             } catch {}
             precondition(store.snapshot == before)
@@ -537,7 +539,7 @@ enum ServerFailure: LocalizedError {
             var draft = before
             draft[keyPath: field] = field == \.kind ? "Imaging" : "Changed clinician"
             let signature = ReportEngine.signature(visit: fixture.visits[0], records: store.records)
-            try store.saveRecordEdits(draft, original: before, reviewed: false)
+            try store.saveRecordEdits(draft, original: before)
             var expected = draft
             expected.version = before.version + 1
             precondition(store.record(original.id) == expected)

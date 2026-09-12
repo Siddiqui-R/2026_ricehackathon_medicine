@@ -24,7 +24,7 @@ The fixed demonstration date is September 12, 2026. Jordan Avery (Synthetic) has
 | `reva-synthetic-resting-ecg-note.pdf` | 1-page text PDF | Written ECG note, no tracing |
 | `reva-synthetic-resolved-ear-infection.pdf` | 1-page text PDF | Unrelated resolved episode |
 | `reva-synthetic-asthma-context.txt` | UTF-8 text | Asthma and existing medication context |
-| `reva-synthetic-symptom-diary-scan.png` | Raster image | Deliberate `needsReview` scan |
+| `reva-synthetic-symptom-diary-scan.png` | Raster image | Scan with a partly obscured entry date |
 | `reva-synthetic-symptom-diary-image-only.pdf` | 1-page raster-only PDF | Alternate import of the same diary; not a second seeded record |
 | `reva-synthetic-import-preparation-note.txt` | UTF-8 text | Unseeded source for a distinct manual import |
 
@@ -46,7 +46,7 @@ The generator checks exact top-level app keys, domain enum/date types, unique ID
 
 ## Honest uncertainty and provenance
 
-The diary's printed week-ending date, September 7, 2026, is legible. An individual entry-date digit is visibly smudged. The seeded record date means the week ending; canonical text preserves the entry as `September 0[unclear], 2026`. The source is intentionally unresolved and marked `needsReview`. Correct only information the presenter can independently confirm; a fictional demonstration correction can be identified as a presenter-supplied value in notes.
+The diary's printed week-ending date, September 7, 2026, is legible. An individual entry-date digit is visibly smudged. The seeded record date means the week ending; canonical text preserves the entry as `September 0[unclear], 2026`. The source is saved with the uncertainty preserved in its text. Correct only information the presenter can independently confirm; a fictional demonstration correction can be identified as a presenter-supplied value in notes.
 
 The seed's diary text is an authored reference transcription. It does not prove OCR ran. Importing the PNG or image-only PDF requires the app's actual native OCR path and can produce imperfect text. A hash match identifies a known fixture but should not replace extraction error handling or erase uncertainty. Similarly, the optional sample transcript has no audio, and must not appear as a transcript of a newly recorded microphone clip.
 

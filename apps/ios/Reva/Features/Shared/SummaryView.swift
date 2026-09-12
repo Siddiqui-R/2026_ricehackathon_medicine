@@ -91,20 +91,6 @@ struct SummaryView: View {
                     Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(RevaTheme.accent)
                 }.padding(18).outlined()
             }.buttonStyle(.plain)
-            if store.records.contains(where: \.needsReview) {
-                SectionHeading(title: "Needs your review")
-                RevaCard {
-                    ForEach(store.records.filter(\.needsReview)) { record in
-                        NavigationLink {
-                            RecordDetailView(id: record.id)
-                        } label: {
-                            RecordRow(record: record)
-                        }.buttonStyle(.plain)
-                    }
-                    Text("A quick check keeps your medical history accurate.").font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
             SectionHeading(title: "Recent records")
             RevaCard {
                 if store.records.isEmpty {

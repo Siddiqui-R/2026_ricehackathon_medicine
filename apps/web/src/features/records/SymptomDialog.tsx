@@ -7,15 +7,12 @@ import { useState, type FormEvent } from 'react';
 import { Check, Clock, NotebookPen } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { makeSymptomRecord, nowISO } from '../../core/domain';
+import { dateFieldValue, defaultTimeZone, displayTimeZone } from '../../core/dates';
+import { editedSymptomOccurrence } from '../../core/symptoms';
 import type { MedicalRecord, SymptomEntry } from '../../core/models';
 import { Button, Field, Modal } from '../../components/ui';
 
-// MARK: - Local occurrence display keeps the original instant unless the user edits it
-function datetimeInput(iso: string) {
-  const date = new Date(iso);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
+// MARK: - Zoned occurrence display keeps the original instant unless the user edits it
 export function SymptomDialog({ record, onClose }: { record?: MedicalRecord; onClose: () => void }) {
   const { saveRecord, summarizeRecord, connectedAI, notify, reportError } = useReva();
   const [original] = useState(() => (record?.symptomEntry ? structuredClone(record) : undefined));
@@ -23,7 +20,7 @@ export function SymptomDialog({ record, onClose }: { record?: MedicalRecord; onC
     () =>
       original?.symptomEntry ?? {
         observedAt: nowISO(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        timeZone: defaultTimeZone,
         symptom: '',
         severity: null,
         duration: '',
@@ -33,12 +30,13 @@ export function SymptomDialog({ record, onClose }: { record?: MedicalRecord; onC
       },
   );
   const [entry, setEntry] = useState<SymptomEntry>(initial);
-  const [when, setWhen] = useState(() => datetimeInput(initial.observedAt));
-  const [timeChanged, setTimeChanged] = useState(false);
+  const occurrenceZone = displayTimeZone(initial.timeZone);
+  const initialWhen = dateFieldValue(initial.observedAt, occurrenceZone);
+  const [when, setWhen] = useState(initialWhen);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
-  const dirty = JSON.stringify(entry) !== JSON.stringify(initial) || timeChanged;
+  const dirty = JSON.stringify(entry) !== JSON.stringify(initial) || when !== initialWhen;
   const close = () => {
     if (!saving) {
       if (dirty) setDiscard(true);
@@ -55,16 +53,9 @@ export function SymptomDialog({ record, onClose }: { record?: MedicalRecord; onC
     setSaving(true);
     setError('');
     try {
-      if (!when || Number.isNaN(new Date(when).getTime()))
-        throw new Error('Choose when you noticed the symptom.');
-      if (timeChanged && datetimeInput(new Date(when).toISOString()) !== when)
-        throw new Error(
-          'That local time does not exist. Check the date and any daylight-saving time change.',
-        );
       const revised = {
         ...entry,
-        observedAt: timeChanged ? new Date(when).toISOString() : initial.observedAt,
-        timeZone: timeChanged ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' : initial.timeZone,
+        ...editedSymptomOccurrence(initial, when),
       };
       const saved = makeSymptomRecord(revised, original);
       await saveRecord(saved, original?.version);
@@ -118,17 +109,14 @@ export function SymptomDialog({ record, onClose }: { record?: MedicalRecord; onC
           </Field>
           <Field
             label="When did it happen?"
-            hint={`Shown in ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}. Existing occurrence time and zone are kept unless you change this field.`}
+            hint={`Shown in ${occurrenceZone}. Existing occurrence time is kept unless you change this field.`}
           >
             <input
               type="datetime-local"
               required
               value={when}
-              max={datetimeInput(nowISO())}
-              onChange={(event) => {
-                setWhen(event.target.value);
-                setTimeChanged(true);
-              }}
+              max={dateFieldValue(nowISO(), occurrenceZone)}
+              onChange={(event) => setWhen(event.target.value)}
             />
           </Field>
           <div className="form-grid">

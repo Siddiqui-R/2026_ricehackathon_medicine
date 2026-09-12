@@ -1,8 +1,8 @@
-// Purpose: Resolve listener, owner identity, storage, and provider settings before starting services.
+// Purpose: Resolve listener, owner identity, account, CORS, storage, and provider settings before starting services.
 // Inputs: An explicit environment dictionary and optional supported command arguments.
 // Outputs: Immutable validated configuration or a descriptive ConfigurationError.
 // Side effects: None here. Constructing database/provider configuration does not open a connection.
-// Ownership: The public demo identity is restricted to loopback local storage. Other modes need private tokens.
+// Ownership: The public demo identity is restricted to loopback local storage. Other modes need private tokens or accounts.
 
 import Foundation
 import PostgresNIO
@@ -18,6 +18,10 @@ public struct ServerConfiguration: Sendable {
     public let isDemo: Bool
     public let postgres: PostgresClient.Configuration?
     public let providers: ProviderConfiguration
+    public let accountsEnabled: Bool
+    public let signupOpen: Bool
+    public let sessionDays: Int
+    public let allowedOrigins: [String]
 
     // MARK: - Validate arguments and listener settings
     public init(
@@ -39,7 +43,23 @@ public struct ServerConfiguration: Sendable {
         }
         port = parsedPort
         directory = URL(fileURLWithPath: env["REVA_DATA_DIRECTORY"] ?? ".local-data", isDirectory: true)
-        // MARK: - Resolve private owners or restricted local demo identity
+        // MARK: - Account, sign-up, session lifetime, and CORS settings
+        let accountsSetting = env["REVA_ACCOUNTS"] ?? "enabled"
+        guard ["enabled", "disabled"].contains(accountsSetting) else {
+            throw ConfigurationError("REVA_ACCOUNTS must be enabled or disabled.")
+        }
+        accountsEnabled = accountsSetting == "enabled"
+        let signupSetting = env["REVA_SIGNUP"] ?? "open"
+        guard ["open", "closed"].contains(signupSetting) else {
+            throw ConfigurationError("REVA_SIGNUP must be open or closed.")
+        }
+        signupOpen = signupSetting == "open"
+        guard let days = Int(env["REVA_SESSION_DAYS"] ?? "30"), (1...365).contains(days) else {
+            throw ConfigurationError("REVA_SESSION_DAYS must be between 1 and 365.")
+        }
+        sessionDays = days
+        allowedOrigins = try Self.parseOrigins(env["REVA_ALLOWED_ORIGINS"])
+        // MARK: - Resolve private owners, account-only identity, or the restricted local demo identity
         if let raw = env["REVA_TOKENS"] {
             guard let data = raw.data(using: .utf8),
                 let configured = try? JSONDecoder().decode([String: String].self, from: data),
@@ -55,13 +75,16 @@ public struct ServerConfiguration: Sendable {
             }
             tokens = configured
             isDemo = false
-        } else {
-            guard mode == "local", Self.isLoopback(hostname) else {
-                throw ConfigurationError(
-                    "Explicit REVA_TOKENS is required for PostgreSQL or a non-loopback listener.")
-            }
+        } else if mode == "local", Self.isLoopback(hostname) {
+            // The public demo token exists only here; account sign-up also works in this mode.
             tokens = [Self.demoToken: "demo-user"]
             isDemo = true
+        } else if accountsEnabled {
+            tokens = [:]
+            isDemo = false
+        } else {
+            throw ConfigurationError(
+                "PostgreSQL or a non-loopback listener requires REVA_TOKENS or REVA_ACCOUNTS=enabled.")
         }
         // MARK: - Provider authorization and database transport policy
         providers = try ProviderConfiguration(environment: env, paidAccessAllowed: !isDemo)
@@ -117,6 +140,45 @@ public struct ServerConfiguration: Sendable {
     // MARK: - Local-only hostname policy
     private static func isLoopback(_ host: String) -> Bool {
         ["127.0.0.1", "localhost", "::1", "[::1]"].contains(host)
+    }
+
+    // MARK: - Exact CORS origins: https anywhere, http only on loopback, never a wildcard
+    /// Each entry must be canonical (lowercase scheme/host, no path, query, fragment, userinfo, or trailing slash)
+    /// so it compares equal to the Origin header a browser sends.
+    static func parseOrigins(_ raw: String?) throws -> [String] {
+        guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        var origins: [String] = []
+        for piece in raw.split(separator: ",", omittingEmptySubsequences: false) {
+            let entry = piece.trimmingCharacters(in: .whitespaces)
+            guard isValidOrigin(entry) else {
+                throw ConfigurationError(
+                    "REVA_ALLOWED_ORIGINS entries must be exact https://host[:port] origins or http://127.0.0.1|localhost[:port]; wildcards are not allowed."
+                )
+            }
+            if !origins.contains(entry) { origins.append(entry) }
+        }
+        guard origins.count <= 50 else {
+            throw ConfigurationError("REVA_ALLOWED_ORIGINS allows at most 50 origins.")
+        }
+        return origins
+    }
+
+    private static func isValidOrigin(_ entry: String) -> Bool {
+        guard !entry.isEmpty, entry.utf8.count <= 260, entry.utf8.allSatisfy({ $0 > 32 && $0 < 127 }),
+            let components = URLComponents(string: entry), let scheme = components.scheme,
+            let host = components.host, !host.isEmpty, components.user == nil, components.password == nil,
+            components.path.isEmpty, components.query == nil, components.fragment == nil,
+            (1...65535).contains(components.port ?? 443)
+        else { return false }
+        let canonical = scheme + "://" + host + (components.port.map { ":\($0)" } ?? "")
+        guard canonical == entry, scheme == scheme.lowercased(), host == host.lowercased() else {
+            return false
+        }
+        switch scheme {
+        case "https": return true
+        case "http": return ["127.0.0.1", "localhost"].contains(host)
+        default: return false
+        }
     }
 }
 

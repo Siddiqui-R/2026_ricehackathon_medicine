@@ -26,9 +26,9 @@ extension AppStore {
             data.records[i] = revised
         }
     }
-    // MARK: - Reviewed editor merge
+    // MARK: - Record editor merge
     // Apply only edited fields to the latest source so a background summary or newer metadata survives.
-    func saveRecordEdits(_ draft: MedicalRecord, original: MedicalRecord, reviewed: Bool) throws {
+    func saveRecordEdits(_ draft: MedicalRecord, original: MedicalRecord) throws {
         guard original.id == draft.id else { throw RevaError.invalid("The record identity changed.") }
         guard let current = record(original.id) else {
             throw RevaError.invalid("This record is no longer available.")
@@ -51,19 +51,12 @@ extension AppStore {
         guard !latest.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw RevaError.invalid("Enter a record title.")
         }
-        let textPresent = !latest.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if latest.text != current.text {
             latest.summary = ReportEngine.localExcerpt(latest.text, isDemo: latest.isDemo)
             latest.summaryModel = nil
             latest.pageTexts = nil
-            latest.status = reviewed && textPresent ? "ready" : "needsReview"
-        } else if reviewed, textPresent {
-            guard current.text == draft.text else {
-                throw RevaError.invalid(
-                    "The source text changed. Reopen the record before marking it reviewed.")
-            }
-            latest.status = "ready"
         }
+        latest.status = "ready"
         try save(latest)
     }
 

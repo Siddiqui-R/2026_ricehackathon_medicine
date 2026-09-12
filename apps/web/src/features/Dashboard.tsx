@@ -19,7 +19,7 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
-import { formatDate } from '../core/domain';
+import { defaultTimeZone, displayTimeZone, formatDate } from '../core/domain';
 import { demoLabel } from '../core/presentation';
 import { Badge, Card } from '../components/ui';
 
@@ -35,11 +35,13 @@ export function Dashboard() {
   const recent = [...records]
     .sort((a, b) => b.date.localeCompare(a.date) || b.uploadedAt.localeCompare(a.uploadedAt))
     .slice(0, 5);
-  const needsReview = records.filter((record) => record.status === 'needsReview').length;
   const firstName = profile.name.split(' ')[0];
-  const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(
-    new Date(),
-  );
+  const today = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: defaultTimeZone,
+  }).format(new Date());
 
   // MARK: - Task-first welcome and action strip
   return (
@@ -108,14 +110,16 @@ export function Dashboard() {
               <div className="appointment-body">
                 <div className="date-tile">
                   <span>
-                    {new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: next.timeZone }).format(
-                      new Date(next.date),
-                    )}
+                    {new Intl.DateTimeFormat('en-US', {
+                      month: 'short',
+                      timeZone: displayTimeZone(next.timeZone),
+                    }).format(new Date(next.date))}
                   </span>
                   <strong>
-                    {new Intl.DateTimeFormat('en-US', { day: 'numeric', timeZone: next.timeZone }).format(
-                      new Date(next.date),
-                    )}
+                    {new Intl.DateTimeFormat('en-US', {
+                      day: 'numeric',
+                      timeZone: displayTimeZone(next.timeZone),
+                    }).format(new Date(next.date))}
                   </strong>
                 </div>
                 <div className="appointment-info">
@@ -190,7 +194,6 @@ export function Dashboard() {
                         {formatDate(record.date)}
                       </span>
                     </span>
-                    {record.status === 'needsReview' && <Badge tone="review">Review</Badge>}
                     <ChevronRight size={17} className="row-chevron" />
                   </a>
                 ))
@@ -247,21 +250,6 @@ export function Dashboard() {
               View medical profile <ArrowRight size={16} />
             </a>
           </Card>
-          {needsReview > 0 && (
-            <Card className="review-reminder">
-              <span className="reminder-icon">
-                <FileText size={21} />
-              </span>
-              <h3>A second look matters</h3>
-              <p>
-                {needsReview} {needsReview === 1 ? 'record needs' : 'records need'} a review. Check extracted
-                text against the original before your visit.
-              </p>
-              <a className="text-link" href="#/records?filter=needsReview">
-                Review records <ArrowRight size={15} />
-              </a>
-            </Card>
-          )}
         </div>
       </div>
     </div>

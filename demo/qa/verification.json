@@ -20,7 +20,7 @@
     "recording-relative timestamp order and bounds",
     "text-only sample belongs to completed visit",
     "expected evidence refers to real records and source pages",
-    "uncertain scan preserved as needsReview"
+    "uncertain scan retains its original wording"
   ],
   "limits": [
     "Fixture-level checks only; app relevance engine execution and native OCR are verified by app integration.",

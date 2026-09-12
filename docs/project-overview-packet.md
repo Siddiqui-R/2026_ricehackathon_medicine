@@ -165,7 +165,7 @@ No MyChart connection, browser wrapper, custom password encryption, local Whispe
 | Apple frameworks | Combine state publication; Codable/JSON persistence; PDFKit, Vision, VisionKit, PhotosUI, QuickLook, AVFoundation, UIKit/CoreText and CryptoKit source signatures. |
 | Vapor 4.122.1 | Swift HTTP server and authenticated JSON/binary routes. URLSession is the app's transport. No third-party iPhone packages are required. |
 | PostgresNIO 1.33.1 | Optional PostgreSQL adapter: JSONB snapshots, BYTEA attachments and mutation audit. Local owner-file storage is the default. Live Tiger testing is pending. |
-| Gemini Developer API | Default model in code: gemini-2.5-flash. Structured generateContent responses for summaries and preparation. GEMINI_MODEL can select an available model. |
+| Gemini Developer API | Default model in code: gemini-3.8-flash. Structured generateContent responses for summaries and preparation. GEMINI_MODEL can select an available model. |
 | OpenAI and ElevenLabs | whisper-1 audio transcription; ElevenLabs Twilio outbound call and conversation polling APIs. Provider HTTP requests originate only from the server. |
 
 ### Native to server route map

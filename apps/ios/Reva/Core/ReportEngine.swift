@@ -187,12 +187,10 @@ enum ReportEngine {
                 }?.offset ?? 0
             let pageText = pages.indices.contains(pageIndex) ? pages[pageIndex] : record.text
             let excerpt = relevantExcerpt(pageText, focusWords: focusWords, isDemo: record.isDemo)
-            let caveat =
-                record.needsReview ? "Needs review: verify this extraction against the original.\n\n" : ""
             let sourcePage = (record.pageTexts?.isEmpty == false) ? pageIndex + 1 : 0
             sections.append(
                 ReportSection(
-                    title: record.title, body: caveat + excerpt.text,
+                    title: record.title, body: excerpt.text,
                     sources: [
                         SourceReference(
                             recordID: record.id, page: sourcePage, excerpt: excerpt.text,

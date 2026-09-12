@@ -38,7 +38,7 @@ public struct ProviderConfiguration: Sendable {
             environment["ELEVENLABS_AGENT_ID"], name: "ELEVENLABS_AGENT_ID")
         elevenLabsPhoneNumberID = try Self.identifier(
             environment["ELEVENLABS_PHONE_NUMBER_ID"], name: "ELEVENLABS_PHONE_NUMBER_ID")
-        geminiModel = environment["GEMINI_MODEL"] ?? "gemini-2.5-flash"
+        geminiModel = environment["GEMINI_MODEL"] ?? "gemini-3.8-flash"
         guard geminiModel.hasPrefix("gemini-"), geminiModel.utf8.count <= 100,
             geminiModel.utf8.allSatisfy({ Self.identifierByte($0) || $0 == 46 })
         else {

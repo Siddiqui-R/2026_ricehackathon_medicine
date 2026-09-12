@@ -1,6 +1,6 @@
 // Purpose: Serve a built web client and proxy its authenticated requests to the local Swift API.
 // Inputs: dist assets, optional PORT/HOST, and a loopback REVA_API_ORIGIN.
-// Outputs: A same-origin browser application with bounded API forwarding.
+// Outputs: A same-origin browser application (/, /demo, /login, /signup, /app) with bounded API forwarding.
 // Side effects: Opens one HTTP listener and forwards explicitly allowed API routes only.
 
 import { createServer, request as requestHTTP } from 'node:http';
@@ -67,8 +67,14 @@ function parseTarget(target) {
 }
 
 // MARK: - Explicit API methods and byte budgets mirror the current Swift routes
+// Auth bodies are capped at 16 KiB by the server; logout routes carry no body at all.
 function apiRoute(pathname) {
   if (pathname === '/health' || pathname === '/v1/providers') return { GET: 0 };
+  if (pathname === '/v1/auth/signup' || pathname === '/v1/auth/login') return { POST: 16 * 1024 };
+  if (pathname === '/v1/auth/session') return { GET: 0 };
+  if (pathname === '/v1/auth/logout' || pathname === '/v1/auth/logout-all') return { POST: 0 };
+  if (pathname === '/v1/auth/password') return { PUT: 16 * 1024 };
+  if (pathname === '/v1/auth/account') return { DELETE: 16 * 1024 };
   if (pathname === '/v1/state') return { GET: 0, PUT: 4 * 1024 * 1024, DELETE: 0 };
   if (pathname === '/v1/ai/summarize') return { POST: 256 * 1024 };
   if (pathname === '/v1/ai/prepare') return { POST: 1024 * 1024 };
@@ -103,9 +109,13 @@ function readBody(incoming, maximum) {
   });
 }
 
-// MARK: - Only compiled assets and bundled fictional data are publicly readable
+// MARK: - Only compiled assets, bundled fictional data and the five application routes are readable
+const appRoutes = new Set(['/', '/demo', '/login', '/signup', '/app']);
+function appRoute(pathname) {
+  return appRoutes.has(pathname.length > 1 ? pathname.replace(/\/+$/u, '') : pathname);
+}
 function publicAsset(pathname) {
-  if (pathname === '/' || pathname === '/index.html' || pathname === '/reva.svg') return true;
+  if (appRoute(pathname) || pathname === '/index.html' || pathname === '/reva.svg') return true;
   const parts = pathname.split('/').slice(1);
   if (parts.some((part) => !part || part.startsWith('.'))) return false;
   const extensions = {
@@ -218,7 +228,7 @@ const server = createServer(async (incoming, response) => {
     return;
   }
   try {
-    const candidate = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+    const candidate = path.resolve(root, '.' + (appRoute(pathname) ? '/index.html' : pathname));
     const file = await realpath(candidate);
     const metadata = await stat(file);
     if (!file.startsWith(root + path.sep) || !metadata.isFile()) {

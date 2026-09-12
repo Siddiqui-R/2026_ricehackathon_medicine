@@ -22,7 +22,7 @@
   "records": [
     {
       "id": "demo-record-symptom-diary",
-      "title": "Scanned symptom note - date needs review",
+      "title": "Weekly symptom diary",
       "kind": "Scan",
       "provider": "Patient-authored sample (Fictional)",
       "date": "2026-09-07",
@@ -31,25 +31,24 @@
         "primary care",
         "nausea",
         "palpitations",
-        "symptom diary",
-        "needs review"
+        "symptom diary"
       ],
       "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nPatient symptom diary\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Patient-authored sample (Fictional)\nWeek ending: September 7, 2026\n\nEntry date: September 0[unclear], 2026\nThe final date digit is obscured in this synthetic scan.\n\nPATIENT OBSERVATIONS\nMorning: brief racing-heart sensation while sitting after breakfast.\nEstimated duration: about 2 minutes. Nausea at the same time.\nAfternoon: another brief racing-heart sensation while at a desk.\nExact start and stop times were not written down.\n\nDETAILS TO CLARIFY\nThe entry does not record meal ingredients, caffeine quantity, or the time\nof any inhaler use. It does not establish a cause for the symptoms.\n\nPATIENT QUESTION\nWhich timing details would help make the follow-up conversation clearer?\n\nREVIEW NEEDED\nConfirm the obscured entry date. Do not infer its last digit.\nRecord date uses the legible week-ending date, September 7, 2026.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSYNTHETIC SCAN | 1 page | no real patient data",
       "pageTexts": [
         "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nPatient symptom diary\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Patient-authored sample (Fictional)\nWeek ending: September 7, 2026\n\nEntry date: September 0[unclear], 2026\nThe final date digit is obscured in this synthetic scan.\n\nPATIENT OBSERVATIONS\nMorning: brief racing-heart sensation while sitting after breakfast.\nEstimated duration: about 2 minutes. Nausea at the same time.\nAfternoon: another brief racing-heart sensation while at a desk.\nExact start and stop times were not written down.\n\nDETAILS TO CLARIFY\nThe entry does not record meal ingredients, caffeine quantity, or the time\nof any inhaler use. It does not establish a cause for the symptoms.\n\nPATIENT QUESTION\nWhich timing details would help make the follow-up conversation clearer?\n\nREVIEW NEEDED\nConfirm the obscured entry date. Do not infer its last digit.\nRecord date uses the legible week-ending date, September 7, 2026.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSYNTHETIC SCAN | 1 page | no real patient data"
       ],
-      "summary": "Demo summary: A diary for the week ending September 7 describes two brief racing-heart sensations and nausea with the morning episode. The individual entry date is partly obscured and requires review.",
+      "summary": "Demo summary: A diary for the week ending September 7 describes two brief racing-heart sensations and nausea with the morning episode. The individual entry date is partly obscured in the original scan.",
       "sourceFilename": "reva-synthetic-symptom-diary-scan.png",
       "mimeType": "image/png",
       "pageCount": 1,
-      "status": "needsReview",
+      "status": "ready",
       "notes": "Synthetic scan with one deliberately obscured entry-date digit. Confirm the date; do not guess. Record date is the clearly printed week-ending date. Seed text is an authored reference transcription, not an OCR success claim.",
       "isDemo": true,
       "version": 1
     },
     {
       "id": "demo-record-labs",
-      "title": "Laboratory results for symptom review",
+      "title": "Bloodwork · September 7",
       "kind": "Labs",
       "provider": "Sample Grove Laboratory (Fictional)",
       "date": "2026-09-07",
@@ -78,7 +77,7 @@
     },
     {
       "id": "demo-record-ecg",
-      "title": "Resting ECG note for palpitation review",
+      "title": "Resting ECG · September 7",
       "kind": "Notes",
       "provider": "Sample Grove Primary Care (Fictional)",
       "date": "2026-09-07",

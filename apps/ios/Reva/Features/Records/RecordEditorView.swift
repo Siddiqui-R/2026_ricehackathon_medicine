@@ -1,6 +1,6 @@
 // Purpose: Review and edit a saved document while preserving source provenance.
 // Inputs: The original MedicalRecord and AppStore.
-// Outputs: A revised record with explicit review status.
+// Outputs: A revised record with preserved source provenance.
 // Side effects: Saves through AppStore; text corrections replace the excerpt and clear page segmentation.
 
 import SwiftUI
@@ -14,7 +14,6 @@ struct RecordEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var original: MedicalRecord
     @State private var record: MedicalRecord
-    @State private var reviewed = false
     // MARK: - Draft initialization
     init(record: MedicalRecord) {
         _original = State(initialValue: record)
@@ -37,7 +36,7 @@ struct RecordEditorView: View {
                     selection: Binding(
                         get: { RevaDate.parse(record.date) }, set: { record.date = RevaDate.day($0) }),
                     displayedComponents: .date
-                ).environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
+                ).environment(\.timeZone, RevaDate.calendarDayTimeZone)
             }
             Section {
                 TextEditor(text: $record.text).frame(minHeight: 220)
@@ -49,7 +48,6 @@ struct RecordEditorView: View {
                 )
             }
             Section("Your notes") { TextEditor(text: $record.notes).frame(minHeight: 100) }
-            Section { Toggle("I checked the text against the source", isOn: $reviewed) }
         }.navigationTitle("Edit record").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -59,10 +57,10 @@ struct RecordEditorView: View {
                 }
             }
     }
-    // MARK: - Save reviewed changes
+    // MARK: - Save record changes
     /// Preserve authored summaries and source pages unless the user changed the extracted text.
     private func save() {
-        if store.perform({ try store.saveRecordEdits(record, original: original, reviewed: reviewed) }) {
+        if store.perform({ try store.saveRecordEdits(record, original: original) }) {
             dismiss()
         }
     }

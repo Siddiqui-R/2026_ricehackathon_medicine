@@ -50,7 +50,7 @@ struct LiveBookingEditorView: View {
                 DatePicker("Latest", selection: $latest, in: earliest...)
                 Text(visit.timeZone).font(.caption)
                 TextField("Scheduling preferences", text: $preferences, axis: .vertical)
-            }.environment(\.timeZone, TimeZone(identifier: visit.timeZone) ?? .current)
+            }.environment(\.timeZone, TimeZone(identifier: visit.timeZone) ?? RevaDate.defaultTimeZone)
             Section {
                 Toggle("I authorize this call and sharing these details", isOn: $consent)
                 Button("Review & place real call") { confirm = true }.disabled(

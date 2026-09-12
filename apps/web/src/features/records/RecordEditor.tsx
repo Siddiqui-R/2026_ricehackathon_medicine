@@ -1,5 +1,5 @@
 // Purpose: Correct document metadata/source text while retaining provenance and source-version authority.
-// Inputs: The original record, edited fields, and explicit review confirmation.
+// Inputs: The original record, edited fields, and source metadata.
 // Outputs: A revised record with refreshed excerpt/page mapping only when source wording changed.
 // Side effects: Persists through context with expectedVersion; cancelling leaves the record untouched.
 
@@ -16,12 +16,11 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
   const { saveRecord, notify } = useReva();
   const [original] = useState(() => structuredClone(record));
   const [draft, setDraft] = useState(() => structuredClone(record));
-  const [reviewed, setReviewed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
   const changed = draft.text !== original.text;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(original) || reviewed;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(original);
   const close = () => {
     if (!saving) {
       if (dirty) setDiscard(true);
@@ -30,7 +29,6 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
   };
   const update = (key: 'title' | 'provider' | 'date' | 'text' | 'notes', value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
-    if (key === 'text') setReviewed(false);
   };
 
   // MARK: - Preserve original bytes; manual full-text corrections no longer claim page segmentation
@@ -53,9 +51,8 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
         revised.summary = localExcerpt(revised.text, revised.isDemo);
         revised.summaryModel = null;
         revised.pageTexts = null;
-        revised.status = reviewed && revised.text.trim() ? 'ready' : 'needsReview';
-      } else if (reviewed && revised.text.trim() && original.status === 'needsReview')
-        revised.status = 'ready';
+      }
+      revised.status = 'ready';
       await saveRecord(revised, original.version);
       notify('Record updated. Source changes mark previous visit briefs for refresh.');
       onClose();
@@ -114,15 +111,6 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
           >
             <textarea rows={13} value={draft.text} onChange={(event) => update('text', event.target.value)} />
           </Field>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={reviewed}
-              onChange={(event) => setReviewed(event.target.checked)}
-              disabled={!draft.text.trim()}
-            />
-            <span>I checked this text against the original source</span>
-          </label>
           <Field label="Your notes · optional">
             <textarea
               rows={3}

@@ -14,13 +14,10 @@ import { SymptomDialog } from './SymptomDialog';
 import { newestRecords, queryParameter, RecordSymbol } from './recordPresentation';
 
 // MARK: - Search, category filtering, and source navigation
-function routeFilter() {
-  return queryParameter('filter') === 'needsReview' ? 'Needs review' : 'All records';
-}
 export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'symptom' }) {
   const { snapshot, loading } = useReva();
   const [query, setQuery] = useState(() => queryParameter('q') ?? '');
-  const [filter, setFilter] = useState(routeFilter);
+  const [filter, setFilter] = useState('All records');
   const [dialog, setDialog] = useState<'import' | 'symptom' | null>(initialAction ?? null);
   useEffect(() => {
     if (initialAction) setDialog(initialAction);
@@ -28,7 +25,7 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
   useEffect(() => {
     const update = () => {
       setQuery(queryParameter('q') ?? '');
-      setFilter(routeFilter());
+      setFilter('All records');
     };
     window.addEventListener('hashchange', update);
     return () => window.removeEventListener('hashchange', update);
@@ -50,11 +47,7 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
   const records = all.filter(
     (record) =>
       (filter === 'All records' ||
-        (filter === 'Needs review'
-          ? record.status === 'needsReview'
-          : filter === 'Symptoms'
-            ? Boolean(record.symptomEntry)
-            : record.kind === filter)) &&
+        (filter === 'Symptoms' ? Boolean(record.symptomEntry) : record.kind === filter)) &&
       (!needle ||
         [
           record.title,
@@ -105,19 +98,11 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
             onChange={(event) => setFilter(event.target.value)}
             aria-label="Record category"
           >
-            {[
-              'All records',
-              'Symptoms',
-              'Needs review',
-              'Notes',
-              'Labs',
-              'Imaging',
-              'Procedure',
-              'Scan',
-              'Recording',
-            ].map((item) => (
-              <option key={item}>{item}</option>
-            ))}
+            {['All records', 'Symptoms', 'Notes', 'Labs', 'Imaging', 'Procedure', 'Scan', 'Recording'].map(
+              (item) => (
+                <option key={item}>{item}</option>
+              ),
+            )}
           </select>
         </label>
       </Card>
@@ -142,7 +127,6 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
                 <p className="small muted">{demoLabel(record.provider, record.isDemo)}</p>
               </div>
               <div className="record-row-status">
-                {record.status === 'needsReview' && <Badge tone="review">Needs review</Badge>}
                 {record.symptomEntry && <Badge tone="accent">Your entry</Badge>}
               </div>
               <ChevronRight size={19} aria-hidden="true" />

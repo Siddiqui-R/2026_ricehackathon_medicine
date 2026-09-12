@@ -1,6 +1,7 @@
 /* Purpose: Adapt the workspace from a desktop patient portal to compact phone navigation.
    Inputs: Shared shell markup and viewport width.
-   Outputs: Bounded sidebar, fluid main area, responsive header, and print-isolated report.
+   Outputs: Bounded sidebar (with an account-mode Log out button), fluid main area, responsive header, and
+            print-isolated report.
    Side effects: None outside layout and visual focus presentation. */
 
 /* MARK: - Wide browser shell keeps navigation available without narrowing content excessively */
@@ -101,6 +102,13 @@
 .sidebar-bottom .nav-item {
   font-size: 11px;
   padding-inline: 13px;
+}
+.nav-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
 }
 .sidebar-divider {
   margin: 20px 5px;
@@ -374,6 +382,9 @@
   .mobile-brand,
   .topbar .mobile-settings {
     display: inline-flex;
+  }
+  .topbar .mobile-logout {
+    margin-left: -6px;
   }
   .mobile-brand .brand-symbol {
     width: 29px;

@@ -51,7 +51,7 @@ struct SymptomEntryEditorView: View {
                     "When did it happen?", selection: observedDate, in: ...Date(),
                     displayedComponents: [.date, .hourAndMinute]
                 )
-                .environment(\.timeZone, TimeZone(identifier: entry.timeZone) ?? .current)
+                .environment(\.timeZone, TimeZone(identifier: entry.timeZone) ?? RevaDate.defaultTimeZone)
             } header: {
                 Text("What did you notice?")
             } footer: {

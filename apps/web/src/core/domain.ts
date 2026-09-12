@@ -6,29 +6,11 @@ import type { MedicalRecord, Visit, VisitReport } from './models';
 export { validateSnapshot, safeFilename } from './validation';
 export { makeSymptomRecord, validateSymptomEntry } from './symptoms';
 export { createMemoryRecord, reconcileMemory, validateBooking, confirmBooking } from './mutations';
+export { defaultTimeZone, displayTimeZone, formatDate, validZone } from './dates';
 
 // MARK: - Shared display and identity conventions.
 export const uid = (): string => crypto.randomUUID();
 export const nowISO = (): string => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-export function validZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
-}
-export function formatDate(text: string, withTime = false, zone?: string): string {
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text);
-  const value = new Date(dateOnly ? `${text}T00:00:00Z` : text);
-  if (!Number.isFinite(value.getTime())) return 'Invalid date';
-  const options: Intl.DateTimeFormatOptions = {
-    dateStyle: 'medium',
-    ...(withTime && !dateOnly ? { timeStyle: 'short' as const } : {}),
-  };
-  options.timeZone = dateOnly ? 'UTC' : zone && validZone(zone) ? zone : undefined;
-  return new Intl.DateTimeFormat(undefined, options).format(value);
-}
 export function durationLabel(seconds: number): string {
   const value = Number.isFinite(seconds) ? Math.max(0, Math.trunc(seconds)) : 0;
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
@@ -268,10 +250,7 @@ export async function generateReport(visit: Visit, records: MedicalRecord[]): Pr
     sections.push({
       id: uid(),
       title: record.title,
-      body:
-        (record.status === 'needsReview'
-          ? 'Needs review: verify this extraction against the original.\n\n'
-          : '') + excerpt.text,
+      body: excerpt.text,
       sources: [
         {
           recordID: record.id,

@@ -237,7 +237,7 @@ export async function extractDocument(
     if (remaining < 0 || accepted !== text) {
       result.incomplete = true;
       result.warnings.push(
-        'Local reading stopped at 120 KB of text. The complete original is retained; this record needs review.',
+        'Local reading stopped at 120 KB of text. The complete original is retained; extracted text is incomplete.',
       );
     }
   };

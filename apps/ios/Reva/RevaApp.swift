@@ -1,6 +1,6 @@
 // Purpose: Start the iPhone app with one shared observable state owner.
 // Inputs: Application launch and the persisted data loaded by AppStore.
-// Outputs: The root scene with the shared store and fixed light appearance.
+// Outputs: The root scene with the shared store, Central time default, and fixed light appearance.
 // Side effects: Creates AppStore, which loads or initializes local state.
 
 import SwiftUI
@@ -15,6 +15,7 @@ import SwiftUI
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store).tint(RevaTheme.accent)
+                .environment(\.timeZone, RevaDate.defaultTimeZone)
                 .preferredColorScheme(.light)
         }
     }

@@ -1,7 +1,8 @@
 // Purpose: Make browser persistence and explicit shared-server operations understandable and controllable.
-// Inputs: Reva connection state and a session-only owner token supplied by the user.
-// Outputs: Configuration status, deliberate push/pull, and a reviewed demo reset.
-// Side effects: May contact the local Swift server or replace active browser state after confirmation.
+// Inputs: Reva connection state; in demo mode a session-only owner token, in account mode the signed-in user.
+// Outputs: Configuration status, deliberate push/pull, a reviewed demo reset (demo only), and account cards
+//          (identity, password change, deletion) in account mode.
+// Side effects: May contact the Swift server or replace active browser state after confirmation.
 
 import { useState } from 'react';
 import {
@@ -17,12 +18,14 @@ import {
 } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
 import { Badge, Button, Card, Field, Modal, PageHeading } from '../components/ui';
+import { AccountCard, ChangePasswordCard, DeleteAccountCard } from './AccountSettings';
 
 // MARK: - Explicit actions separate configuration discovery from data replacement
 export function SettingsPage() {
   const store = useReva();
   const [confirm, setConfirm] = useState<'pull' | 'reset' | null>(null);
   const [working, setWorking] = useState(false);
+  const account = store.mode === 'account';
   async function run(action: () => Promise<void>) {
     setWorking(true);
     try {
@@ -36,58 +39,87 @@ export function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeading
-        eyebrow="YOUR WORKSPACE"
+        eyebrow={account ? 'YOUR ACCOUNT' : 'YOUR WORKSPACE'}
         title="Settings & connections"
-        description="Choose when to connect and when to share your latest changes."
+        description={
+          account
+            ? 'Your account, your sessions, and when this browser talks to the server.'
+            : 'Choose when to connect and when to share your latest changes.'
+        }
       />
       <div className="settings-grid">
         <div className="stack">
-          <Card className="settings-card">
-            <div className="card-title">
-              <span className="action-icon">
-                <Link2 size={22} />
-              </span>
-              <div>
-                <h2>Connect to Reva</h2>
-                <p className="muted">Use the same workspace as your iPhone.</p>
+          {account ? (
+            <AccountCard working={working} run={run} />
+          ) : (
+            <Card className="settings-card">
+              <div className="card-title">
+                <span className="action-icon">
+                  <Link2 size={22} />
+                </span>
+                <div>
+                  <h2>Connect to Reva</h2>
+                  <p className="muted">Use the same workspace as your iPhone.</p>
+                </div>
               </div>
-            </div>
-            <p>
-              The browser keeps its own saved copy. Connect to the Reva server to exchange records,
-              appointments, and your medical profile.
-            </p>
-            <Field
-              label="Workspace access token"
-              hint="Kept only for this browser session. Use the token configured on your Reva server."
-            >
-              <input
-                type="password"
-                autoComplete="off"
-                value={store.token}
-                onChange={(event) => store.setToken(event.target.value)}
-                placeholder="Enter your workspace token"
-              />
-            </Field>
-            <div className="form-actions">
-              <span className="small muted">
-                {store.serverRevision == null
-                  ? 'Check your connection before syncing.'
-                  : `Server revision ${store.serverRevision}`}
-              </span>
-              <Button disabled={working || store.busy} onClick={() => run(store.checkServer)}>
-                <RefreshCw size={16} />
-                Check connection
-              </Button>
-            </div>
-          </Card>
+              <p>
+                The browser keeps its own saved copy. Connect to the Reva server to exchange records,
+                appointments, and your medical profile.
+              </p>
+              <Field
+                label="Workspace access token"
+                hint="Kept only for this browser session. Use the token configured on your Reva server."
+              >
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={store.token}
+                  onChange={(event) => store.setToken(event.target.value)}
+                  placeholder="Enter your workspace token"
+                />
+              </Field>
+              <div className="form-actions">
+                <span className="small muted">
+                  {store.serverRevision == null
+                    ? 'Check your connection before syncing.'
+                    : `Server revision ${store.serverRevision}`}
+                </span>
+                <Button disabled={working || store.busy} onClick={() => run(store.checkServer)}>
+                  <RefreshCw size={16} />
+                  Check connection
+                </Button>
+              </div>
+            </Card>
+          )}
           <Card className="settings-card">
             <div className="card-title">
               <Database size={23} />
               <div>
                 <h2>Keep your devices in step</h2>
-                <p className="muted">Transfers happen when you choose.</p>
+                <p className="muted">
+                  {account
+                    ? 'Saves sync on their own; use these to send or fetch right now.'
+                    : 'Transfers happen when you choose.'}
+                </p>
               </div>
             </div>
+            {account && (
+              <div className="form-actions">
+                <span className="small muted">
+                  {store.serverRevision == null
+                    ? 'Check your connection before syncing.'
+                    : `Server revision ${store.serverRevision}`}
+                </span>
+                <Button
+                  variant="secondary"
+                  disabled={working || store.busy}
+                  onClick={() => run(store.checkServer)}
+                >
+                  <RefreshCw size={16} />
+                  Check connection
+                </Button>
+              </div>
+            )}
             <div className="sync-options">
               <div>
                 <h3>Send this browser’s changes</h3>
@@ -121,17 +153,24 @@ export function SettingsPage() {
               </div>
             </div>
           </Card>
-          <Card className="settings-card">
-            <h2>Demo</h2>
-            <p className="muted">
-              Restore the original demonstration records in this browser. This replaces active local changes;
-              it does not change the server or your iPhone.
-            </p>
-            <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm('reset')}>
-              <RotateCcw size={16} />
-              Restore demo
-            </Button>
-          </Card>
+          {account ? (
+            <>
+              <ChangePasswordCard working={working} run={run} />
+              <DeleteAccountCard working={working} run={run} />
+            </>
+          ) : (
+            <Card className="settings-card">
+              <h2>Demo</h2>
+              <p className="muted">
+                Restore the original demonstration records in this browser. This replaces active local
+                changes; it does not change the server or your iPhone.
+              </p>
+              <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm('reset')}>
+                <RotateCcw size={16} />
+                Restore demo
+              </Button>
+            </Card>
+          )}
         </div>
         <div className="stack">
           <Card className="settings-card">
@@ -182,10 +221,11 @@ export function SettingsPage() {
           <div className="storage-note">
             <CheckCircle2 size={21} />
             <div>
-              <strong>Saved in this browser</strong>
+              <strong>{account ? 'Saved to your account' : 'Saved in this browser'}</strong>
               <p>
-                Records and originals use local browser storage. Clearing site data removes this copy. Push to
-                your server before switching browsers if you want to bring your history with you.
+                {account
+                  ? 'Your records and originals live in your account on the Reva server, with a private copy in this browser for speed and offline reading. Clearing site data removes only the browser copy.'
+                  : 'Records and originals use local browser storage. Clearing site data removes this copy. Push to your server before switching browsers if you want to bring your history with you.'}
               </p>
             </div>
           </div>

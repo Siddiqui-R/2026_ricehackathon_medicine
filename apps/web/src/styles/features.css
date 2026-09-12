@@ -1,6 +1,6 @@
 /* Purpose: Give each care workflow a readable desktop hierarchy and a complete small-screen layout.
-   Inputs: Dashboard, records, profile, appointment and settings feature classes.
-   Outputs: Responsive cards, lists, source panels, timelines and transcript controls.
+   Inputs: Dashboard, records, profile, appointment, settings and account-card feature classes.
+   Outputs: Responsive cards, lists, source panels, timelines, transcript controls and account settings cards.
    Side effects: None beyond presentation. */
 
 /* MARK: - Overview composition balances upcoming care, sources and quick-reference health */
@@ -318,28 +318,6 @@
 }
 .glance-section p + p {
   padding-top: 11px;
-}
-.review-reminder {
-  margin-top: 22px;
-  border-color: #fae6e588;
-  background: var(--surface);
-}
-.reminder-icon {
-  display: inline-flex;
-  padding: 10px;
-  background: #fae6e525;
-  border-radius: 9px;
-  color: var(--accent-text);
-  margin-bottom: 14px;
-}
-.review-reminder h3 {
-  font-size: 16px;
-}
-.review-reminder p {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.8;
-  margin: 9px 0 17px;
 }
 
 /* MARK: - Records and profile layouts retain full information at compact widths */
@@ -859,6 +837,63 @@ audio {
   line-height: 1.9;
 }
 
+/* MARK: - Account cards: identity readouts, stacked password forms and a clearly framed deletion */
+.account-card .card-title .avatar-large {
+  flex-shrink: 0;
+}
+.account-card .card-title h2,
+.account-card .card-title .muted {
+  overflow-wrap: anywhere;
+}
+.account-card .card-title .muted {
+  font-size: 12px;
+}
+.account-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.account-meta dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.account-meta dd {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.account-actions {
+  justify-content: flex-end;
+}
+.account-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+.account-form-grid .field {
+  margin: 0;
+}
+.account-form-grid > [role='alert']:empty {
+  display: none;
+}
+.account-form-grid .form-actions {
+  margin-top: 4px;
+}
+.danger-card {
+  border-color: #c79e92;
+}
+.danger-card h2 {
+  color: var(--danger);
+}
+
 /* MARK: - Responsivity stacks by content needs, with no clipping of record names or forms */
 @media (max-width: 1250px) {
   .quick-actions {
@@ -921,9 +956,6 @@ audio {
   .dashboard-secondary > .section-heading {
     grid-column: 1/-1;
     margin-bottom: -4px;
-  }
-  .review-reminder {
-    margin-top: 0;
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1038,6 +1070,10 @@ audio {
   .record-icon {
     width: 32px;
     height: 37px;
+  }
+  .account-meta {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   .sync-options {
     grid-template-columns: minmax(0, 1fr);

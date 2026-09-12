@@ -16,14 +16,14 @@ import {
 import { confirmBooking, reconcileMemory, upsertRecord } from '../mutations.ts';
 import { sample, seed } from './fixtures.ts';
 
-// MARK: - Golden signatures were emitted by the actual Swift ReportEngine on this same seed.
+// MARK: - Golden signatures are also asserted by native FixtureEvidenceTests on this same seed.
 describe('native evidence compatibility', () => {
   it('matches every native fixture signature exactly', async () => {
     const data = seed(),
       expected = [
-        '527ef9c5bd17610165587b1ee17ef5e78a6d5937922ece737eed0c7830855e11',
-        '296a24acd853c35b53a9864894170716ba93650899330020e4aabc6e43f9dcb3',
-        '9868130528caaa4118306c0c7c825c3ab6dad7d33a6e1857df1a97cb05cffde3',
+        '937429cbe44f6a68bfc00a8a478d96fe15cd1d5ccad14f706f11bbf6c2410838',
+        '2e7fcfea03b2755a34e4ca33a88d3ba7ff21377d2cbeb72b5efec1d530591e22',
+        '94fce266a8ea02ac6a60dcbe6b8268ab949b6756b320daee89e2c07157206caf',
       ];
     expect(await Promise.all(data.visits.map((visit) => reportSignature(visit, data.records)))).toEqual(
       expected,
@@ -50,7 +50,7 @@ describe('native evidence compatibility', () => {
     const section = report.sections.find((item) =>
       item.sources.some((source) => source.recordID === 'demo-record-symptom-diary'),
     )!;
-    expect(section.body).toContain('Needs review:');
+    expect(section.body).not.toContain('Needs review:');
     expect(section.body).toContain('September 0[unclear], 2026');
     expect(section.sources[0].excerpt).not.toContain('SYNTHETIC DEMO');
     expect(section.sources[0].excerpt).not.toContain('Invented for Reva');

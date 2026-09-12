@@ -28,7 +28,8 @@ struct MedicalProfileEditor: View {
         _name = State(initialValue: profile.name)
         _hasBirthDate = State(initialValue: !profile.dateOfBirth.isEmpty)
         _birthDate = State(
-            initialValue: profile.dateOfBirth.isEmpty ? Date() : RevaDate.parse(profile.dateOfBirth))
+            initialValue: RevaDate.parse(profile.dateOfBirth.isEmpty ? RevaDate.today() : profile.dateOfBirth)
+        )
         _allergies = State(initialValue: profile.allergies.joined(separator: "\n"))
         _medications = State(initialValue: profile.medications.joined(separator: "\n"))
         _conditions = State(initialValue: profile.conditions.joined(separator: "\n"))
@@ -44,9 +45,10 @@ struct MedicalProfileEditor: View {
                 Toggle("Include date of birth", isOn: $hasBirthDate)
                 if hasBirthDate {
                     DatePicker(
-                        "Date of birth", selection: $birthDate, in: ...Date(), displayedComponents: .date
+                        "Date of birth", selection: $birthDate, in: ...RevaDate.parse(RevaDate.today()),
+                        displayedComponents: .date
                     )
-                    .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
+                    .environment(\.timeZone, RevaDate.calendarDayTimeZone)
                 }
             }
             Section {

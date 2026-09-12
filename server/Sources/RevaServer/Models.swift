@@ -1,8 +1,9 @@
-// Purpose: Define the server wire/storage contracts and shared structural resource limits.
-// Inputs: Codable JSON values, snapshot envelopes, flat attachment metadata, and original bytes.
-// Outputs: Forward-compatible aggregate values, storage interfaces, and validation errors for malformed/oversized input.
+// Purpose: Define the server wire/storage contracts, account/session records, and shared structural resource limits.
+// Inputs: Codable JSON values, snapshot envelopes, flat attachment metadata, original bytes, and account records.
+// Outputs: Forward-compatible aggregate values, storage interfaces, auth envelopes, and validation errors for malformed input.
 // Side effects: No I/O. OwnerDocument records bounded in-memory audit entries before a store persists them.
 // Boundary: Snapshot validation checks structure/size, while the native client owns detailed medical domain rules.
+// Ownership: UserRecord.passwordHash is always a bcrypt hash and SessionRecord.tokenHash a SHA-256 hex; never plaintext.
 
 import Foundation
 import Vapor
@@ -118,6 +119,179 @@ public protocol RevaStore: Sendable {
     func putAttachment(owner: String, attachment: StoredAttachment) async throws
     func getAttachment(owner: String, id: String) async throws -> StoredAttachment
     func deleteAttachment(owner: String, id: String) async throws
+}
+
+// MARK: - Account and session records
+// The owner ID of an account is its user ID, so existing owner-scoped routes work unchanged.
+public struct UserRecord: Codable, Sendable, Equatable {
+    public let id: String
+    public let email: String
+    public let name: String
+    public let passwordHash: String
+    public let createdAt: Date
+    public let passwordUpdatedAt: Date
+
+    public init(
+        id: String, email: String, name: String, passwordHash: String, createdAt: Date,
+        passwordUpdatedAt: Date
+    ) {
+        self.id = id
+        self.email = email
+        self.name = name
+        self.passwordHash = passwordHash
+        self.createdAt = createdAt
+        self.passwordUpdatedAt = passwordUpdatedAt
+    }
+
+    func replacingPassword(hash: String, at date: Date) -> UserRecord {
+        UserRecord(
+            id: id, email: email, name: name, passwordHash: hash, createdAt: createdAt,
+            passwordUpdatedAt: date)
+    }
+}
+
+public struct SessionRecord: Codable, Sendable, Equatable {
+    public let id: UUID
+    public let tokenHash: String
+    public let userID: String
+    public let label: String
+    public let createdAt: Date
+    public let lastUsedAt: Date
+    public let expiresAt: Date
+    public let revokedAt: Date?
+
+    public init(
+        id: UUID, tokenHash: String, userID: String, label: String, createdAt: Date, lastUsedAt: Date,
+        expiresAt: Date, revokedAt: Date?
+    ) {
+        self.id = id
+        self.tokenHash = tokenHash
+        self.userID = userID
+        self.label = label
+        self.createdAt = createdAt
+        self.lastUsedAt = lastUsedAt
+        self.expiresAt = expiresAt
+        self.revokedAt = revokedAt
+    }
+
+    /// A session is live only while it is neither revoked nor past its expiry.
+    func isLive(at now: Date) -> Bool { revokedAt == nil && expiresAt > now }
+
+    func touched(at date: Date) -> SessionRecord {
+        SessionRecord(
+            id: id, tokenHash: tokenHash, userID: userID, label: label, createdAt: createdAt,
+            lastUsedAt: date,
+            expiresAt: expiresAt, revokedAt: revokedAt)
+    }
+
+    func revoked(at date: Date) -> SessionRecord {
+        SessionRecord(
+            id: id, tokenHash: tokenHash, userID: userID, label: label, createdAt: createdAt,
+            lastUsedAt: lastUsedAt, expiresAt: expiresAt, revokedAt: revokedAt ?? date)
+    }
+}
+
+// MARK: - Account failure vocabulary and account storage interface
+enum AccountError: Error, Sendable {
+    case emailTaken, userMissing, sessionMissing
+}
+
+public protocol AccountStore: Sendable {
+    /// Throws AccountError.emailTaken on a duplicate normalized email (case-insensitive).
+    func createUser(_ user: UserRecord) async throws
+    func user(email: String) async throws -> UserRecord?
+    func user(id: String) async throws -> UserRecord?
+    func updatePassword(userID: String, hash: String, at: Date) async throws
+    /// Removes the user, every session, and the owner's state/attachments/audit rows.
+    func deleteUser(id: String) async throws
+    /// Enforces the 20-live-sessions-per-user cap by revoking the oldest sessions.
+    func createSession(_ session: SessionRecord) async throws
+    /// Returns nil when no live session matches; revoked and expired sessions are never returned.
+    func session(tokenHash: String) async throws -> (SessionRecord, UserRecord)?
+    func touchSession(id: UUID, at: Date) async throws
+    func revokeSession(id: UUID) async throws
+    func revokeSessions(userID: String, except: UUID?) async throws
+}
+
+// MARK: - Authenticated identity carried through a request
+// Static workspace tokens carry no session/user; account sessions carry both and use the user ID as owner.
+struct OwnerIdentity: Authenticatable {
+    let id: String
+    var session: SessionRecord? = nil
+    var user: UserRecord? = nil
+}
+
+// MARK: - Public auth envelopes
+// Dates encode as ISO-8601 through Vapor's JSON content configuration.
+public struct AuthUser: Content, Equatable {
+    public let id: String
+    public let email: String
+    public let name: String
+    public let createdAt: Date
+
+    public init(_ user: UserRecord) {
+        id = user.id
+        email = user.email
+        name = user.name
+        createdAt = user.createdAt
+    }
+}
+
+public struct AuthSessionEnvelope: Content {
+    public let token: String
+    public let expiresAt: Date
+    public let user: AuthUser
+
+    public init(token: String, expiresAt: Date, user: AuthUser) {
+        self.token = token
+        self.expiresAt = expiresAt
+        self.user = user
+    }
+}
+
+public struct AuthSessionSummary: Content, Equatable {
+    public let id: UUID
+    public let createdAt: Date
+    public let expiresAt: Date
+    public let lastUsedAt: Date
+
+    public init(_ session: SessionRecord) {
+        id = session.id
+        createdAt = session.createdAt
+        expiresAt = session.expiresAt
+        lastUsedAt = session.lastUsedAt
+    }
+}
+
+public struct AuthIdentityResponse: Content {
+    public let kind: String
+    public let owner: String
+    public let user: AuthUser?
+    public let session: AuthSessionSummary?
+
+    public init(kind: String, owner: String, user: AuthUser?, session: AuthSessionSummary?) {
+        self.kind = kind
+        self.owner = owner
+        self.user = user
+        self.session = session
+    }
+}
+
+struct SignupRequest: Content {
+    let email: String
+    let password: String
+    let name: String
+}
+struct LoginRequest: Content {
+    let email: String
+    let password: String
+}
+struct PasswordChangeRequest: Content {
+    let currentPassword: String
+    let newPassword: String
+}
+struct AccountDeleteRequest: Content {
+    let password: String
 }
 
 // MARK: - Shared structural, path, content-type, and size limits

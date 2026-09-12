@@ -34,6 +34,30 @@ const callRequest = (): BookingRequest => {
 
 // MARK: - State never publishes an edit that storage failed to commit.
 describe('local state publication', () => {
+  it('refreshes old demo labels once while preserving source wording and edited samples', async () => {
+    const repository = new MemoryRepository();
+    const records = repository.saved!.snapshot.records;
+    const diary = records.find((record) => record.id === 'demo-record-symptom-diary')!;
+    diary.title = 'Scanned symptom note - date needs review';
+    diary.status = 'needsReview';
+    diary.tags.push('needs review');
+    const source = diary.text;
+    const labs = records.find((record) => record.id === 'demo-record-labs')!;
+    labs.title = 'My bloodwork notes';
+    labs.version = 2;
+    const { store } = await ready(transport(), repository);
+    expect(store.getState().snapshot!.records.find((record) => record.id === diary.id)).toMatchObject({
+      title: 'Weekly symptom diary',
+      status: 'ready',
+      text: source,
+      version: 2,
+    });
+    expect(store.getState().snapshot!.records.find((record) => record.id === labs.id)).toEqual(labs);
+    const revision = repository.saved!.revision;
+    await ready(transport(), repository);
+    expect(repository.saved!.revision).toBe(revision);
+  });
+
   it('serializes simultaneous local edits without losing either field', async () => {
     const { store, repository } = await ready();
     await Promise.all([

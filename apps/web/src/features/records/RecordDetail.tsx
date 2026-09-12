@@ -129,20 +129,9 @@ export function RecordDetail({ id }: { id: string }) {
         <span className="record-icon">
           <RecordSymbol record={record} />
         </span>
-        <Badge tone={record.status === 'needsReview' ? 'review' : 'accent'}>
-          {record.status === 'needsReview' ? 'Needs review' : 'Saved record'}
-        </Badge>
+        <Badge tone="accent">Saved record</Badge>
         <span className="small muted">Source version {record.version}</span>
       </div>
-      {record.status === 'needsReview' && (
-        <div className="extraction-notices">
-          <strong>Check the original before using these details</strong>
-          <p>
-            Some text or dates need confirmation. You can correct the wording and mark it reviewed in Edit
-            record.
-          </p>
-        </div>
-      )}
       <div className="detail-grid">
         <div className="stack">
           {record.symptomEntry ? (
