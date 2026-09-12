@@ -21,3 +21,9 @@ Device adapter contributor ran 26 simulator checks covering faithful bytes, OCR 
 ## Resource observations
 
 No reset credit was redeemed by the agent. Initial Codex weekly usage was64%; later65%; at the next fresh check on September12 06:55CDT the tool reported0% used with the same one reset credit still available. Claude used4% of its five-hour limit after architecture review, and later displayed3% weekly Fable usage after implementation review. No paid resources or upgrades were purchased.
+
+## MVP deadline revision and one API contract check
+
+The user replaced the exhaustive review loop with a two-hour MVP deadline at07:28CDT. See docs/mvp-goal.md; further heavy review is deferred to manual feedback. Checkpoint d9ec87c froze earlier acceptance fixes. Main was reorganized into feature folders and focused AppStore extensions, with a three-person ownership guide.
+
+Claude Desktop Fable5.1 Extra performed one bounded API contract check, saved as mvp-api-contract-review.md. It read an in-progress snapshot before server adapters appeared; its statements about absent code are historical. Primary checked the resulting implemented adapters against current official-doc research from contributors. Accepted: multipart Whisper with integer-to-string segment IDs,90s server deadline below110s native timeout, explicit16MiB route; durable call intent/replay handling and nullable provider response validation; flattened bounded conversation turns without automatic appointment confirmation; Gemini Developer API key header, configurable verifiedmodel, structured JSON and candidate-ID validation. Speculative silence filtering, automatic polling and guessed call reconciliation were not added; failures remain reviewable and no uncertain call redials.

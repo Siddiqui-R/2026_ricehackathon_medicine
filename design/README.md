@@ -11,6 +11,6 @@
 | Aqua | 111, 171, 182 | `#6FABB6` | Secondary accents and illustrations |
 | Sky | 225, 236, 238 | `#E1ECEE` | Soft selected/source surfaces |
 
-These are exact pixels in the supplied image, not a claim about a separate original designer file. Preserve these named source colors unchanged. Additional neutral text, semantic status colors, and dark-mode variants must be labeled as Reva-derived tokens rather than presented as extracted colors.
+These are exact pixels in the supplied image, not a claim about a separate original designer file. Preserve these named source colors unchanged. The user reaffirmed these exact values during MVP verification. The shipped MVP uses Ivory canvas, Sky cards, Teal actions and Ivory action text. Gold/Slate/Aqua remain named supporting colors. Derived dark substitutions were removed; the MVP stays in light appearance. Native system text and controls retain readable neutral rendering.
 
 Use Apple Health's readable hierarchy and grouped surfaces. The palette is not an instruction to copy the image's decorative serif typography. SF Pro remains the native app typeface. The earlier A–D color proposals are superseded.

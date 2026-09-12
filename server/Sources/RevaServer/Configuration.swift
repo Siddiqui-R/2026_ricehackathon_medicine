@@ -10,6 +10,7 @@ public struct ServerConfiguration: Sendable {
     public let tokens: [String: String]
     public let isDemo: Bool
     public let postgres: PostgresClient.Configuration?
+    public let providers: ProviderConfiguration
 
     public init(environment env: [String: String] = ProcessInfo.processInfo.environment, arguments: [String] = []) throws {
         guard arguments.isEmpty || [["serve"], ["routes"], ["--help"], ["help"]].contains(arguments) else {
@@ -40,6 +41,7 @@ public struct ServerConfiguration: Sendable {
             tokens = [Self.demoToken: "demo-user"]
             isDemo = true
         }
+        providers = try ProviderConfiguration(environment: env, paidAccessAllowed: !isDemo)
         if mode == "postgres" {
             guard let raw = env["DATABASE_URL"], let url = URLComponents(string: raw),
                   ["postgres", "postgresql"].contains(url.scheme ?? ""),

@@ -60,12 +60,15 @@ struct VisitDetailView: View {
                             Label("Arrive with a clearer picture", systemImage: "list.bullet.clipboard").font(.headline)
                             Text("We’ll bring together relevant source excerpts and the questions you want to ask.").font(.subheadline).foregroundStyle(.secondary)
                             Button { prepare() } label: { if generating { ProgressView().tint(RevaTheme.buttonText) } else { Text("Create pre-visit brief") } }.buttonStyle(PrimaryButtonStyle()).disabled(generating)
-                            Text("Local demo · no cloud model connected").font(.caption).foregroundStyle(.secondary)
+                            Text(store.useConnectedAI ? "Connected Gemini · source review required" : "Local source excerpts · no cloud request").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     SectionHeading(title: "Plan the appointment")
                     RevaCard {
                         Button { booking = true } label: { Label("Request a booking · simulation", systemImage: "phone.arrow.up.right").font(.headline) }.padding(.vertical, 5)
+                        if store.providerStatus?.booking.configured == true && store.providerStatus?.liveCallsEnabled == true {
+                            NavigationLink { LiveBookingEditorView(visit: visit) } label: { Label("Call clinic with connected agent", systemImage: "phone.arrow.up.right") }
+                        }
                         ForEach(store.bookings.filter { $0.visitID == id }) { request in
                             Divider(); NavigationLink { BookingStatusView(id: request.id) } label: { HStack { Text(request.clinic); Spacer(); Text(BookingStatusView.label(request.status)).font(.caption).foregroundStyle(RevaTheme.accent) } }
                         }
@@ -93,7 +96,7 @@ struct VisitDetailView: View {
     }
     private func prepare() {
         generating = true
-        Task { try? await Task.sleep(for: .milliseconds(450)); if store.perform({ try store.generateReport(id) }) { showReport = true }; generating = false }
+        Task { if await store.generatePreferredReport(id) { showReport = true }; generating = false }
     }
 }
 
@@ -113,7 +116,7 @@ struct VisitEditorView: View {
     @State private var pins: Set<String> = []
     var valid: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !concern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && TimeZone(identifier: zone) != nil }
     var body: some View {
-        Form {
+        RevaForm {
             Section("Appointment") {
                 TextField("Visit title", text: $title)
                 Picker("Visit type", selection: $type) { ForEach(["Primary care", "Orthopedics", "Cardiology", "Other"], id: \.self) { Text($0) } }
@@ -144,7 +147,7 @@ struct ReportView: View {
         Group {
             if let visit = store.visit(visitID), let report = visit.report {
                 Page {
-                    ModeBadge(text: "LOCAL PRE-VISIT BRIEF")
+                    ModeBadge(text: report.generationModel == nil ? "LOCAL PRE-VISIT BRIEF" : "AI-ASSISTED · REVIEW SOURCES")
                     Text(visit.title).font(.title.bold())
                     Text("Prepared \(RevaDate.display(report.createdAt)) · \(report.selectedRecordIDs.count) source records").font(.caption).foregroundStyle(.secondary)
                     if ReportEngine.isStale(visit, records: store.records) { StatusNotice(title: "Out of date", message: "Your records or visit details changed. Regenerate before sharing.", symbol: "arrow.clockwise") }
@@ -164,8 +167,8 @@ struct ReportView: View {
                         Button("Edit questions & notes") { edit = true }.font(.subheadline.weight(.semibold))
                     }
                     if !report.notes.isEmpty { RevaCard { Text("Your notes").font(.headline); Text(report.notes) } }
-                    StatusNotice(title: "A conversation aid", message: "This local demo selects and quotes your records. It does not diagnose or recommend treatment. Check the sources with your clinician.")
-                    Button("Regenerate from current records") { store.perform { try store.generateReport(visitID) } }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
+                    StatusNotice(title: "A conversation aid", message: "This brief brings together selected source excerpts. Any AI overview needs review. It does not diagnose or recommend treatment; check the sources with your clinician.")
+                    Button(store.isProviderBusy ? "Preparing…" : "Regenerate from current records") { Task { await store.generatePreferredReport(visitID) } }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity).disabled(store.isProviderBusy)
                     Button { exportReport(visit, report) } label: { Label("Share visit brief", systemImage: "square.and.arrow.up") }.buttonStyle(PrimaryButtonStyle()).disabled(ReportEngine.isStale(visit, records: store.records))
                 }.sheet(isPresented: $edit) { NavigationStack { ReportEditorView(visit: visit) } }
             } else { ContentUnavailableView("No brief yet", systemImage: "doc.text", description: Text("Generate a brief from the visit screen.")) }
@@ -177,7 +180,7 @@ struct ReportView: View {
             var sections = report.sections.map { section in PDFSection(title: section.title, body: section.body + (section.sources.isEmpty ? "" : "\n\nSource: " + section.sources.map { "\(store.record($0.recordID)?.title ?? "Missing") · \($0.locationLabel)" }.joined(separator: "; "))) }
             sections.append(PDFSection(title: "Questions to bring", body: report.questions.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")))
             if !report.notes.isEmpty { sections.append(PDFSection(title: "Your notes", body: report.notes)) }
-            let url = try ReportPDFRenderer.render(title: "Reva · " + visit.title, subtitle: "Local demo brief · " + RevaDate.display(visit.date, time: true, zone: visit.timeZone), sections: sections, sources: report.selectedRecordIDs.compactMap { store.record($0) }.map { "\($0.title) · \(RevaDate.display($0.date)) · source version \($0.version)" })
+            let url = try ReportPDFRenderer.render(title: "Reva · " + visit.title, subtitle: (report.generationModel.map { "AI-assisted (" + $0 + ") · review sources · " } ?? "Local source brief · ") + RevaDate.display(visit.date, time: true, zone: visit.timeZone), sections: sections, sources: report.selectedRecordIDs.compactMap { store.record($0) }.map { "\($0.title) · \(RevaDate.display($0.date)) · source version \($0.version)" })
             exportDocument = ExportDocument(url: url)
         }
     }
@@ -192,7 +195,7 @@ struct ReportEditorView: View {
     let visit: Visit
     @State private var questions = ""
     @State private var notes = ""
-    var body: some View { Form {
+    var body: some View { RevaForm {
         Section { TextEditor(text: $questions).frame(minHeight: 220) } header: { Text("Questions to ask") } footer: { Text("One question per line. Your edits stay when the brief is regenerated.") }
         Section("Your notes") { TextEditor(text: $notes).frame(minHeight: 160) }
     }.navigationTitle("Make it yours").navigationBarTitleDisplayMode(.inline).onAppear { questions = visit.report?.questions.joined(separator: "\n") ?? ""; notes = visit.report?.notes ?? "" }

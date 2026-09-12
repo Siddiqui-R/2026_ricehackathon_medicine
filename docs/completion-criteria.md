@@ -1,3 +1,5 @@
+> Superseded where scope conflicts by [the user’s two-hour MVP revision](mvp-goal.md). Remaining work follows that shorter delivery scope; this original checklist is retained for history and later manual feedback.
+
 # Reva hackathon prototype — binding completion criteria
 
 Written before implementation, September 12, 2026. User goal: a presentable, functional native Swift iPhone prototype based on the Apple Health-led style plan and the supplied Ivory / Gold / Slate / Teal / Aqua / Sky palette. This file is mirrored to /Users/tempadmin/goals.txt as requested.

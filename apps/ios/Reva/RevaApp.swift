@@ -2,11 +2,10 @@ import SwiftUI
 
 @main struct RevaApp: App {
     @StateObject private var store = AppStore()
-    @AppStorage("appearance") private var appearance = "System"
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store).tint(RevaTheme.accent)
-                .preferredColorScheme(appearance == "Light" ? .light : appearance == "Dark" ? .dark : nil)
+                .preferredColorScheme(.light)
         }
     }
 }

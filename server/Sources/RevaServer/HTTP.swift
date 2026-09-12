@@ -1,6 +1,6 @@
 import Vapor
 
-private struct OwnerIdentity: Authenticatable { let id: String }
+struct OwnerIdentity: Authenticatable { let id: String }
 
 private struct BearerMiddleware: AsyncMiddleware {
     let tokens: [String: String]
@@ -60,7 +60,8 @@ private struct SafeErrors: AsyncMiddleware {
     }
 }
 
-public func configure(_ app: Application, configuration: ServerConfiguration, store: any RevaStore) {
+public func configure(_ app: Application, configuration: ServerConfiguration, store: any RevaStore,
+                      geminiTransport: GeminiHTTPTransport? = nil) {
     app.http.server.configuration.hostname = configuration.hostname
     app.http.server.configuration.port = configuration.port
     app.routes.defaultMaxBodySize = "4mb"
@@ -73,6 +74,8 @@ public func configure(_ app: Application, configuration: ServerConfiguration, st
     }
 
     let secured = app.grouped(BearerMiddleware(tokens: configuration.tokens)).grouped("v1")
+    registerProviderRoutes(secured, configuration: configuration.providers, directory: configuration.directory,
+                           geminiTransport: geminiTransport ?? .live)
     secured.get("state") { request async throws -> StateEnvelope in
         try await store.getState(owner: request.auth.require(OwnerIdentity.self).id)
     }

@@ -67,7 +67,14 @@ struct RecordingDetailView: View {
                         ShareLink(item: url) { Label("Share audio", systemImage: "square.and.arrow.up") }.font(.subheadline)
                     }
                 }
-                if !recording.isSample { StatusNotice(title: "Transcription not connected", message: "This is your actual saved audio. Add your own notes below; a generated transcript will require a configured service.") }
+                if !recording.isSample {
+                    if let model = recording.transcriptionModel {
+                        StatusNotice(title: "Transcript · " + model, message: "Review the words against your audio. Speaker labels are generic; this service does not identify people.")
+                    } else { StatusNotice(title: "Your saved audio", message: "Add notes, or connect transcription in Profile & settings to generate a reviewable transcript.") }
+                    if store.providerStatus?.transcription.configured == true {
+                        Button(store.isProviderBusy ? "Transcribing…" : "Transcribe saved audio") { Task { await store.transcribeRecording(id) } }.buttonStyle(.bordered).disabled(store.isProviderBusy || recording.audioFilename == nil || !recording.segments.isEmpty)
+                    }
+                }
                 if !recording.summary.isEmpty {
                     RevaCard {
                         Text("Separate visit notes").font(.headline)
@@ -120,7 +127,7 @@ struct TranscriptTextEditor: View {
     }
 
     var body: some View {
-        Form {
+        RevaForm {
             Section {
                 Text("Correct the words in the existing transcript. Speaker labels and recording-relative times stay the same. Your separate visit notes are kept; an already-saved memory refreshes from these corrections.").font(.subheadline).foregroundStyle(.secondary)
             }
@@ -150,5 +157,5 @@ struct RecordingNotesEditor: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State var recording: VisitRecording
-    var body: some View { Form { Section("Your visit notes") { TextEditor(text: $recording.summary).frame(minHeight: 300) }; Text("These are your editable notes. They do not change the original transcript or audio.").font(.footnote).foregroundStyle(.secondary) }.navigationTitle("Visit notes").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { if store.perform({ try store.save(recording) }) { dismiss() } } } } }
+    var body: some View { RevaForm { Section("Your visit notes") { TextEditor(text: $recording.summary).frame(minHeight: 300) }; Text("These are your editable notes. They do not change the original transcript or audio.").font(.footnote).foregroundStyle(.secondary) }.navigationTitle("Visit notes").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { if store.perform({ try store.save(recording) }) { dismiss() } } } } }
 }

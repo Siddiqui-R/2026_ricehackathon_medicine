@@ -1,3 +1,5 @@
+> Superseded where scope conflicts by [the user’s two-hour MVP revision](mvp-goal.md). Remaining work follows that shorter delivery scope; this original checklist is retained for history and later manual feedback.
+
 # Reva — complete implementation and verification task list
 
 **Authority:** the user's active build goal and subsequent instructions.

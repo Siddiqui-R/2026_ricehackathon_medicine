@@ -30,6 +30,7 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
     var version: Int = 1
     var pageTexts: [String]?
     var sourceRecordingID: String? = nil
+    var summaryModel: String? = nil
 
     var symbol: String {
         switch kind {
@@ -42,7 +43,7 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
         }
     }
     var needsReview: Bool { status == "needsReview" }
-    var summaryLabel: String { isDemo ? "Demo summary" : "Local excerpt" }
+    var summaryLabel: String { summaryModel.map { "AI summary · " + $0 } ?? (isDemo ? "Demo summary" : "Local excerpt") }
 }
 
 struct SourceReference: Codable, Identifiable, Equatable {
@@ -69,6 +70,7 @@ struct VisitReport: Codable, Identifiable, Equatable {
     var notes: String
     var selectedRecordIDs: [String]
     var isDemo: Bool = true
+    var generationModel: String? = nil
 }
 struct Visit: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
@@ -100,6 +102,9 @@ struct BookingRequest: Codable, Identifiable, Equatable {
     var scenario: String = "Appointment available"
     var createdAt: String = RevaDate.now
     var confirmedVisitID: String?
+    var isLive: Bool? = nil
+    var providerConversationID: String? = nil
+    var providerTranscript: String? = nil
 }
 struct TranscriptSegment: Codable, Identifiable, Equatable {
     var id: String
@@ -119,6 +124,7 @@ struct VisitRecording: Codable, Identifiable, Equatable {
     var summary: String = ""
     var isSample: Bool = false
     var status: String = "saved"
+    var transcriptionModel: String? = nil
 }
 struct AppSnapshot: Codable, Equatable {
     var schemaVersion: Int = 1

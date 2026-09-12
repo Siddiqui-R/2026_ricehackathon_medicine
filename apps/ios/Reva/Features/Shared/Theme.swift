@@ -1,17 +1,15 @@
 import SwiftUI
 
 enum RevaTheme {
-    // Exact source palette. Adaptive roles are explicitly derived.
+    // Exact six-color user palette, reaffirmed September12. No adaptive color substitutions.
     static let ivory = Color(hex: 0xFAF4F4), gold = Color(hex: 0xC8A07D), slate = Color(hex: 0xA2B7BC)
     static let teal = Color(hex: 0x0A5B6C), aqua = Color(hex: 0x6FABB6), sky = Color(hex: 0xE1ECEE)
-    static let canvas = adaptive(0xFAF4F4, 0x11191C)
-    static let surface = adaptive(0xFFFFFF, 0x1D292D)
-    static let accent = adaptive(0x0A5B6C, 0x8AC6D0)
-    static let soft = adaptive(0xE1ECEE, 0x243C43)
-    static let buttonText = adaptive(0xFFFFFF, 0x10292F)
-    static func adaptive(_ light: UInt, _ dark: UInt) -> Color {
-        Color(uiColor: UIColor { trait in UIColor(hex: trait.userInterfaceStyle == .dark ? dark : light) })
-    }
+    static let canvas = ivory
+    static let surface = sky
+    static let accent = teal
+    static let soft = sky
+    static let buttonText = ivory
+
 }
 extension UIColor {
     convenience init(hex: UInt) { self.init(red: CGFloat((hex >> 16) & 255)/255, green: CGFloat((hex >> 8) & 255)/255, blue: CGFloat(hex & 255)/255, alpha: 1) }
@@ -81,5 +79,14 @@ struct VisitRow: View {
             }
             Spacer(minLength: 0); Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
         }.contentShape(Rectangle())
+    }
+}
+
+/// Shared native form surface keeps editor screens on the same supplied palette.
+struct RevaForm<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        Form { content.listRowBackground(RevaTheme.surface) }
+            .scrollContentBackground(.hidden).background(RevaTheme.canvas)
     }
 }

@@ -10,3 +10,6 @@ xcuserdata/
 .worktrees/
 *.log
 output/qa/
+
+__pycache__/
+*.pyc

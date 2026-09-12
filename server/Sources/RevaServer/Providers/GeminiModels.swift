@@ -1,0 +1,72 @@
+import Foundation
+import Vapor
+
+struct GeminiSummaryRequest: Content {
+    let recordID: String
+    let title: String
+    let text: String
+
+    func validate() throws {
+        guard Validation.safeID(recordID), GeminiValidation.text(title, maximum: 240),
+              GeminiValidation.text(text, maximum: 120_000) else {
+            throw Abort(.badRequest, reason: "Provide a safe recordID, a title of 1–240 bytes, and source text of 1–120000 bytes.")
+        }
+    }
+}
+
+struct GeminiPreparationRequest: Content {
+    struct Visit: Codable, Sendable {
+        let id: String
+        let type: String
+        let concern: String
+        let goal: String
+        let questions: [String]
+    }
+    struct Record: Codable, Sendable {
+        let id: String
+        let title: String
+        let date: String
+        let text: String
+        let summary: String
+        let version: Int
+    }
+    let visit: Visit
+    let records: [Record]
+
+    func validate() throws {
+        guard Validation.safeID(visit.id), GeminiValidation.text(visit.type, maximum: 80),
+              GeminiValidation.text(visit.concern, maximum: 6000, allowEmpty: true),
+              GeminiValidation.text(visit.goal, maximum: 6000, allowEmpty: true),
+              !(visit.concern + visit.goal).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              visit.questions.count <= 20, visit.questions.allSatisfy({ GeminiValidation.text($0, maximum: 1000) }),
+              (1...100).contains(records.count), Set(records.map(\.id)).count == records.count else {
+            throw Abort(.badRequest, reason: "Provide a valid visit concern/goal, at most 20 questions, and 1–100 uniquely identified candidate records.")
+        }
+        var total = 0
+        for record in records {
+            guard Validation.safeID(record.id), GeminiValidation.text(record.title, maximum: 240),
+                  GeminiValidation.text(record.date, maximum: 40), record.version >= 1,
+                  GeminiValidation.text(record.text, maximum: 120_000),
+                  GeminiValidation.text(record.summary, maximum: 8000, allowEmpty: true) else {
+                throw Abort(.badRequest, reason: "Candidate records need safe IDs, source text, dates, positive versions, and bounded title/summary fields.")
+            }
+            total += record.text.utf8.count + record.summary.utf8.count
+        }
+        guard total <= 500_000 else { throw Abort(.payloadTooLarge, reason: "Candidate source text and summaries exceed 500000 bytes. Choose fewer records.") }
+    }
+}
+
+struct GeminiSummaryResponse: Content { let summary: String; let model: String }
+struct GeminiPreparationResponse: Content {
+    let overview: String
+    let questions: [String]
+    let selectedRecordIDs: [String]
+    let model: String
+}
+
+enum GeminiValidation {
+    static func text(_ value: String, maximum: Int, allowEmpty: Bool = false) -> Bool {
+        value.utf8.count <= maximum && !value.contains("\0") &&
+        (allowEmpty || !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+}

@@ -1,0 +1,42 @@
+# MVP API contract review — Gemini, Whisper, ElevenLabs
+
+One bounded check of `docs/mvp-goal.md`, `docs/task-specs/mvp-api-contract.md`, the app-side `apps/ios/Reva/Core/ProviderClient.swift` (uncommitted in main), and the existing server transport the adapters will inherit (`server/Sources/RevaServer/HTTP.swift`, `Models.swift`). No server provider code exists yet in main or this worktree. No web reads, live calls, or code edits; provider behaviors below are from the current official APIs as I know them and should be confirmed against the reference pages during setup, as the contract already requires.
+
+## Four material pitfalls
+
+### 1. Whisper: the raw-bytes route must be re-wrapped, sized, and timed correctly
+
+- **Multipart and filename.** OpenAI `POST /v1/audio/transcriptions` accepts only `multipart/form-data` with fields `file`, `model`, `response_format`, `timestamp_granularities[]`. Format detection uses the part's `filename` extension (`m4a`, `mp4`, `mp3`, `wav`, …). The app sends `audio/mp4` for `.m4a` (`ProviderClient.swift:90-92`); the server must build the multipart part with a filename whose extension matches the content type, falling back to `.m4a` when `X-Filename` is missing or has no extension. A wrong extension returns 400 "Invalid file format".
+- **Segments only on `whisper-1`.** `verbose_json` with segment timestamps is supported by `whisper-1` only; `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` accept only `json`/`text`. If `OPENAI_TRANSCRIPTION_MODEL` is anything else, reject at configuration time or return `text` with a single segment `[0, duration]` clearly labeled, never an empty `segments` array presented as a transcript.
+- **Shape mapping.** Whisper segment `id` is an Int; the contract needs a String (`"whisper-segment-0"`). Use the top-level `duration` to clamp `end` and to reject `start >= end`, matching the local `VisitRecording` rules. Segments with high `no_speech_prob` (commonly > 0.6) are whisper-1 hallucinations on silence; drop or flag them rather than emit invented speech.
+- **Body limit and time.** `app.routes.defaultMaxBodySize = "4mb"` (`HTTP.swift:66`); the transcribe route must declare `body: .collect(maxSize: "16mb")` like the attachment route or every real recording over 4 MB gets 413. A one-hour 32 kbps recording is about 14 MB and can take minutes upstream; the client timeout is 110 s (`ProviderClient.swift:61`). Either bound the server-side upstream call with an explicit deadline shorter than the client's and tell the user to trim, or make transcription an async job the app polls. Vapor's client has no total-request timeout by default; set one.
+
+### 2. ElevenLabs call start: nullable IDs, soft failures, and no idempotency upstream
+
+- **Response shape.** `POST /v1/convai/twilio/outbound-call` (header `xi-api-key`; body `agent_id`, `agent_phone_number_id`, `to_number`, optional `conversation_initiation_client_data`) returns `{success, message, conversation_id, callSid}` where `conversation_id` and `callSid` are nullable, and failures such as a bad number or phone-number ID can arrive as HTTP 200 with `success: false`. The server must branch on `success`, store `callSid`, and return a non-null `conversationID` (empty string or the receipt ID) because the app decodes `conversationID: String` (`ProviderClient.swift:26`) and a JSON null would surface as "unsupported response" after the call was actually placed.
+- **Receipt semantics.** ElevenLabs has no idempotency key. Persist the intent keyed by owner and `requestID` before the POST, mark it `uncertain` on timeout or transport error, and never retry the POST automatically. Reconcile uncertain receipts by listing `GET /v1/convai/conversations?agent_id=…&call_start_after_unix=…` and matching the intent window rather than placing a second call. A client-side 110 s timeout must lead to polling `GET /v1/booking/call/:requestID`, not to a new start.
+- **Configuration traps.** The Twilio endpoint requires a phone number imported from Twilio (`ELEVENLABS_PHONE_NUMBER_ID` from `GET /v1/convai/phone-numbers`); a SIP-trunk number needs the SIP endpoint instead. `to_number` must be strict E.164 (`+` and digits, validated server-side, not just a 10-digit count). Dynamic variables passed in `conversation_initiation_client_data.dynamic_variables` (clinic, reason, window, time zone, patient name) must be declared in the agent's prompt and overrides enabled in the agent's security settings, or initiation fails.
+
+### 3. ElevenLabs polling: turn arrays, status lifecycle, and no auto-confirmation
+
+- `GET /v1/convai/conversations/{conversation_id}` returns `status` in `initiated | in-progress | processing | done | failed`, `transcript` as an array of turns `{role, message, time_in_call_secs, …}`, `metadata.call_duration_secs`, and `analysis`. The contract's `transcript: String` means the server flattens turns as `[m:ss] role: message`, bounds length (for example 20 KB), and reports `processing` as "call ended, transcript being finalized", not as failure. Text can be empty until `done`.
+- Immediately after a successful start the conversation resource can 404 briefly; treat 404 within the first minute of a known receipt as `initiated`, and only after that as `failed`. Never delete the receipt on a poll error.
+- Do not read `analysis.call_successful` or `data_collection_results` into booking state. The visit date, clinic, and time zone are entered or accepted manually by the user, per the contract; the poll response should carry only status and transcript.
+- Poll from the app only while the status screen is in the foreground, at about 5–10 s, and stop on `done`/`failed` or after a bounded wall time; the app has no background modes.
+
+### 4. Gemini: settle auth, model, and structured output before writing the adapter
+
+- **Two conflicting setups.** The root `.env.example` documents Vertex-style `GEMINI_PROJECT_ID`/`GEMINI_LOCATION` and a model name `gemini-3.8-flash`; the contract specifies `GEMINI_API_KEY` and `GEMINI_MODEL`. Implement the Gemini Developer API only (`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, key in the `x-goog-api-key` header, never in the query string where it would be logged). Do not hardcode a model name from memory; at setup confirm the default against `GET /v1beta/models` and have `/v1/providers` report the configured string. Update `.env.example` so the two files agree.
+- **Structured output.** Request `generationConfig.responseMimeType = "application/json"` with a `responseSchema` for `{summary}` and `{overview, questions, selectedRecordIDs}`; otherwise Flash returns fenced Markdown that breaks `JSONDecoder`. Concatenate all `candidates[0].content.parts[].text` before decoding. Keep the existing rule: validate `selectedRecordIDs` as a subset of the supplied candidates and drop the rest.
+- **Non-success responses.** An empty `candidates` array with `promptFeedback.blockReason`, or `finishReason` of `SAFETY`, `RECITATION`, or `MAX_TOKENS`, must map to an explicit 502 with a readable reason, not to an empty summary that the app would store. Clinical text with doses or self-harm language is a realistic safety-filter trigger. On 2.5-class Flash models thinking tokens count against `maxOutputTokens`; set `thinkingConfig.thinkingBudget: 0` or a generous `maxOutputTokens` so JSON is not truncated.
+- **Bounds and timeouts.** `/v1/ai/prepare` posts full texts for every candidate record; the existing 4 MiB body cap is fine for the fixture set but enforce a per-record text cap server-side so a large OCR import cannot exhaust it. Give the upstream call an explicit deadline under the app's 110 s.
+
+## Checked, no issue against the contract
+
+- Wire shapes in `ProviderClient.swift` match the contract field for field; `transcribe` enforces 16 MiB and non-empty bytes; `callStatus` guards the path component.
+- Existing bearer middleware, owner identity, `SafeErrors`, and `X-Filename` sanitization are reusable as-is for the new routes; `Validation.contentTypes` already includes `audio/mp4`, `audio/x-m4a`, `audio/m4a`, `audio/wav`, `audio/mpeg`.
+- The sample transcript has no `audioFilename`, so "sample cannot be transcribed" is enforceable by that field alone.
+
+## Not checked
+
+Server provider code, tests, and settings UI do not exist yet; Vapor client timeout behavior and the exact current model identifiers were not verified online in this pass.

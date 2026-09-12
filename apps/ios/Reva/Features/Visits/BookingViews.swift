@@ -15,7 +15,7 @@ struct BookingEditorView: View {
     @State private var requestID: String?
     @State private var created = false
     var body: some View {
-        Form {
+        RevaForm {
             Section { Label("Booking simulation", systemImage: "phone.badge.waveform").font(.headline); Text("Review the information a future calling assistant would use. This demo never dials or contacts a clinic.").font(.subheadline).foregroundStyle(.secondary) }
             Section("Clinic & purpose") { TextField("Clinic name", text: $clinic); TextField("Phone number", text: $phone).keyboardType(.phonePad); TextField("Visit reason", text: $reason, axis: .vertical).lineLimit(2...5) }
             Section("Allowed appointment window") { DatePicker("Earliest / demo proposal", selection: $earliest); DatePicker("Latest", selection: $latest, in: earliest...); Text(visit.timeZone).font(.caption).foregroundStyle(.secondary); TextField("Preferences and constraints", text: $preferences, axis: .vertical).lineLimit(2...4) }.environment(\.timeZone, TimeZone(identifier: visit.timeZone) ?? .current)
@@ -38,7 +38,9 @@ struct BookingStatusView: View {
         ["draft": "Ready", "queued": "Queued", "calling": "Simulating call", "proposed": "Time proposed", "confirmed": "Demo confirmed", "needsUser": "Needs your input", "failed": "No answer"][status] ?? status
     }
     var body: some View {
-        if let request = store.booking(id) {
+        if let request = store.booking(id), request.isLive == true {
+            LiveBookingStatusView(id: id)
+        } else if let request = store.booking(id) {
             Page {
                 ModeBadge(text: "SIMULATION · NO CALL PLACED")
                 RevaCard {
