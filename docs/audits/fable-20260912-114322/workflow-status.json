@@ -1,11 +1,10 @@
 {
   "audit": "fable-20260912-114322",
   "supervisor": {
-    "role": "coordinator (role 20 of 20)",
-    "chat": "Claude Desktop Code tab, separate from the 'Reva architecture review' implementation session",
-    "sessionId": "a4829c72-eed5-4457-959e-34f8c5715bdc",
-    "model": "claude-fable-5-1 (Fable 5.1)",
-    "effort": "Ultracode session mode (multi-agent orchestration enabled by user keyword)"
+    "role": "Codex continuation coordinator",
+    "agent": "/root",
+    "authorization": "User: claude limits ran out, pick up where it left off",
+    "originalFableRecord": "evidence/codex-takeover/workflow-status.json"
   },
   "sourceSnapshot": {
     "worktree": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
@@ -26,217 +25,159 @@
     "policy": "never reused; delta review only after a completed checkpoint appears in main git log"
   },
   "platform": {
-    "orchestration": "Claude Code Workflow tool (deterministic script, agent()/parallel())",
-    "workerModel": "inherits session model claude-fable-5-1; no substitution",
-    "workerEffort": {
-      "sourceReviewers": "xhigh",
-      "evidenceRunner": "xhigh",
-      "validators": "max",
-      "synthesis": "max"
-    },
-    "concurrencyCap": "platform cap min(16, cpus-2)=12 on this 14-CPU Mac; audit policy caps source reviewers at 6 concurrent (+1 runner)",
-    "limitsHit": []
+    "orchestration": "Codex collaboration after Fable usage exhaustion",
+    "concurrency": "three independent workers plus supervisor",
+    "modelClaim": "Codex continuation is not attributed to Fable",
+    "originalFableRecord": "evidence/codex-takeover/workflow-status.json"
   },
-  "phase": "codex-continuation-source-review",
+  "phase": "audit-complete",
   "phases": [
     {
       "id": 0,
-      "title": "Supervisor: verify snapshot and scope",
-      "status": "done",
-      "at": "2026-09-12T12:05:00-05:00"
+      "title": "Frozen snapshot and scope",
+      "status": "complete"
     },
     {
       "id": 1,
-      "title": "Workflow 1: runner + waves A/B/C + validators + runner follow-up",
-      "status": "running",
-      "startedAt": "2026-09-12T12:10:00-05:00"
+      "title": "Source review tracks01\u201316 and evidence adjudication",
+      "status": "complete",
+      "note": "Unexecuted functional gates remain explicit in coverage; original Fable run interrupted by limit."
     },
     {
       "id": 2,
-      "title": "Supervisor: delta check of main checkout (read-only git)",
-      "status": "pending"
+      "title": "Read-only main checkout delta check",
+      "status": "complete",
+      "note": "No completed application checkpoint since prior documentation handoff; later account/Tiger code remains WIP.",
+      "evidence": "evidence/codex-takeover/main-delta-check.json"
     },
     {
       "id": 3,
-      "title": "Synthesis: dedup findings, coverage, backlog, final report",
-      "status": "pending"
+      "title": "Independent validation, deduplication, coverage and synthesis",
+      "status": "complete",
+      "evidence": [
+        "reports/18-validator.md",
+        "reports/19-validator.md",
+        "FINAL-REPORT.md"
+      ]
     }
   ],
   "roles": [
     {
-      "role": 1,
       "track": "01",
-      "taskFile": "tasks/01.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a97c726685bde8af2",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-01.md"
     },
     {
-      "role": 2,
       "track": "02",
-      "taskFile": "tasks/02.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a03674f455213428e",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-02.md"
     },
     {
-      "role": 3,
       "track": "03",
-      "taskFile": "tasks/03.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a9309149bc8348f47",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-03.md"
     },
     {
-      "role": 4,
       "track": "04",
-      "taskFile": "tasks/04.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a332e8e9674ed1afb",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-04.md"
     },
     {
-      "role": 5,
       "track": "05",
-      "taskFile": "tasks/05.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a343c08870aedb4cd",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-05.md"
     },
     {
-      "role": 6,
       "track": "06",
-      "taskFile": "tasks/06.md",
-      "wave": "A",
-      "status": "running",
-      "agentId": "a035e6548b94eac67",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00"
+      "status": "complete",
+      "author": "Fable",
+      "report": "reports/track-06.md"
     },
     {
-      "role": 7,
       "track": "07",
-      "taskFile": "tasks/07.md",
-      "wave": "B",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-07.md"
     },
     {
-      "role": 8,
       "track": "08",
-      "taskFile": "tasks/08.md",
-      "wave": "B",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-08.md"
     },
     {
-      "role": 9,
       "track": "09",
-      "taskFile": "tasks/09.md",
-      "wave": "B",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-09.md"
     },
     {
-      "role": 10,
       "track": "10",
-      "taskFile": "tasks/10.md",
-      "wave": "B",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-10.md"
     },
     {
-      "role": 11,
       "track": "11",
-      "taskFile": "tasks/11.md",
-      "wave": "B",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-11.md"
     },
     {
-      "role": 12,
       "track": "12",
-      "taskFile": "tasks/12.md",
-      "wave": "C",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-12.md"
     },
     {
-      "role": 13,
       "track": "13",
-      "taskFile": "tasks/13.md",
-      "wave": "C",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-13.md"
     },
     {
-      "role": 14,
       "track": "14",
-      "taskFile": "tasks/14.md",
-      "wave": "C",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-14.md"
     },
     {
-      "role": 15,
       "track": "15",
-      "taskFile": "tasks/15.md",
-      "wave": "C",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-15.md"
     },
     {
-      "role": 16,
       "track": "16",
-      "taskFile": "tasks/16.md",
-      "wave": "C",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex continuation",
+      "report": "reports/track-16.md"
     },
     {
-      "role": 17,
       "track": "17",
-      "taskFile": "tasks/17-evidence-runner.md",
-      "wave": "R (parallel to A/B; C waits on it)",
-      "status": "running",
-      "agentId": "a6fdca29b0034cf91",
-      "agentType": "workflow-subagent",
-      "startedAt": "2026-09-12T12:02:00-05:00",
-      "note": "track 17 runs as three sequential agents: stage1 (builds/tests), stage2 (UI/measurements), follow-up (validator evidence requests)"
+      "status": "complete-with-explicit-evidence-gaps",
+      "author": "Fable stage1/captures; Codex adjudication/reproductions",
+      "reports": [
+        "reports/17-evidence-runner.md",
+        "reports/17b-codex-evidence-adjudication.md"
+      ]
     },
     {
-      "role": 18,
       "track": "18",
-      "taskFile": "tasks/18-validator.md",
-      "wave": "V",
-      "status": "assigned",
-      "agentId": null
+      "status": "complete",
+      "author": "Codex independent validator",
+      "report": "reports/18-validator.md"
     },
     {
-      "role": 19,
       "track": "19",
-      "taskFile": "tasks/19-validator.md",
-      "wave": "V",
-      "status": "assigned",
-      "agentId": null
-    },
-    {
-      "role": 20,
-      "track": "supervisor",
-      "taskFile": "START-HERE.md",
-      "wave": "all",
-      "status": "active",
-      "agentId": "a4829c72-eed5-4457-959e-34f8c5715bdc"
+      "status": "complete",
+      "author": "Codex independent validator",
+      "report": "reports/19-validator.md"
     }
   ],
   "workflowRuns": [
@@ -253,12 +194,13 @@
         "validators": "max"
       },
       "agentModel": "inherited session model claude-fable-5-1",
-      "status": "running",
+      "status": "interrupted-by-usage-limit; superseded-by-Codex-continuation",
       "journal": "/Users/tempadmin/.claude/projects/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/subagents/workflows/wf_74d707c0-9d8/journal.jsonl",
-      "observedConcurrency": "7 agents at launch (runner stage1 + tracks 01-06), per journal"
+      "observedConcurrency": "7 agents at launch (runner stage1 + tracks 01-06), per journal",
+      "cancellationConfirmed": false
     }
   ],
-  "updatedAt": "2026-09-12T17:42:35.752292+00:00",
+  "updatedAt": "2026-09-12T18:06:29.719491+00:00",
   "supplementalContext": [
     {
       "receivedAt": "2026-09-12T12:12:31-05:00",
@@ -324,22 +266,57 @@
       "17 stage1 complete; stage2 images and metrics saved, final report absent",
       "11 findings JSON only"
     ],
-    "remaining": [
-      "07",
-      "08",
-      "09",
-      "10",
-      "11",
-      "12",
-      "13",
-      "14",
-      "15",
-      "16",
-      "17 stage2 adjudication",
-      "18 validation",
-      "19 validation",
-      "coverage",
-      "synthesis"
-    ]
+    "remaining": [],
+    "completedAt": "2026-09-12T18:06:29.719491+00:00",
+    "deliverablesComplete": true,
+    "functionalReadiness": "Unverified/WIP gates remain; see final coverage. Audit completion does not assert feature completion.",
+    "canonicalSummary": {
+      "inputFindings": 77,
+      "canonicalFindings": 74,
+      "duplicateEntries": 3,
+      "canonicalStatuses": {
+        "suggestion": 36,
+        "WIP": 3,
+        "evidence-gap": 6,
+        "confirmed": 23,
+        "candidate": 3,
+        "rejected": 3
+      },
+      "confirmedSeverity": {
+        "P2": 14,
+        "P3": 9
+      },
+      "coverage": {
+        "Pass": 18,
+        "Unverified": 22,
+        "Defect": 22,
+        "WIP": 5
+      },
+      "repairIDs": [
+        "RVA-10-001",
+        "RVA-02-002",
+        "RVA-02-005",
+        "RVA-05-004",
+        "RVA-07-001",
+        "RVA-05-001",
+        "RVA-04-005",
+        "RVA-08-001",
+        "RVA-03-001",
+        "RVA-05-008",
+        "RVA-05-002",
+        "RVA-04-001",
+        "RVA-16-001",
+        "RVA-14-001",
+        "RVA-02-004",
+        "RVA-02-006",
+        "RVA-04-004",
+        "RVA-04-006",
+        "RVA-04-007",
+        "RVA-04-008",
+        "RVA-07-002",
+        "RVA-14-002",
+        "RVA-16-002"
+      ]
+    }
   }
 }

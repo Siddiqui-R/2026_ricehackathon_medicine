@@ -1,0 +1,14 @@
+Compiler exit: 0
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-vRE2AxUd' (errno=Operation not permitted)
+2026-09-12 12:51:54.104 xcodebuild[67897:11413980]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-09-12 12:51:54.920 xcodebuild[67905:11414037]  DVTFilePathFSEvents: Failed to start fs event stream.
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-GyJC8pVp' (errno=Operation not permitted)
+2026-09-12 12:51:57.595 xcodebuild[68170:11414666]  DVTFilePathFSEvents: Failed to start fs event stream.
+Run exit: 0
+REPRODUCED: summary request begun on owner A publishes after token switches to owner B
+REPRODUCED: delayed owner A call transcript is persisted in owner B snapshot with matching request ID
+LIMIT: real provider, HTTP transport, login UI and UI timing were not exercised; production state mutation was
+PASS: all three browser signature goldens match the frozen production Swift ReportEngine
+REPRODUCED: native visit projection puts 08:45Z before 10:00+02:00 (08:00Z)
+REPRODUCED: failed startup repair leaves valid loaded snapshot but sets startupError, selecting RootView recovery screen
+LIMIT: repair failure simulated with a blocking filesystem entry; recovery UI presentation inspected from source only

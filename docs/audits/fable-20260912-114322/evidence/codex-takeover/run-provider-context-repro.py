@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
@@ -28,7 +29,8 @@ with tempfile.TemporaryDirectory(prefix="reva-provider-audit-", dir="/private/tm
         result = run
     evidence = HERE / "provider-context-repro.txt"
     if evidence.exists():
-        (HERE / "provider-context-prior-attempt.txt").write_text(evidence.read_text())
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        (HERE / ("provider-context-prior-" + stamp + ".txt")).write_text(evidence.read_text())
     evidence.write_text(output)
     print(output)
     raise SystemExit(result.returncode)

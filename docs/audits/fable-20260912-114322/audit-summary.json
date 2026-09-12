@@ -1,0 +1,48 @@
+{
+  "inputFindings": 77,
+  "canonicalFindings": 74,
+  "duplicateEntries": 3,
+  "canonicalStatuses": {
+    "suggestion": 36,
+    "WIP": 3,
+    "evidence-gap": 6,
+    "confirmed": 23,
+    "candidate": 3,
+    "rejected": 3
+  },
+  "confirmedSeverity": {
+    "P2": 14,
+    "P3": 9
+  },
+  "coverage": {
+    "Pass": 18,
+    "Unverified": 22,
+    "Defect": 22,
+    "WIP": 5
+  },
+  "repairIDs": [
+    "RVA-10-001",
+    "RVA-02-002",
+    "RVA-02-005",
+    "RVA-05-004",
+    "RVA-07-001",
+    "RVA-05-001",
+    "RVA-04-005",
+    "RVA-08-001",
+    "RVA-03-001",
+    "RVA-05-008",
+    "RVA-05-002",
+    "RVA-04-001",
+    "RVA-16-001",
+    "RVA-14-001",
+    "RVA-02-004",
+    "RVA-02-006",
+    "RVA-04-004",
+    "RVA-04-006",
+    "RVA-04-007",
+    "RVA-04-008",
+    "RVA-07-002",
+    "RVA-14-002",
+    "RVA-16-002"
+  ]
+}

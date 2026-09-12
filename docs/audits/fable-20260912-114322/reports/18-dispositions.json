@@ -60,8 +60,8 @@
     "id": "RVA-02-002",
     "status": "confirmed",
     "severity": "P2",
-    "rationale": "Source unambiguously cuts inside an arbitrary token at character1800, without an omission marker, and reuses that cut as a quoted medical excerpt. A synthetic boundary can cut a numeric value/unit; source retention does not make the displayed truncated fact clear. Confirm source defect, not observed clinical harm.",
-    "evidence": "Core/ReportEngine.swift:14-15,161-165; browser core/domain.ts:60-61,145-161; existing short negation test does not exercise the boundary."
+    "rationale": "Confirmed and reproduced through the frozen production Swift ReportEngine: 1791 synthetic x characters followed by ' dose: 100 mg' produces an excerpt ending ' dose: 10', without an omission marker. The arbitrary 1800-character cut changes the displayed numeric token and removes its unit. Browser equivalent is source-proven; no browser boundary execution, UI presentation or clinical harm was observed.",
+    "evidence": "Core/ReportEngine.swift:14-15,161-165; browser core/domain.ts:60-61,145-161; evidence/codex-takeover/ProviderContextRepro.swift:110-114; evidence/codex-takeover/provider-context-repro.txt:1,7,15 (compiler/run exit 0; production Swift boundary reproduced)."
   },
   {
     "id": "RVA-02-003",
@@ -81,8 +81,8 @@
     "id": "RVA-02-005",
     "status": "confirmed",
     "severity": "P2",
-    "rationale": "The helper receives only text, so the synthetic-wrapper stripping rule applies to all user documents. A real header/body before Source date or a literal demo-trailer marker can be omitted from summaries/quoted excerpts. Confirm narrow omission defect; raw original text remains saved.",
-    "evidence": "Core/ReportEngine.swift:17-29; browser core/domain.ts:45-61; no isDemo input at either boundary."
+    "rationale": "Confirmed and reproduced through the frozen production Swift ReportEngine: ordinary input 'Medication: synthetic A', followed by 'Source date: 2026-09-12' and 'Plan: synthetic follow-up', becomes only 'Plan: synthetic follow-up'. The fixture-wrapper heuristic accepts all user text and silently strips the preceding medication line. Browser equivalent and literal demo-trailer behavior remain source-proven; raw source text stays saved, and no UI or clinical harm was observed.",
+    "evidence": "Core/ReportEngine.swift:17-29; browser core/domain.ts:45-61; no isDemo input at either boundary; evidence/codex-takeover/ProviderContextRepro.swift:115-118; evidence/codex-takeover/provider-context-repro.txt:1,7,16 (compiler/run exit 0; production Swift header omission reproduced)."
   },
   {
     "id": "RVA-02-006",
@@ -96,7 +96,7 @@
     "status": "confirmed",
     "severity": "P2",
     "rationale": "Exact duplicate of the native string-sort defect, with concrete Summary consequence better documented by track04.",
-    "evidence": "State/AppStore.swift:98; SummaryView.swift:20; seed offset dates versus RevaDate.iso UTC values.",
+    "evidence": "State/AppStore.swift:98; SummaryView.swift:20; seed offset dates versus RevaDate.iso UTC values. evidence/codex-takeover/provider-context-repro.txt (compiler exit0, run exit0); evidence/codex-takeover/ProviderContextRepro.swift:73-108 uses production ReportEngine/AppStore/LocalRepository with synthetic data and a controlled transport double.",
     "duplicateOf": "RVA-04-001"
   },
   {
@@ -139,8 +139,8 @@
     "id": "RVA-03-001",
     "status": "confirmed",
     "severity": "P2",
-    "rationale": "A readable active snapshot is set before the repair save; any repair write failure sets startupError and RootView hides that usable state. Its only control restores fictional data without the usual confirmation. Confirm misleading/error-recovery flow by source; filesystem fault/UI not reproduced here.",
-    "evidence": "AppStore.swift:59-86,111-115,130-138; Features/Shared/RootView.swift:21-29."
+    "rationale": "Confirmed and now reproduced through the unchanged production AppStore/LocalRepository: a synthetic blocking filesystem entry makes the repair save fail after a valid snapshot loaded, yielding snapshot!=nil and startupError!=nil. RootView then selects its recovery branch by source. No UI/simulator interaction or real user data was used.",
+    "evidence": "AppStore.swift:59-86,111-115,130-138; Features/Shared/RootView.swift:21-29. evidence/codex-takeover/provider-context-repro.txt (compiler exit0, run exit0); evidence/codex-takeover/ProviderContextRepro.swift:73-108 uses production ReportEngine/AppStore/LocalRepository with synthetic data and a controlled transport double."
   },
   {
     "id": "RVA-03-002",
@@ -195,8 +195,8 @@
     "id": "RVA-04-001",
     "status": "confirmed",
     "severity": "P2",
-    "rationale": "The lexicographic comparison demonstrably orders a14:00Z offset-formatted seed visit ahead of a13:00Z user visit. Summary chooses the first upcoming element, so the wrong next appointment is a direct consequence. Confirm source/arithmetic; no simulator interaction claimed.",
-    "evidence": "State/AppStore.swift:98; Features/Shared/SummaryView.swift:20; VisitsView.swift:17-34; RevaDate.iso; seed dates."
+    "rationale": "Confirmed and reproduced through production store.visits: 08:45Z is ordered before10:00+02:00 (08:00Z), while production parser proves the latter is earlier. Summary picks first upcoming by source. Synthetic state harness is real production-state execution, not a simulator/UI test.",
+    "evidence": "State/AppStore.swift:98; Features/Shared/SummaryView.swift:20; VisitsView.swift:17-34; RevaDate.iso; seed dates. evidence/codex-takeover/provider-context-repro.txt (compiler exit0, run exit0); evidence/codex-takeover/ProviderContextRepro.swift:73-108 uses production ReportEngine/AppStore/LocalRepository with synthetic data and a controlled transport double."
   },
   {
     "id": "RVA-04-002",
@@ -369,10 +369,10 @@
   },
   {
     "id": "RVA-06-002",
-    "status": "evidence-gap",
+    "status": "rejected",
     "severity": "P3",
-    "rationale": "The literal browser goldens exist but the supplied original checked-in tests only assert native self-consistency. Source algorithms look aligned; no known mismatch. Await root production Swift harness evidence to close provenance; do not report signature failure.",
-    "evidence": "browser core/__tests__/domain.test.ts:19-31; Core/ReportEngine.swift:33-46; browser core/domain.ts:78-90; runner1 passes alone do not supply these values."
+    "rationale": "Closed by root continuation evidence: all three browser literal goldens exactly match the unchanged production Swift ReportEngine on the frozen fixture. The original provenance gap no longer remains. A durable checked-in shared regression fixture remains a separate suggestion02-012.",
+    "evidence": "evidence/codex-takeover/provider-context-repro.txt (compiler exit0, run exit0); evidence/codex-takeover/ProviderContextRepro.swift:73-108 uses production ReportEngine/AppStore/LocalRepository with synthetic data and a controlled transport double."
   },
   {
     "id": "RVA-06-003",

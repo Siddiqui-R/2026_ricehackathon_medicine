@@ -106,5 +106,15 @@ import Foundation
         precondition(repairedStore.snapshot?.profile == needsRepair.profile)
         print("REPRODUCED: failed startup repair leaves valid loaded snapshot but sets startupError, selecting RootView recovery screen")
         print("LIMIT: repair failure simulated with a blocking filesystem entry; recovery UI presentation inspected from source only")
+
+        // Excerpt boundaries must disclose omission and avoid silently trimming ordinary source headers.
+        let doseSource = String(repeating: "x", count: 1791) + " dose: 100 mg"
+        let doseExcerpt = ReportEngine.localExcerpt(doseSource)
+        precondition(doseExcerpt.hasSuffix(" dose: 10"))
+        print("REPRODUCED: 1800-character excerpt ends with synthetic 'dose: 10' while source ends 'dose: 100 mg', without an omission marker")
+        let headerSource = "Medication: synthetic A\nSource date: 2026-09-12\nPlan: synthetic follow-up"
+        let headerExcerpt = ReportEngine.localExcerpt(headerSource)
+        precondition(headerExcerpt == "Plan: synthetic follow-up")
+        print("REPRODUCED: ordinary source content before a Source date header is stripped by the fixture-wrapper heuristic")
     }
 }

@@ -1,9 +1,9 @@
 Compiler exit: 0
-xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-vRE2AxUd' (errno=Operation not permitted)
-2026-09-12 12:51:54.104 xcodebuild[67897:11413980]  DVTFilePathFSEvents: Failed to start fs event stream.
-2026-09-12 12:51:54.920 xcodebuild[67905:11414037]  DVTFilePathFSEvents: Failed to start fs event stream.
-xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-GyJC8pVp' (errno=Operation not permitted)
-2026-09-12 12:51:57.595 xcodebuild[68170:11414666]  DVTFilePathFSEvents: Failed to start fs event stream.
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-g9wJHfG6' (errno=Operation not permitted)
+2026-09-12 12:55:31.650 xcodebuild[70421:11427677]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-09-12 12:55:32.513 xcodebuild[70437:11427732]  DVTFilePathFSEvents: Failed to start fs event stream.
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-2yQZsrbb' (errno=Operation not permitted)
+2026-09-12 12:55:33.364 xcodebuild[70441:11427760]  DVTFilePathFSEvents: Failed to start fs event stream.
 Run exit: 0
 REPRODUCED: summary request begun on owner A publishes after token switches to owner B
 REPRODUCED: delayed owner A call transcript is persisted in owner B snapshot with matching request ID
@@ -12,3 +12,5 @@ PASS: all three browser signature goldens match the frozen production Swift Repo
 REPRODUCED: native visit projection puts 08:45Z before 10:00+02:00 (08:00Z)
 REPRODUCED: failed startup repair leaves valid loaded snapshot but sets startupError, selecting RootView recovery screen
 LIMIT: repair failure simulated with a blocking filesystem entry; recovery UI presentation inspected from source only
+REPRODUCED: 1800-character excerpt ends with synthetic 'dose: 10' while source ends 'dose: 100 mg', without an omission marker
+REPRODUCED: ordinary source content before a Source date header is stripped by the fixture-wrapper heuristic

@@ -164,3 +164,8 @@ Every other command exited 0 with its own PASS/succeeded text present in its log
 ## Stage 2 (UI journeys and measurements)
 
 _Placeholder — Stage 2 will append its own section here (browser journeys at 375/390/768/1024/1440/1920, focus/Escape/labels/zoom checks, print artifacts where tools permit, and bounded measurements requested by source reviewers)._
+
+
+## Codex continuation notice
+
+Fable reached its session limit after saving the browser matrix. The independent [Codex evidence adjudication](17b-codex-evidence-adjudication.md) records the saved capture boundaries and additional production-state reproductions. This original stage-one report is preserved in the takeover manifest.

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "RVA-07-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Confirmed by the complete extraction branch: a PDF page with at least 35 nonwhitespace embedded characters bypasses its only raster/OCR path. A substantive scanned body can therefore be omitted without incomplete=true. The retained original and explicit review checkbox limit the impact; no mixed-PDF runtime reproduction is claimed. Keep this browser finding separate from related native RVA-05-004 because the implementation and regression checks differ.",
+    "evidence": "Frozen apps/web/src/features/records/extractDocument.ts:279-311,362-372; apps/web/src/features/records/ImportDialog.tsx:142. Trigger: embedded header >=35 characters plus raster medical body. Impact: source text and later retrieval omit the raster facts."
+  },
+  {
+    "id": "RVA-07-002",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Confirmed source-level unreferenced attachment keys, downgraded from candidate P2 to P3. Original bytes commit in a standalone transaction before snapshot CAS; every failed retry chooses a new UUID key and the catch neither cleans nor reuses it. A stale repository revision is a concrete failure trigger. Snapshot integrity remains protected. Physical storage duplication, quota exhaustion, and an outage were not measured, so those consequences are not confirmed. Distinct from intentional retention on deletion or the documented server upload-before-snapshot tradeoff.",
+    "evidence": "Frozen apps/web/src/features/records/ImportDialog.tsx:125-147,152-159; apps/web/src/core/repository.ts:177-185; apps/web/src/core/store.ts:203-204. Trigger: original save succeeds, record publication fails after another tab advances CAS, then retry in the same dialog. Impact: another unreachable original key per failed attempt."
+  },
+  {
+    "id": "RVA-08-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Confirmed by React state and mutation flow. The editor retains opening form state but receives updated visit props. After preparation publishes first-report questions, its conflict comparison sees the current prop equal to current state and accepts the stale empty form value. Saving notes can clear the generated questions. This is a same-store update, not a cross-tab CAS failure. No DOM-level race execution was supplied.",
+    "evidence": "Frozen apps/web/src/features/visits/VisitBrief.tsx:99,196-201,207-235; apps/web/src/core/store.ts:304-316; apps/web/src/core/visitEdits.ts:64-87 provides the separate stable-baseline merge pattern. Trigger: open Add questions & notes during first asynchronous preparation, edit notes only, let preparation finish, save."
+  },
+  {
+    "id": "RVA-10-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Confirmed by source and the coordinator-run unchanged-production-state reproduction. The summary begun under token A persists after switching to B; polling begun under A persists its transcript into a replacement B snapshot sharing the same booking ID. All 13 compiled production source hashes independently match both frozen files and snapshot-manifest.json. The double controls the transport suspension; real HTTP authentication, UI timing, a live provider and an actual sync pull were not exercised. This demonstrates stale client publication, not server owner-isolation failure, duplicate dialing, or unrestricted cross-owner access. Other provider methods and stale error paths share missing guards in source but were not all executed.",
+    "evidence": "Frozen apps/ios/Reva/State/AppStore+AI.swift:12-30,34-86; AppStore.swift:25-49; AppStore+LiveCalls.swift:11-61; Features/Shared/SettingsView.swift:22-26,75,107-109. Coordinator evidence/codex-takeover/provider-context-repro.txt: Compiler exit 0, Run exit 0 and both named REPRODUCED observations; ProviderContextRepro.swift; run-provider-context-repro.py; provider-context-production-hashes.json. Trigger: connection switch, then optional workspace replacement retaining the target stable ID, during await."
+  },
+  {
+    "id": "RVA-10-002",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "Retain as an evidence gap, not a demonstrated prompt-injection vulnerability or clinical error. System/data separation, no tools, schema validation and candidate-ID validation are implemented. Mocked output cases cannot establish dose, negation, date or other semantic fidelity of an actual model response. No live model call was made or required for this audit.",
+    "evidence": "Frozen server/Sources/RevaServer/Providers/GeminiService.swift:25-33,62-76,99-114,146-158; server/Tests/RevaServerTests/GeminiProviderTests.swift; evidence/r1-12-swift-test-server.log. Trigger: a semantically inaccurate but structurally valid response or hostile source text; behavior remains unexecuted."
+  },
+  {
+    "id": "RVA-10-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Retain as targeted transport hardening. FoundationNetworking Gemini and shared voice transport collect Data before enforcing their decode caps, while the Apple Gemini path streams with a bound. The code and comments disclose this distinction. A fixed provider or proxy returning too much data can exceed the nominal cap in memory, but no oversized transport run, process failure or arbitrary-destination exploit was demonstrated.",
+    "evidence": "Frozen server/Sources/RevaServer/Providers/GeminiTransport.swift:38-48; server/Sources/RevaServer/Providers/VoiceTransport.swift:25-36,81-92. Trigger: fixed provider returns >1 MiB Gemini or >4 MiB voice response. Impact: collection memory scales with received bytes before rejection."
+  },
+  {
+    "id": "RVA-11-001",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Retain as a deployment-hardening suggestion and lower its priority from P2 to P3. File receipts are deliberately separate from PostgreSQL snapshots; the frozen server README explicitly requires persistent storage and preservation across redeploys. Losing that storage can lose duplicate-call protection if an external client later resubmits the old request ID, but neither current UI resubmits an existing request. Ephemeral Docker/Tiger deployment was unfinished and is not evidence of a delivered-path defect. Requiring an absolute directory alone would not prove persistence.",
+    "evidence": "Frozen server/Sources/RevaServer/Providers/VoiceCalls.swift:109-113,129-145,284-308; server/Sources/RevaServer/Configuration.swift:41; server/README.md:98,100; apps/ios/Reva/Features/Visits/LiveBookingEditorView.swift:80-84; apps/web/src/core/store.ts:415. Trigger: operator discards or relocates receipt storage, then an external client resubmits the prior ID."
+  },
+  {
+    "id": "RVA-11-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Confirm the cosmetic mechanism but retain suggestion status. An uncertain receipt with no provider conversation returns an empty string; native state keeps it non-nil and the status view renders a blank Conversation line. Uncertain status remains accurate and no data loss or redial follows. No native screen capture of this path was supplied.",
+    "evidence": "Frozen server/Sources/RevaServer/Providers/VoiceCalls.swift:197-200; apps/ios/Reva/State/AppStore+LiveCalls.swift:53-59; apps/ios/Reva/Features/Visits/LiveBookingStatusView.swift:24-26. Trigger: poll an uncertain receipt without a conversation ID."
+  },
+  {
+    "id": "RVA-11-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Retain only as latent API clarity hardening; reject promotion to a confirmed reachable UI defect. placeLiveCall can silently return while busy after a caller saves a request, but the current editor disables submission while busy and its confirmation flow blocks the competing normal controls. No reachable current-UI interleaving was established.",
+    "evidence": "Frozen apps/ios/Reva/State/AppStore+LiveCalls.swift:12; apps/ios/Reva/Features/Visits/LiveBookingEditorView.swift:56-57,80-84. Conditional trigger: a caller reaches the busy guard after saving a draft. Impact would be an unsent persisted request; reachability remains unproven."
+  },
+  {
+    "id": "RVA-11-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Retain as a future boundary/audit-trail improvement, not a consent bypass. The only current native caller requires the user consent toggle and review, although the store serializes a literal true and reads the patient name at send time. Server replay checks reject changed inputs without redial. No reachable unauthorized call or same-request replay UI was demonstrated.",
+    "evidence": "Frozen apps/ios/Reva/State/AppStore+LiveCalls.swift:20-26; apps/ios/Reva/Features/Visits/LiveBookingEditorView.swift:27-32,55-57,70-86; apps/ios/Reva/Core/Models.swift:117-134; server/Sources/RevaServer/Providers/VoiceCalls.swift:32-35,129-135. Trigger: a future caller omits the reviewed UI gate or changes a reviewed name before dispatch."
+  },
+  {
+    "id": "RVA-11-005",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "Retain a narrower native workflow evidence gap. The original blanket claim that only compile evidence exists is now outdated: the coordinator production harness executes refreshLiveCall, including stale owner publication, and a failed startup-repair path. It does not execute the complete booking simulation, normal relaunch repair, placeLiveCall uncertain outcome, or native UI journey. Browser screenshots do not cover those native paths. Remaining coverage recommendations are separate from a demonstrated bug.",
+    "evidence": "Frozen Package.swift:16; apps/ios/Reva/State/AppStore+Bookings.swift:23; AppStore.swift:72-82; Tests/RevaCoreTests/DomainTests.swift:96-97; evidence/r1-18-xcodebuild.log; evidence/codex-takeover/ProviderContextRepro.swift and provider-context-repro.txt. Trigger: assessing native end-to-end booking behavior from compile/source evidence alone."
+  },
+  {
+    "id": "RVA-11-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Retain focused optional regression coverage, not a defect or a requirement to test every guard. Current tests already cover provider errors, malformed success, durable uncertainty, replay, ownership and bounded call transcript truncation. The suggested untested payload branches include success:false with an ID, detail ID/status/time rejection, raw intent receipts, transcription segment ordering/size, and post-dial persistence failure. Distinguish transcription bounds from the call transcript size case already present. No current guard failure was found.",
+    "evidence": "Frozen server/Tests/RevaServerTests/VoiceProviderTests.swift:172-211,387-442; server/Sources/RevaServer/Providers/VoiceCalls.swift:136-138,170-179,197-200,225-239; server/Sources/RevaServer/Providers/VoiceTranscription.swift:98-115; evidence/r1-12-swift-test-server.log. Trigger: future edits to these fail-closed branches."
+  },
+  {
+    "id": "RVA-13-001",
+    "status": "evidence-gap",
+    "severity": "P2",
+    "rationale": "Retain as a deployment-verification gap, not a PostgreSQL defect. The dedicated database test was skipped without REVA_TEST_DATABASE_URL; build and unreachable-database checks do not prove successful integration. The existing gate covers migration replay, basic revision conflict, owner separation, byte round-trip and tombstones. Concurrent quota/CAS races, restart durability and deployment TLS validation require additional checks beyond merely enabling that test. Later account migrations and Tiger hosting remain a separate unfinished delta.",
+    "evidence": "Frozen server/Tests/RevaServerTests/PostgresIntegrationTests.swift:15-63; server/Sources/RevaServer/PostgresStore.swift:27-65,79-189; server/Sources/RevaServer/Migrations/001_snapshot.sql; evidence/r1-12-swift-test-server.log and reports/17-evidence-runner.md r1-14. Trigger: treating configured PostgreSQL/Tiger as production-verified without a disposable successful database run."
+  }
+]
