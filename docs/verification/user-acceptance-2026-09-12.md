@@ -33,3 +33,21 @@ No blocking defect was found in the completed checks. These results establish th
 The generated summaries omitted the fixtures' “fictional” preamble, although the source titles, originals and citations retained it. For hackathon presentation, keep fictional labels visible and do not rely on the summary alone to identify test data.
 
 Not exercised in this run: browser file selection/import, PDF/image OCR, microphone permission/capture, transcription, print-dialog/PDF export, mobile layouts or a separate physical device. Earlier deployment checks of transcription are documented separately and are not counted as this user test.
+
+## Follow-up: actual browser scan/import verification
+
+Completed later on September 12 against the live site using a separate **Fictional Scan Verification** account. Files were selected through the browser's real upload control and file chooser, reviewed in the import dialog, and saved with **Save to Records**. No records were inserted through the API for this follow-up; API reads only verified the results.
+
+| Input                                         | Reading result                                                                                | Saved result                                                                                  |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `reva-synthetic-laboratory-results.pdf`       | 1,175 characters extracted, including hemoglobin 13.4 g/dL and the remaining reported values. | Record and original PDF saved.                                                                |
+| `reva-synthetic-symptom-diary-scan.png`       | Local English OCR produced 1,078 characters and an explicit review warning.                   | Scan record, OCR text and original image saved.                                               |
+| `reva-synthetic-symptom-diary-image-only.pdf` | Local OCR produced 1,077 characters from the image-only PDF.                                  | Record, OCR text and original PDF saved; manually selected source date September 7 persisted. |
+
+All three appeared in Records after a full reload. Authenticated server reads confirmed the extracted text and all three originals matched the selected files byte-for-byte. [Records screenshot](screenshots/scan-import-records.png).
+
+OCR correctly requires review: the deliberately obscured date in the fixtures was read as “September Of” in the image and “September Oy” in the scanned PDF. Legible symptom content was extracted, but this is not a claim of perfect recognition. Record metadata initially defaults to today's date; users must choose the source date during review. Keyboard edits to the native date input persisted; an automated `fill` attempt alone did not update the form state.
+
+This closes the earlier browser-upload/PDF/OCR coverage gap for these three fixtures. Camera capture, handwriting beyond the fixture, mobile devices and print export remain outside this verification.
+
+The separate scan-test account and its imported records were deleted after verification; the browser returned to the landing page. Only the report and screenshot are committed, not test credentials.
