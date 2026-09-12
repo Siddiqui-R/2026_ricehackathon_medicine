@@ -27,13 +27,16 @@ The silence timeout is 120 seconds; long silent holds can end before the overall
 
 ## Remaining phone connection
 
-- [ ] Sign in to the intended Twilio account. No Twilio account credentials or caller identity were available during setup.
-- [ ] Select an existing purchased Twilio number or an outbound-only verified caller ID. A verified caller ID cannot receive inbound calls.
-- [ ] In ElevenLabs **Phone Numbers → Import number**, supply a label, the exact number, and the Twilio SID/token or supported API key credentials. Store Twilio secrets in that integration.
+- [x] Sign in to the intended Twilio account and verify the supplied primary API key. Both number-inventory requests returned HTTP 200. The account SID and supplied key pairs are saved only in ignored `secrets/twilio.env`; the alternate key was saved but not tested.
+- [ ] Complete the Twilio account upgrade. The current 30-day trial blocks `<Stream>`, which prevents the ElevenLabs voice integration. The console upgrade form requires account/tax details, a balance selection and payment. No upgrade or purchase was submitted.
+- [ ] Select a purchased, voice-capable Twilio number or an outbound-only verified caller ID. Both API inventories currently contain zero entries. The console's trial caller number and verified trial recipient are separate from these inventories; neither proves an importable number exists. A verified caller ID cannot receive inbound calls.
+- [ ] In ElevenLabs **Phone Numbers → Import number**, supply a label, the exact number, and the Twilio SID/token or supported API key credentials. API-key imports additionally require the account Auth Token for inbound webhook verification. Store Twilio secrets in that integration and disable SMS routing (`enable_sms=false`).
 - [ ] Verify the imported resource supports outbound calls, then put its returned identifier in `ELEVENLABS_PHONE_NUMBER_ID` in backend secrets. Reva chooses the agent explicitly on each outbound request; inbound assignment is a separate choice.
 - [ ] Configure private `REVA_TOKENS`, start/deploy the Swift backend with durable call-receipt storage, and route the browser API requests to it.
 - [ ] Use a specifically reviewed test recipient and scheduling request before enabling `REVA_ENABLE_LIVE_CALLS`. Confirm speech, menu navigation, transcript polling, duplicate prevention and manual review through the app.
 
 Live calling remains disabled. No real phone call was placed. Knowledge-base uploads, calendar writes, messaging integrations, public widgets and extra workflow agents are not required by the existing availability-inquiry implementation.
+
+Twilio verification references: [current trial restrictions](https://www.twilio.com/docs/usage/trials), [Voice trial blocked verbs](https://www.twilio.com/docs/usage/trials/try-out-voice#blocked-verbs), and [ElevenLabs phone import schema](https://elevenlabs.io/docs/eleven-agents/api-reference/phone-numbers/create). Recheck the number inventories after upgrading; do not use the console trial number as `ELEVENLABS_PHONE_NUMBER_ID`.
 
 Provider references: [agent creation](https://elevenlabs.io/docs/api-reference/agents/create), [dynamic variables](https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables), [retention](https://elevenlabs.io/docs/eleven-agents/customization/privacy/retention), and [Twilio integration](https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/native-integration).
