@@ -1,11 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "installCommand": "npm ci --include=dev --prefix apps/web",
+  "installCommand": "npm ci --include=dev && npm ci --include=dev --prefix apps/web",
   "buildCommand": "npm run build --prefix apps/web",
   "outputDirectory": "apps/web/dist",
   "trailingSlash": false,
+  "functions": {
+    "api/reva.mjs": {
+      "maxDuration": 120,
+      "includeFiles": "server/Sources/RevaServer/Migrations/*.sql"
+    }
+  },
   "rewrites": [
+    { "source": "/health", "destination": "/api/reva?route=/health" },
+    { "source": "/v1/:path*", "destination": "/api/reva?route=/v1/:path*" },
     { "source": "/demo", "destination": "/index.html" },
     { "source": "/login", "destination": "/index.html" },
     { "source": "/signup", "destination": "/index.html" },

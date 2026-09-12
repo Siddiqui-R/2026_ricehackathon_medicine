@@ -47,14 +47,15 @@ The gear in Medical profile opens Settings for server configuration and explicit
 
 ## Configurable APIs
 
-The Swift server, native client, and browser entry points are implemented. **Live provider and database readiness remain unverified; credentials and hosting require setup.** Configuration flags report settings, not a successful credential probe.
+The browser deploys with a same-origin Node.js backend on Vercel, using Tiger PostgreSQL for accounts, snapshots and originals. See the [deployment and verification checklist](docs/deployment-vercel.md). The Swift server remains available for local/native development. Configuration flags report settings, not a successful credential probe.
 
 | Feature | Implemented behavior |
 | --- | --- |
 | Gemini | Document summaries, visit preparation and summaries of full appointment transcripts; configurable model, default `gemini-3.8-flash`. Selected IDs are validated; original-source citations come from local records. |
 | OpenAI Whisper | Saved-audio transcription using `whisper-1`, with recording-relative segment times and generic speaker labels; no diarization claim. |
+| ElevenLabs Scribe | Vercel saved-audio transcription using `scribe_v2`, recording-relative timestamps and neutral speaker labels. |
 | Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, consent-gated recording/playback and sample memory work without provider setup. |
-| Tiger Data PostgreSQL | Compiled PostgresNIO adapter and versioned JSONB/BYTEA schema for domain snapshots and attachments. Live database setup/testing remains manual. |
+| Tiger Data PostgreSQL | Shared versioned JSONB/BYTEA schema for accounts, snapshots and originals; Vercel integration tested against Tiger with isolated fictional accounts. |
 
 From the repository root, start the local API:
 

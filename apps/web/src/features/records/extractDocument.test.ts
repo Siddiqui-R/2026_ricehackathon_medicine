@@ -4,6 +4,7 @@
 // Side effects: Reads a fictional fixture and renders local canvases; no network or live OCR services.
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
 
@@ -18,7 +19,9 @@ const state = vi.hoisted(() => ({
 vi.mock('pdfjs-dist', async () => {
   const actual = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const require = createRequire(import.meta.url);
-  actual.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  actual.GlobalWorkerOptions.workerSrc = pathToFileURL(
+    require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+  ).href;
   return {
     OPS: actual.OPS,
     GlobalWorkerOptions: {},
