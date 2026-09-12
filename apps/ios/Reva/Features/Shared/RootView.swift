@@ -13,6 +13,7 @@ struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @State private var welcome = false
+    @State private var confirmRestore = false
     @State private var selectedTab: RevaTab = .summary
     @State private var recordsGeneration = 0
     // MARK: - Rendering and navigation
@@ -24,7 +25,7 @@ struct RootView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Restore fictional demo") { store.perform { try store.resetDemo() } }.buttonStyle(
+                    Button("Restore fictional demo") { confirmRestore = true }.buttonStyle(
                         .borderedProminent)
                 }
             } else {
@@ -55,6 +56,12 @@ struct RootView: View {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: {
             Text(store.errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Restore the fictional demo and replace your local changes?", isPresented: $confirmRestore,
+            titleVisibility: .visible
+        ) {
+            Button("Restore demo", role: .destructive) { store.perform { try store.resetDemo() } }
         }
         .sheet(isPresented: $welcome) {
             WelcomeView {
