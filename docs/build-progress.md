@@ -149,3 +149,12 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Resolved the single native sync conflict by retaining the remote deduplicated upload map and our filename-based audio MIME selection. Provider budget checks, snapshot/connection guards, staged original-file protection and the expanded credential ignore rules remain intact.
 - Re-ran the native package suite: 43 passed, one explicit gate skipped. The merged iPhone simulator build succeeded. Source responsibility checks still cover 71 Swift and 50 browser files. The remote focused optimization harness passed all six regression groups after adapting its network doubles to compile the exact production audio-type helper. The deduplicated upload regression covers M4A/WebM/Ogg MIME precedence, original bytes, failed push and explicit retry.
 - The current full-stack document now records the native staging behavior and browser IndexedDB boundary. No review worktree was changed.
+
+
+## Vercel 404 configuration fix — September 12
+
+- User reported Vercel accepted the push but showed 404. GitHub confirmed Production deployment 6411370200 of dc25e87 as successful. The repository had neither a root web entry point nor Vercel build configuration.
+- Added root vercel.json with explicit browser install/build/output paths and the local host's CSP, nosniff and referrer policy. Kept repository-root builds so native demo originals and local OCR model assets are available. Hash routes require no catch-all rewrite.
+- Clean npm ci (including development build/OCR packages) and the exact production build command passed. Generated index, JS/CSS, demo/seed.json and OCR worker/model exist under apps/web/dist. Added docs/deployment-vercel.md and linked the browser guide.
+- The unique deployment URL redirected to Vercel login. Computer access to Google Chrome was denied; no credentials or browser protections were bypassed. GitHub deployment status remains available for following the new build, and the public URL has been requested for visual verification.
+- This fixes frontend publishing. Hosted provider/sync routes still require a separately deployed Swift backend; no local loopback proxy or provider key is silently exposed on Vercel.

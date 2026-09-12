@@ -29,6 +29,10 @@ npm run serve
 
 The built preview opens at `http://127.0.0.1:4173`. `PORT` and `HOST` configure that listener; its default is loopback. Development and built previews have different origins and therefore separate browser storage. Keep the same origin when checking persistence, or use explicit server sync to transfer a workspace.
 
+## Deploy the browser on Vercel
+
+Use the repository root as the Vercel project's Root Directory. The root `vercel.json` installs and builds `apps/web`, then publishes `apps/web/dist`. The [Vercel deployment guide](../../docs/deployment-vercel.md) covers the 404 fix, build settings, source/OCR assets and the separate hosted-backend requirement. The local Node/Vite proxy is not a Vercel backend.
+
 ## Connect the existing Swift server
 
 In another terminal, from the repository root:
