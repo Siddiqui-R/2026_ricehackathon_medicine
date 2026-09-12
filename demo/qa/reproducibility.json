@@ -1,0 +1,23 @@
+{
+  "synthetic": true,
+  "status": "passed",
+  "sameRuntimeRegenerationIdentical": true,
+  "filesCompared": 15,
+  "hashes": {
+    "demo/sources/reva-synthetic-asthma-context.txt": "3c4507ffed1a10a18196568425f7a0b60a587ee53b0b31210a25437ed7fb9401",
+    "demo/sources/reva-synthetic-fibula-injury-2026.pdf": "cb606bee6b14d5893f78e61667e6dbf764fd0d012d8379f415b95aeaa1556bd1",
+    "demo/sources/reva-synthetic-health-history.pdf": "df7e3cec56be9eb82b3a5f99bdf730ae952587d27072c30f175301a35ac4580a",
+    "demo/sources/reva-synthetic-import-preparation-note.txt": "8217d33c6cea1fc1052cf332826d80d6de54f9962542bdd0a31becc959f2f676",
+    "demo/sources/reva-synthetic-laboratory-results.pdf": "31f5858f0ef551bbebb1cf84df0d10459542dc4182519e48235d502ec22143aa",
+    "demo/sources/reva-synthetic-leg-imaging.pdf": "f3f8f8d2d023a70572ab13e845327b208a0306e93db561552a374ac31f117c96",
+    "demo/sources/reva-synthetic-resolved-ear-infection.pdf": "248e1d112ea71888ffc9e52a8af81f7a91903309aa933ad3bdcd6b2ec7d7685e",
+    "demo/sources/reva-synthetic-resting-ecg-note.pdf": "d3e53007d82800121a1fc81cd2b5476738dc1d5ee0b5151178882bef369c68ed",
+    "demo/sources/reva-synthetic-symptom-diary-image-only.pdf": "e6e88e48c077bba652b92d5308a4f3e2beb357d0ca16bf388d0bbe3d945e9c58",
+    "demo/sources/reva-synthetic-symptom-diary-scan.png": "eaaaeef048485efdd418b757e0c4e3541a34d2aa9950b0b48b4fc8cc9e45dc32",
+    "demo/sources/reva-synthetic-tibia-procedure-2019.pdf": "e2d8cb745b976083898535ea5b552bb655b47e0035a77cf909af1ed50cffe486",
+    "demo/seed.json": "224e94df659241a2550bdfedd8bdccb946709d74c874693512bfcb64b0252d9b",
+    "demo/sample-transcript.json": "ae6d94090aa3eaa0c1c7c0f2c32f2271309c979023653a769cc453760a96e398",
+    "demo/fixture-manifest.json": "a715fa95274594ca8f3ffec9cdfed0a21c86c0193b8a98185e40e8d04f2b501c",
+    "demo/expected-evidence.json": "aba31ccbe4661387e40dfca6212736afe76c0a1469168e3c1986668204e32a9c"
+  }
+}

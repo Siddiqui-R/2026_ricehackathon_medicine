@@ -1,0 +1,14 @@
+SYNTHETIC DEMO - FICTIONAL PATIENT PREPARATION NOTE
+Jordan Avery (Synthetic) | Source date: 2026-09-12
+
+ORTHOPEDIC VISIT PREPARATION
+I want to bring the August 29 lower-leg imaging report and the older right
+tibia implant inventory to the September 17 visit. My new injury is in the
+distal fibula; the nail is from the tibia repair in 2019.
+
+QUESTION TO ADD
+Which changes in walking comfort should I describe when comparing this week
+with the day of the injury?
+
+This unseeded sample is intended for a manual import demonstration. It is
+not a clinical recommendation or a real patient document.

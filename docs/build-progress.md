@@ -22,7 +22,7 @@ Record each meaningful commit with scope, verification, and follow-up below. Git
 
 ## Completion audit
 
-All 18 gates remain unproven until matching implementation and execution evidence is recorded. Planning and palette extraction are complete; no app was built before the criteria were written.
+All 19 gates require matching implementation and execution evidence. Planning and palette extraction are complete; no app was built before the criteria were written. The user added an as-built stack visualization (`docs/architecture.md`) to be produced immediately before the final push.
 
 ## Review log
 
@@ -31,3 +31,14 @@ Claude review rounds, material findings, decisions, fixes, and retests will be r
 ## Usage accounting
 
 At goal start: Codex weekly 64% used, 36% remaining; one reset credit available. No reset consumed in this goal yet. The user authorizes that single remaining reset at eligibility and asks to preserve at least 50% after it, beginning convergence near 75% remaining.
+
+
+## Native implementation checkpoint — September 12, 2026, 02:48 CDT
+
+- Xcode 26.4 opened `/Users/tempadmin/Documents/Reva/Reva.xcodeproj` in its native project window. iPhone17 simulator boot/install/launch succeeded (bundle health.revamed.Reva). Integrated 17-file app build passed, log `/private/tmp/reva-app-build.log`.
+- Primary wrote Core domain, atomic local repository, deterministic report relevance/excerpts, source-version signature, idempotent booking confirmation, URLSession boundary, AppStore, selected-palette native screens, record intake/review, visit/report export, booking and recording UIs, settings. Initial six core tests pass. UI and end-to-end verification still pending.
+- Dataset contributor delivered nine coherent fictional records, three visits, 11 importable sources, source hashes and exact per-page text, sample transcript and demo script. Primary inspected schema, IDs and expected evidence; final integration acceptance ongoing.
+- Device contributor supplied native import/OCR/scanner/audio/PDF adapters; strict compiler checks and isolated runtime QA underway.
+- Backend contributor delivered Vapor + PostgresNIO server, schema, owner isolation, state revisions/tombstones, local file persistence and attachment support. Eight local tests and real HTTP/restart checks reported passed; primary code review and client integration pending. Live PostgreSQL test remains deferred.
+- Claude Desktop Fable5.1 Extra architecture review completed in `local_3c7583ff-a1c1-44ed-a2f1-a225a45f2e72`, project Reva; UI showed 4% of5h usage. Findings accepted: honest local labels, deterministic authority, page text/provenance, interrupted booking recovery, explicit recording end state, fixture expectations, testable transport, derived dark tokens. Specific decisions recorded in implementation contract.
+- No external API activated; root `.env` still empty. Final architecture visualization remains intentionally deferred until immediately before final push.

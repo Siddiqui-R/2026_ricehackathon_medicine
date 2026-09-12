@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "fixtureDate": "2026-09-12",
+  "status": "passed",
+  "recordCount": 9,
+  "visitCount": 3,
+  "transcriptSegmentCount": 9,
+  "sourceCount": 11,
+  "pdfCount": 8,
+  "pdfPageCount": 9,
+  "checks": [
+    "contract keys and enum/date types",
+    "unique IDs and visit relationships",
+    "source presence and flat names",
+    "PDF extraction matches JSON per page",
+    "plain-text source matches JSON",
+    "image-only PDF has no text layer",
+    "SHA-256 manifest",
+    "byte-identical app resource copies",
+    "recording-relative timestamp order and bounds",
+    "text-only sample belongs to completed visit",
+    "expected evidence refers to real records and source pages",
+    "uncertain scan preserved as needsReview"
+  ],
+  "limits": [
+    "Fixture-level checks only; app relevance engine execution and native OCR are verified by app integration.",
+    "PDF visual inspection is recorded separately in the dataset task specification."
+  ]
+}

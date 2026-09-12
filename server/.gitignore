@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+.local-data/
+.env
+*.log

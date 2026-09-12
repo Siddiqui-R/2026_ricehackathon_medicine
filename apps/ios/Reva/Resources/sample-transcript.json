@@ -1,0 +1,75 @@
+{
+  "id": "demo-recording-primary-20260908",
+  "visitID": "demo-visit-primary-20260908",
+  "title": "Synthetic sample transcript - no audio",
+  "createdAt": "2026-09-08T19:04:00Z",
+  "duration": 196,
+  "segments": [
+    {
+      "id": "demo-segment-01",
+      "speaker": "Narrator (Synthetic)",
+      "start": 0,
+      "end": 12,
+      "text": "This is a fictional Reva demonstration transcript. No real patient conversation or recorded audio is represented."
+    },
+    {
+      "id": "demo-segment-02",
+      "speaker": "Jordan Avery - patient (Fictional)",
+      "start": 14,
+      "end": 34,
+      "text": "I wrote down two brief racing-heart sensations. I felt nauseated during the morning one. The exact entry date on my scan is smudged, so I need to confirm it."
+    },
+    {
+      "id": "demo-segment-03",
+      "speaker": "Dr. Morgan Ellis - clinician (Fictional)",
+      "start": 36,
+      "end": 55,
+      "text": "The diary is labeled for the week ending September seventh. We can keep that clear date separate from the entry date that is still uncertain."
+    },
+    {
+      "id": "demo-segment-04",
+      "speaker": "Jordan Avery - patient (Fictional)",
+      "start": 57,
+      "end": 77,
+      "text": "The current list includes my asthma inhaler and seasonal cetirizine. I did not record when I used them, or how much caffeine I had that day."
+    },
+    {
+      "id": "demo-segment-05",
+      "speaker": "Dr. Morgan Ellis - clinician (Fictional)",
+      "start": 79,
+      "end": 104,
+      "text": "We have the September seventh laboratory results and a resting ECG note. The ECG note says you did not feel a typical episode during that test. These documents do not establish why the episodes happened."
+    },
+    {
+      "id": "demo-segment-06",
+      "speaker": "Jordan Avery - patient (Fictional)",
+      "start": 106,
+      "end": 123,
+      "text": "For the next visit I want a clearer timeline, and I want to understand what the existing results leave unresolved."
+    },
+    {
+      "id": "demo-segment-07",
+      "speaker": "Dr. Morgan Ellis - clinician (Fictional)",
+      "start": 125,
+      "end": 151,
+      "text": "Our documented preparation items are to confirm the obscured date, bring the existing medication list, and organize the timing information you already have. We have not documented a diagnosis or a medication change in this sample conversation."
+    },
+    {
+      "id": "demo-segment-08",
+      "speaker": "Jordan Avery - patient (Fictional)",
+      "start": 153,
+      "end": 173,
+      "text": "I will review my notes and add the questions to the September fifteenth follow-up. The leg-fracture appointment is separate, so I will keep those preparation notes with orthopedics."
+    },
+    {
+      "id": "demo-segment-09",
+      "speaker": "Narrator (Synthetic)",
+      "start": 175,
+      "end": 194,
+      "text": "End of synthetic sample. Preparation items and unresolved questions come from the dialogue above. This text is not a treatment plan or a transcript of newly captured microphone audio."
+    }
+  ],
+  "summary": "Synthetic sample memory: Discussed nausea and brief palpitations with an uncertain diary date [demo-segment-02, demo-segment-03]. Reviewed existing medication context and missing timing details [demo-segment-04]. Existing laboratory and ECG notes did not establish a cause in this conversation [demo-segment-05]. Preparation items: confirm the obscured date, bring the existing medication list, and organize available timing information [demo-segment-07]. Questions remain for the September 15 follow-up [demo-segment-06, demo-segment-08]. No diagnosis or medication change was documented [demo-segment-07].",
+  "isSample": true,
+  "status": "ready"
+}

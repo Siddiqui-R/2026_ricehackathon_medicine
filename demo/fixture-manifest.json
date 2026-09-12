@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "fixtureDate": "2026-09-12",
+  "description": "Invented for Reva software demonstration. Not a real patient record or medical advice.",
+  "profileID": "demo-profile-jordan-avery",
+  "sources": [
+    {
+      "filename": "reva-synthetic-asthma-context.txt",
+      "sha256": "3c4507ffed1a10a18196568425f7a0b60a587ee53b0b31210a25437ed7fb9401",
+      "recordID": "demo-record-asthma",
+      "mimeType": "text/plain",
+      "bytes": 977,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-fibula-injury-2026.pdf",
+      "sha256": "cb606bee6b14d5893f78e61667e6dbf764fd0d012d8379f415b95aeaa1556bd1",
+      "recordID": "demo-record-fibula-injury",
+      "mimeType": "application/pdf",
+      "bytes": 65011,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-health-history.pdf",
+      "sha256": "df7e3cec56be9eb82b3a5f99bdf730ae952587d27072c30f175301a35ac4580a",
+      "recordID": "demo-record-history",
+      "mimeType": "application/pdf",
+      "bytes": 65028,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-import-preparation-note.txt",
+      "sha256": "8217d33c6cea1fc1052cf332826d80d6de54f9962542bdd0a31becc959f2f676",
+      "recordID": null,
+      "mimeType": "text/plain",
+      "bytes": 595,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": false,
+      "note": "Unseeded preparation note for a distinct manual import."
+    },
+    {
+      "filename": "reva-synthetic-laboratory-results.pdf",
+      "sha256": "31f5858f0ef551bbebb1cf84df0d10459542dc4182519e48235d502ec22143aa",
+      "recordID": "demo-record-labs",
+      "mimeType": "application/pdf",
+      "bytes": 64996,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-leg-imaging.pdf",
+      "sha256": "f3f8f8d2d023a70572ab13e845327b208a0306e93db561552a374ac31f117c96",
+      "recordID": "demo-record-leg-imaging",
+      "mimeType": "application/pdf",
+      "bytes": 64994,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-resolved-ear-infection.pdf",
+      "sha256": "248e1d112ea71888ffc9e52a8af81f7a91903309aa933ad3bdcd6b2ec7d7685e",
+      "recordID": "demo-record-ear-infection",
+      "mimeType": "application/pdf",
+      "bytes": 64819,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-resting-ecg-note.pdf",
+      "sha256": "d3e53007d82800121a1fc81cd2b5476738dc1d5ee0b5151178882bef369c68ed",
+      "recordID": "demo-record-ecg",
+      "mimeType": "application/pdf",
+      "bytes": 64881,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-symptom-diary-image-only.pdf",
+      "sha256": "e6e88e48c077bba652b92d5308a4f3e2beb357d0ca16bf388d0bbe3d945e9c58",
+      "recordID": "demo-record-symptom-diary",
+      "mimeType": "application/pdf",
+      "bytes": 151976,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": false,
+      "note": "Raster-only alternate of the seeded diary; requires actual OCR on import."
+    },
+    {
+      "filename": "reva-synthetic-symptom-diary-scan.png",
+      "sha256": "eaaaeef048485efdd418b757e0c4e3541a34d2aa9950b0b48b4fc8cc9e45dc32",
+      "recordID": "demo-record-symptom-diary",
+      "mimeType": "image/png",
+      "bytes": 160937,
+      "pageCount": 1,
+      "isSynthetic": true,
+      "isSeededSource": true
+    },
+    {
+      "filename": "reva-synthetic-tibia-procedure-2019.pdf",
+      "sha256": "e2d8cb745b976083898535ea5b552bb655b47e0035a77cf909af1ed50cffe486",
+      "recordID": "demo-record-tibia-procedure",
+      "mimeType": "application/pdf",
+      "bytes": 66669,
+      "pageCount": 2,
+      "isSynthetic": true,
+      "isSeededSource": true
+    }
+  ]
+}

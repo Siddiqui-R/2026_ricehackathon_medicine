@@ -1,0 +1,154 @@
+import UIKit
+import PDFKit
+import AVFoundation
+
+@main
+@MainActor
+final class HarnessApp: UIResponder, UIApplicationDelegate {
+    var window: UIWindow?
+    private var lines: [String] = []
+    private let importer = DocumentImportService()
+    private let output = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        let controller = UIViewController()
+        let label = UILabel(frame: CGRect(x: 24, y: 100, width: 350, height: 300))
+        label.text = "Reva device adapter checks\nRunning isolated synthetic tests…"
+        label.numberOfLines = 0
+        controller.view.backgroundColor = .white
+        controller.view.addSubview(label)
+        window.rootViewController = controller
+        self.window = window
+        window.makeKeyAndVisible()
+        Task { await run(); label.text = lines.joined(separator: "\n") }
+        return true
+    }
+
+    private func check(_ condition: Bool, _ label: String) throws {
+        guard condition else { throw NSError(domain: "Harness", code: 1, userInfo: [NSLocalizedDescriptionKey: label]) }
+        lines.append("PASS \(label)")
+        saveLog()
+    }
+
+    private func expectFailure(_ label: String, _ action: () async throws -> Void) async throws {
+        do { try await action() } catch { lines.append("PASS \(label): \(error.localizedDescription)"); saveLog(); return }
+        throw NSError(domain: "Harness", code: 2, userInfo: [NSLocalizedDescriptionKey: "Expected rejection: \(label)"])
+    }
+
+    private func saveLog() { try? lines.joined(separator: "\n").write(to: output.appendingPathComponent("results.txt"), atomically: true, encoding: .utf8) }
+
+    private func file(_ data: Data, _ name: String) throws -> URL {
+        let url = output.appendingPathComponent(name)
+        try data.write(to: url)
+        return url
+    }
+
+    private func scanImage() -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 700)).image { ctx in
+            UIColor.white.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 700))
+            ("SYNTHETIC TEST DOCUMENT\nPatient: Fictional Example\nPage two source evidence\nDate: September 12, 2026\nReview all extracted text." as NSString)
+                .draw(in: CGRect(x: 65, y: 60, width: 1070, height: 590), withAttributes: [.font: UIFont.systemFont(ofSize: 43), .foregroundColor: UIColor.black])
+        }
+    }
+
+    private func run() async {
+        do {
+            let original = Data("SYNTHETIC fixture\nExact source wording: 12.5 mg; no reported reaction.\n".utf8)
+            let textURL = try file(original, "fixture.txt")
+            let text = try await importer.ingest(url: textURL)
+            try check(text.data == original && text.mimeType == "text/plain" && text.pageTexts.count == 1 && text.warnings.isEmpty, "UTF8 exact bytes and page text")
+            let utf16Data = "SYNTHETIC UTF16 fixture\nSecond line.".data(using: .utf16)!
+            let utf16URL = try file(utf16Data, "unicode.txt")
+            let utf16 = try await importer.ingest(url: utf16URL)
+            try check(utf16.text.contains("Second line") && utf16.data == utf16Data, "UTF16 decoding preserves original bytes")
+            let emptyURL = try file(Data(), "empty.txt")
+            try await expectFailure("empty input") { _ = try await self.importer.ingest(url: emptyURL) }
+            let binaryURL = try file(Data([0, 1, 2, 3]), "binary.txt")
+            try await expectFailure("binary text rejection") { _ = try await self.importer.ingest(url: binaryURL) }
+            try await expectFailure("remote URL rejection") { _ = try await self.importer.ingest(url: URL(string: "https://example.com/file.pdf")!) }
+            let hugeURL = try file(Data(repeating: 65, count: DocumentImportService.maximumBytes + 1), "oversized.txt")
+            try await expectFailure("16MiB byte limit") { _ = try await self.importer.ingest(url: hugeURL) }
+            try FileManager.default.removeItem(at: hugeURL)
+            try await expectFailure("corrupt image rejection") { _ = try await self.importer.ingest(imageData: Data([1, 2, 3]), filename: "bad.png") }
+            let image = scanImage()
+            let png = image.pngData()!
+            let recognized = try await importer.ingest(imageData: png, filename: "../../wrong.jpg")
+            try check(recognized.mimeType == "image/png" && recognized.filename == "wrong.jpg" && recognized.data == png && !recognized.warnings.isEmpty && recognized.text.contains("SYNTHETIC"), "Vision image OCR, MIME detection, safe leaf filename, exact bytes and review warning")
+            let blank = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400)).image { ctx in UIColor.white.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 300, height: 400)) }.pngData()!
+            let blankResult = try await importer.ingest(imageData: blank, filename: "blank.png")
+            try check(blankResult.text.isEmpty && blankResult.warnings.contains(where: { $0.contains("No readable text") }), "Blank image produces review state")
+            var pdfRenderer: UIGraphicsPDFRenderer { UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792)) }
+            let embeddedBytes = pdfRenderer.pdfData { ctx in
+                for marker in ["ALPHAPAGE distinct source evidence.", "BETAPAGE distinct source evidence."] {
+                    ctx.beginPage()
+                    (marker as NSString).draw(at: CGPoint(x: 40, y: 60), withAttributes: [.font: UIFont.systemFont(ofSize: 16)])
+                }
+            }
+            let embeddedURL = try file(embeddedBytes, "embedded.pdf")
+            let embedded = try await importer.ingest(url: embeddedURL)
+            try check(embedded.pageCount == 2 && embedded.pageTexts[0].contains("ALPHAPAGE") && embedded.pageTexts[1].contains("BETAPAGE") && embedded.data == embeddedBytes, "PDF embedded text retains correct page provenance and original bytes: \(embedded.pageCount), \(embedded.pageTexts), bytes=\(embedded.data == embeddedBytes)")
+            let scannedBytes = pdfRenderer.pdfData { ctx in ctx.beginPage(); image.draw(in: CGRect(x: 10, y: 10, width: 590, height: 345)) }
+            let scannedURL = try file(scannedBytes, "scanned.pdf")
+            let scanned = try await importer.ingest(url: scannedURL)
+            try check(scanned.text.contains("SYNTHETIC") && scanned.pageTexts.count == 1 && !scanned.warnings.isEmpty, "Scanned PDF OCR with review warning")
+            let manyBytes = pdfRenderer.pdfData { ctx in for _ in 0..<31 { ctx.beginPage() } }
+            let manyURL = try file(manyBytes, "many.pdf")
+            try await expectFailure("31-page PDF rejection") { _ = try await self.importer.ingest(url: manyURL) }
+            let limitBytes = pdfRenderer.pdfData { ctx in for _ in 0..<12 { ctx.beginPage() } }
+            let limitURL = try file(limitBytes, "ocr-limit.pdf")
+            let limited = try await importer.ingest(url: limitURL)
+            try check(limited.pageTexts.count == 12 && limited.pageTexts.allSatisfy(\.isEmpty) && limited.warnings.contains(where: { $0.contains("Page 12") && $0.contains("limit") }), "OCR limit retains all twelve page indexes and names skipped page")
+            let clippedURL = try file(Data(String(repeating: "word ", count: 45_000).utf8), "long.txt")
+            let clipped = try await importer.ingest(url: clippedURL)
+            try check(clipped.text.count == 200_000 && clipped.warnings.contains(where: { $0.contains("200,000") }), "Text extraction cap is explicit")
+            let cancelled = Task { try await importer.ingest(url: textURL) }
+            cancelled.cancel()
+            try await expectFailure("cancellation") { _ = try await cancelled.value }
+            let paragraphs = (0..<75).map { "PARAGRAPH\($0)MARKER. " + String(repeating: "This fictional source fact remains reviewable in the original document. ", count: 7) }
+            let reportURL = try ReportPDFRenderer.render(title: "Synthetic visit preparation", subtitle: "September 12, 2026 · Device adapter verification", sections: [PDFSection(title: "Long paginated history", body: paragraphs.joined(separator: "\n\n")), PDFSection(title: "Questions", body: "What should be clarified from these fictional records?")], sources: ["ALPHAPAGE — synthetic record, page 1", "BETAPAGE — synthetic record, page 2"])
+            let finalPDF = output.appendingPathComponent("adapter-report.pdf")
+            try? FileManager.default.removeItem(at: finalPDF)
+            try FileManager.default.copyItem(at: reportURL, to: finalPDF)
+            let pdf = PDFDocument(url: finalPDF)!
+            let renderedText = pdf.string ?? ""
+            try check(pdf.pageCount >= 3 && (0..<75).allSatisfy { renderedText.contains("PARAGRAPH\($0)MARKER") } && renderedText.contains("BETAPAGE"), "Paginated PDF contains every paragraph marker and source citation across \(pdf.pageCount) pages")
+            try check((0..<pdf.pageCount).allSatisfy { pdf.page(at: $0)?.string?.contains("Source-based preparation") == true }, "Every PDF page carries provenance footer")
+            for index in [0, pdf.pageCount - 1] {
+                let preview = pdf.page(at: index)!.thumbnail(of: CGSize(width: 918, height: 1188), for: .mediaBox)
+                try preview.pngData()!.write(to: output.appendingPathComponent("report-page-\(index + 1).png"))
+            }
+            try await expectFailure("empty export title") { _ = try ReportPDFRenderer.render(title: " ", subtitle: "", sections: [], sources: []) }
+            let recorder = AudioRecorder()
+            try await expectFailure("finish without capture") { _ = try recorder.finish() }
+            recorder.cancel()
+            let toneURL = output.appendingPathComponent("synthetic-tone.caf")
+            let format = AVAudioFormat(standardFormatWithSampleRate: 22_050, channels: 1)!
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 22_050)!
+            buffer.frameLength = 22_050
+            for i in 0..<22_050 { buffer.floatChannelData![0][i] = Float(sin(Double(i) * 2 * Double.pi * 440 / 22_050)) * 0.05 }
+            let tone = try AVAudioFile(forWriting: toneURL, settings: format.settings)
+            try tone.write(from: buffer)
+            let playback = AudioPlayback()
+            try playback.play(url: toneURL)
+            try await Task.sleep(for: .milliseconds(300))
+            try check(playback.isPlaying && playback.currentTime > 0 && playback.duration > 0.9, "Actual audio playback timer advances")
+            playback.pause()
+            playback.seek(to: 0.5)
+            try check(!playback.isPlaying && abs(playback.currentTime - 0.5) < 0.01, "Playback pause and seek")
+            playback.seek(to: -.infinity)
+            try check(abs(playback.currentTime - 0.5) < 0.01, "Nonfinite seek rejected")
+            try playback.play(url: toneURL)
+            try await Task.sleep(for: .milliseconds(700))
+            try check(!playback.isPlaying, "Playback completion updates state")
+            playback.stop()
+            try check(playback.currentTime == 0 && playback.duration == 0, "Playback stop resets state")
+            try await expectFailure("missing audio rejection") { try playback.play(url: self.output.appendingPathComponent("missing.m4a")) }
+            try check(!DocumentScanner.isSupported, "Simulator reports camera scanning unsupported")
+            lines.append("ALL CHECKS PASSED\nCamera capture and microphone input remain physical-device/manual checks.")
+        } catch {
+            lines.append("FAIL \(error.localizedDescription)")
+        }
+        saveLog()
+    }
+}

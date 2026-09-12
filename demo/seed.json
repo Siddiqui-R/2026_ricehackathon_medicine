@@ -1,0 +1,341 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "id": "demo-profile-jordan-avery",
+    "name": "Jordan Avery (Synthetic)",
+    "dateOfBirth": "1991-04-16",
+    "initials": "JA",
+    "allergies": [
+      "Penicillin - childhood rash reported (synthetic)"
+    ],
+    "medications": [
+      "Albuterol inhaler, 90 mcg/actuation - existing as-needed use documented (synthetic)",
+      "Cetirizine, 10 mg - seasonal use reported (synthetic)"
+    ],
+    "conditions": [
+      "Intermittent asthma (synthetic)",
+      "Right distal fibula fracture, August 2026 (synthetic)",
+      "Prior right tibial fixation with retained hardware, 2019 (synthetic)"
+    ],
+    "isDemo": true
+  },
+  "records": [
+    {
+      "id": "demo-record-symptom-diary",
+      "title": "Nausea and palpitation diary - date needs review",
+      "kind": "Scan",
+      "provider": "Patient-authored sample (Fictional)",
+      "date": "2026-09-07",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "primary care",
+        "nausea",
+        "palpitations",
+        "symptom diary",
+        "needs review"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nPatient symptom diary\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Patient-authored sample (Fictional)\nWeek ending: September 7, 2026\n\nEntry date: September 0[unclear], 2026\nThe final date digit is obscured in this synthetic scan.\n\nPATIENT OBSERVATIONS\nMorning: brief racing-heart sensation while sitting after breakfast.\nEstimated duration: about 2 minutes. Nausea at the same time.\nAfternoon: another brief racing-heart sensation while at a desk.\nExact start and stop times were not written down.\n\nDETAILS TO CLARIFY\nThe entry does not record meal ingredients, caffeine quantity, or the time\nof any inhaler use. It does not establish a cause for the symptoms.\n\nPATIENT QUESTION\nWhich timing details would help make the follow-up conversation clearer?\n\nREVIEW NEEDED\nConfirm the obscured entry date. Do not infer its last digit.\nRecord date uses the legible week-ending date, September 7, 2026.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSYNTHETIC SCAN | 1 page | no real patient data",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nPatient symptom diary\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Patient-authored sample (Fictional)\nWeek ending: September 7, 2026\n\nEntry date: September 0[unclear], 2026\nThe final date digit is obscured in this synthetic scan.\n\nPATIENT OBSERVATIONS\nMorning: brief racing-heart sensation while sitting after breakfast.\nEstimated duration: about 2 minutes. Nausea at the same time.\nAfternoon: another brief racing-heart sensation while at a desk.\nExact start and stop times were not written down.\n\nDETAILS TO CLARIFY\nThe entry does not record meal ingredients, caffeine quantity, or the time\nof any inhaler use. It does not establish a cause for the symptoms.\n\nPATIENT QUESTION\nWhich timing details would help make the follow-up conversation clearer?\n\nREVIEW NEEDED\nConfirm the obscured entry date. Do not infer its last digit.\nRecord date uses the legible week-ending date, September 7, 2026.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSYNTHETIC SCAN | 1 page | no real patient data"
+      ],
+      "summary": "Demo summary: A diary for the week ending September 7 describes two brief racing-heart sensations and nausea with the morning episode. The individual entry date is partly obscured and requires review.",
+      "sourceFilename": "reva-synthetic-symptom-diary-scan.png",
+      "mimeType": "image/png",
+      "pageCount": 1,
+      "status": "needsReview",
+      "notes": "Synthetic scan with one deliberately obscured entry-date digit. Confirm the date; do not guess. Record date is the clearly printed week-ending date. Seed text is an authored reference transcription, not an OCR success claim.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-labs",
+      "title": "Laboratory results for symptom review",
+      "kind": "Labs",
+      "provider": "Sample Grove Laboratory (Fictional)",
+      "date": "2026-09-07",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "primary care",
+        "labs",
+        "nausea",
+        "palpitations",
+        "CBC",
+        "metabolic",
+        "TSH"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nLaboratory results for symptom review\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Laboratory (Fictional)\nSource date: 2026-09-07\nCOLLECTION CONTEXT\nCollected September 7, 2026 at 08:15 America/Chicago. Reason documented in the order: review of\nintermittent nausea and palpitations. Fasting status was not recorded.\nREPORTED VALUES\nHemoglobin: 13.4 g/dL\nWhite blood cells: 6.2 x 10^9/L\nPlatelets: 248 x 10^9/L\nSodium: 139 mmol/L\nPotassium: 4.1 mmol/L\nCreatinine: 0.82 mg/dL\nGlucose: 94 mg/dL\nThyroid-stimulating hormone (TSH): 1.62 mIU/L\nDOCUMENTATION LIMITS\nThe fictional source does not supply laboratory-specific reference intervals, prior trend values, or a diagnostic\ninterpretation. These invented numbers are included to test faithful transcription of values and units.\nDISCUSSION CONTEXT\nThe patient plans to review what these results can and cannot clarify alongside the symptom diary and\nmedication list at primary care.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-labs\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nLaboratory results for symptom review\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Laboratory (Fictional)\nSource date: 2026-09-07\nCOLLECTION CONTEXT\nCollected September 7, 2026 at 08:15 America/Chicago. Reason documented in the order: review of\nintermittent nausea and palpitations. Fasting status was not recorded.\nREPORTED VALUES\nHemoglobin: 13.4 g/dL\nWhite blood cells: 6.2 x 10^9/L\nPlatelets: 248 x 10^9/L\nSodium: 139 mmol/L\nPotassium: 4.1 mmol/L\nCreatinine: 0.82 mg/dL\nGlucose: 94 mg/dL\nThyroid-stimulating hormone (TSH): 1.62 mIU/L\nDOCUMENTATION LIMITS\nThe fictional source does not supply laboratory-specific reference intervals, prior trend values, or a diagnostic\ninterpretation. These invented numbers are included to test faithful transcription of values and units.\nDISCUSSION CONTEXT\nThe patient plans to review what these results can and cannot clarify alongside the symptom diary and\nmedication list at primary care.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-labs\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: September 7 results list hemoglobin 13.4 g/dL, sodium 139 mmol/L, potassium 4.1 mmol/L, creatinine 0.82 mg/dL, glucose 94 mg/dL, and TSH 1.62 mIU/L. Values are synthetic and do not establish the cause of symptoms.",
+      "sourceFilename": "reva-synthetic-laboratory-results.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-ecg",
+      "title": "Resting ECG note for palpitation review",
+      "kind": "Notes",
+      "provider": "Sample Grove Primary Care (Fictional)",
+      "date": "2026-09-07",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "primary care",
+        "palpitations",
+        "ECG",
+        "heart",
+        "rhythm",
+        "nausea"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nResting ECG note for palpitation review\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-09-07\nREASON FOR TEST\nPatient-reported intermittent palpitations, described as brief racing-heart sensations, sometimes with nausea.\nREPORTED EXAMINATION\nResting ECG obtained September 7, 2026. The fictional clinician's note states sinus rhythm at 82 beats per\nminute. The patient did not report a typical racing-heart episode while the ECG was obtained.\nCONTEXT AND LIMITS\nThis file is a written encounter note, not an ECG tracing. The note does not establish the cause of intermittent\nsymptoms or exclude events occurring outside the recorded examination.\nPATIENT QUESTION\nWhat information about the timing and duration of episodes would make the next discussion more useful?\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-ecg\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nResting ECG note for palpitation review\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-09-07\nREASON FOR TEST\nPatient-reported intermittent palpitations, described as brief racing-heart sensations, sometimes with nausea.\nREPORTED EXAMINATION\nResting ECG obtained September 7, 2026. The fictional clinician's note states sinus rhythm at 82 beats per\nminute. The patient did not report a typical racing-heart episode while the ECG was obtained.\nCONTEXT AND LIMITS\nThis file is a written encounter note, not an ECG tracing. The note does not establish the cause of intermittent\nsymptoms or exclude events occurring outside the recorded examination.\nPATIENT QUESTION\nWhat information about the timing and duration of episodes would make the next discussion more useful?\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-ecg\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: A September 7 resting ECG note records sinus rhythm at 82 beats per minute. The patient did not report a racing-heart episode during the recorded examination; a single note does not explain intermittent symptoms.",
+      "sourceFilename": "reva-synthetic-resting-ecg-note.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-history",
+      "title": "Medication, allergy and health history",
+      "kind": "Notes",
+      "provider": "Sample Grove Primary Care (Fictional)",
+      "date": "2026-09-01",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "medications",
+        "allergy",
+        "penicillin",
+        "asthma",
+        "primary care",
+        "active context"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nMedication, allergy and health history\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-09-01\nPURPOSE\nMedication and allergy reconciliation for the fictional patient's shared visit history.\nALLERGY\nPenicillin: rash reported in childhood. This record does not describe the original reaction or a formal allergy\ntest.\nMEDICATIONS REPORTED ON SEPTEMBER 1\nAlbuterol inhaler, 90 mcg per actuation: as-needed use is documented in the existing medication list. Cetirizine,\n10 mg: patient-reported seasonal use. No new prescription or change is documented here.\nMEDICAL HISTORY\nIntermittent asthma. Prior right tibial fracture repair in 2019 with retained hardware. A separate right distal\nfibula fracture occurred on August 22, 2026.\nPATIENT CONTEXT\nThe patient wants appointment summaries that keep prior documentation separate from current questions.\nThis list reflects information recorded on September 1 and may require reconciliation at the next visit.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-history\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nMedication, allergy and health history\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-09-01\nPURPOSE\nMedication and allergy reconciliation for the fictional patient's shared visit history.\nALLERGY\nPenicillin: rash reported in childhood. This record does not describe the original reaction or a formal allergy\ntest.\nMEDICATIONS REPORTED ON SEPTEMBER 1\nAlbuterol inhaler, 90 mcg per actuation: as-needed use is documented in the existing medication list. Cetirizine,\n10 mg: patient-reported seasonal use. No new prescription or change is documented here.\nMEDICAL HISTORY\nIntermittent asthma. Prior right tibial fracture repair in 2019 with retained hardware. A separate right distal\nfibula fracture occurred on August 22, 2026.\nPATIENT CONTEXT\nThe patient wants appointment summaries that keep prior documentation separate from current questions.\nThis list reflects information recorded on September 1 and may require reconciliation at the next visit.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-history\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: Penicillin-associated rash is documented. The medication list records albuterol inhaler and cetirizine use. Intermittent asthma is part of the fictional history.",
+      "sourceFilename": "reva-synthetic-health-history.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-leg-imaging",
+      "title": "Right lower-leg follow-up radiology report",
+      "kind": "Imaging",
+      "provider": "Sample Harbor Imaging (Fictional)",
+      "date": "2026-08-29",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "orthopedics",
+        "right leg",
+        "tibia",
+        "fibula",
+        "fracture",
+        "imaging",
+        "hardware",
+        "x-ray"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nRight lower-leg follow-up radiology report\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Imaging (Fictional)\nSource date: 2026-08-29\nEXAMINATION\nRIGHT TIBIA AND FIBULA, two views. Examination date: August 29, 2026. Comparison: August 22, 2026\nstudy described in the injury encounter.\nCLINICAL HISTORY\nFollow-up after a right distal fibula fracture. Remote right tibial fixation in 2019.\nFINDINGS\nThe described distal fibula fracture remains visible with no interval change in alignment on the provided\ncomparison. An intramedullary nail and locking screws are present in the right tibia. The hardware is described\nas intact on this examination.\nIMPRESSION\nDocumented distal fibula fracture with unchanged alignment. Remote tibial fixation hardware remains in place.\nClinical follow-up is referenced in the encounter record.\nSOURCE BOUNDARY\nThis synthetic written report has no attached radiographic images and cannot be used to interpret an actual\nimage or establish healing status beyond the text above.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-leg-imaging\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nRight lower-leg follow-up radiology report\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Imaging (Fictional)\nSource date: 2026-08-29\nEXAMINATION\nRIGHT TIBIA AND FIBULA, two views. Examination date: August 29, 2026. Comparison: August 22, 2026\nstudy described in the injury encounter.\nCLINICAL HISTORY\nFollow-up after a right distal fibula fracture. Remote right tibial fixation in 2019.\nFINDINGS\nThe described distal fibula fracture remains visible with no interval change in alignment on the provided\ncomparison. An intramedullary nail and locking screws are present in the right tibia. The hardware is described\nas intact on this examination.\nIMPRESSION\nDocumented distal fibula fracture with unchanged alignment. Remote tibial fixation hardware remains in place.\nClinical follow-up is referenced in the encounter record.\nSOURCE BOUNDARY\nThis synthetic written report has no attached radiographic images and cannot be used to interpret an actual\nimage or establish healing status beyond the text above.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-leg-imaging\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: The August 29 radiology report describes an unchanged distal fibula fracture alignment and intact prior tibial nail and locking screws. It is a written report; no diagnostic radiograph is included.",
+      "sourceFilename": "reva-synthetic-leg-imaging.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-fibula-injury",
+      "title": "Right distal fibula fracture - initial assessment",
+      "kind": "Notes",
+      "provider": "Sample Harbor Orthopedics (Fictional)",
+      "date": "2026-08-22",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "orthopedics",
+        "right leg",
+        "distal fibula",
+        "fracture",
+        "ankle",
+        "injury",
+        "follow-up"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nRight distal fibula fracture - initial assessment\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2026-08-22\nREASON FOR ENCOUNTER\nRight ankle and lower-leg discomfort after a missed step on August 22, 2026. The patient reported swelling\nand reduced walking comfort.\nDOCUMENTED ASSESSMENT\nThe source note records a right distal fibula fracture after review of initial radiographs. It also records the\npatient's prior right tibial nail from a 2019 tibial fracture repair.\nCARE ALREADY DOCUMENTED\nThe encounter note states that a walking boot was supplied and follow-up with orthopedics was arranged. This\ndemo document does not add activity, weight-bearing, or treatment instructions.\nQUESTIONS CARRIED FORWARD\nThe patient wants to discuss walking comfort, interval imaging, and whether the prior tibial hardware affects\nhow the new injury is assessed.\nSOURCE BOUNDARY\nThis is the initial assessment of the 2026 fibula injury. It is not the 2019 tibial operation and does not document\na new implant.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-fibula-injury\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nRight distal fibula fracture - initial assessment\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2026-08-22\nREASON FOR ENCOUNTER\nRight ankle and lower-leg discomfort after a missed step on August 22, 2026. The patient reported swelling\nand reduced walking comfort.\nDOCUMENTED ASSESSMENT\nThe source note records a right distal fibula fracture after review of initial radiographs. It also records the\npatient's prior right tibial nail from a 2019 tibial fracture repair.\nCARE ALREADY DOCUMENTED\nThe encounter note states that a walking boot was supplied and follow-up with orthopedics was arranged. This\ndemo document does not add activity, weight-bearing, or treatment instructions.\nQUESTIONS CARRIED FORWARD\nThe patient wants to discuss walking comfort, interval imaging, and whether the prior tibial hardware affects\nhow the new injury is assessed.\nSOURCE BOUNDARY\nThis is the initial assessment of the 2026 fibula injury. It is not the 2019 tibial operation and does not document\na new implant.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-fibula-injury\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: An August 22 fall led to a documented right distal fibula fracture. The note records a walking boot and an orthopedic follow-up plan; prior right tibial hardware is a separate historical event.",
+      "sourceFilename": "reva-synthetic-fibula-injury-2026.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-asthma",
+      "title": "Asthma history and medication context",
+      "kind": "Notes",
+      "provider": "Sample Grove Primary Care (Fictional)",
+      "date": "2026-05-12",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "asthma",
+        "albuterol",
+        "medications",
+        "primary care",
+        "history"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nAsthma history and medication context\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-05-12\n\nDOCUMENTED HISTORY\nIntermittent asthma appears in the fictional health history. The encounter note\nrecords an albuterol inhaler on the existing medication list. No hospital stay\nor acute respiratory complaint is documented in this particular encounter.\n\nPATIENT-REPORTED MEDICATION CONTEXT\nAlbuterol inhaler, 90 mcg per actuation: as-needed use documented in the source\nmedication list. Cetirizine, 10 mg: seasonal use reported by the patient.\nThis note does not introduce a new medicine or change an existing instruction.\n\nSOURCE BOUNDARY\nThis note gives historical context for medication reconciliation. It contains\nno attribution of symptoms to a medicine and no separate symptom assessment.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice.",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nAsthma history and medication context\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Grove Primary Care (Fictional)\nSource date: 2026-05-12\n\nDOCUMENTED HISTORY\nIntermittent asthma appears in the fictional health history. The encounter note\nrecords an albuterol inhaler on the existing medication list. No hospital stay\nor acute respiratory complaint is documented in this particular encounter.\n\nPATIENT-REPORTED MEDICATION CONTEXT\nAlbuterol inhaler, 90 mcg per actuation: as-needed use documented in the source\nmedication list. Cetirizine, 10 mg: seasonal use reported by the patient.\nThis note does not introduce a new medicine or change an existing instruction.\n\nSOURCE BOUNDARY\nThis note gives historical context for medication reconciliation. It contains\nno attribution of symptoms to a medicine and no separate symptom assessment.\n\nInvented for Reva software demonstration. Not a real patient record or medical advice."
+      ],
+      "summary": "Demo summary: The May note documents intermittent asthma and existing albuterol and seasonal cetirizine use. It contains no attribution of symptoms to a medicine.",
+      "sourceFilename": "reva-synthetic-asthma-context.txt",
+      "mimeType": "text/plain",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic plain-text source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-ear-infection",
+      "title": "Resolved minor right-ear infection",
+      "kind": "Notes",
+      "provider": "Sample Maple Walk-In Clinic (Fictional)",
+      "date": "2025-11-04",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "ear",
+        "otitis",
+        "resolved",
+        "unrelated episode"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nResolved minor right-ear infection\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Maple Walk-In Clinic (Fictional)\nSource date: 2025-11-04\nFOLLOW-UP REASON\nReview after a minor right-ear infection documented the preceding week. This is a standalone fictional episode.\nRECORDED OUTCOME\nThe patient reported that the ear discomfort had resolved. The follow-up note records no ongoing ear\ncomplaint and no further ear-related appointment in this dataset.\nRECORD SCOPE\nThis note is limited to the resolved ear complaint described above.\nDEMONSTRATION PURPOSE\nThe record intentionally represents a less relevant historical episode. It should remain searchable and\navailable when a user explicitly chooses to include it in visit preparation.\n Invented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-ear-infection\nPage 1 of 1",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nResolved minor right-ear infection\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Maple Walk-In Clinic (Fictional)\nSource date: 2025-11-04\nFOLLOW-UP REASON\nReview after a minor right-ear infection documented the preceding week. This is a standalone fictional episode.\nRECORDED OUTCOME\nThe patient reported that the ear discomfort had resolved. The follow-up note records no ongoing ear\ncomplaint and no further ear-related appointment in this dataset.\nRECORD SCOPE\nThis note is limited to the resolved ear complaint described above.\nDEMONSTRATION PURPOSE\nThe record intentionally represents a less relevant historical episode. It should remain searchable and\navailable when a user explicitly chooses to include it in visit preparation.\n Invented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-ear-infection\nPage 1 of 1"
+      ],
+      "summary": "Demo summary: A November 2025 follow-up note documents resolution of a minor right-ear infection and no ongoing ear complaint. This unrelated past episode is included to demonstrate relevance filtering.",
+      "sourceFilename": "reva-synthetic-resolved-ear-infection.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 1,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    },
+    {
+      "id": "demo-record-tibia-procedure",
+      "title": "Prior right tibia fixation and implant record",
+      "kind": "Procedure",
+      "provider": "Sample Harbor Orthopedics (Fictional)",
+      "date": "2019-04-18",
+      "uploadedAt": "2026-09-12T14:00:00Z",
+      "tags": [
+        "orthopedics",
+        "right leg",
+        "tibia",
+        "fracture",
+        "implant",
+        "hardware",
+        "nail",
+        "procedure"
+      ],
+      "text": "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nPrior right tibia fixation and implant record\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2019-04-18\nPROCEDURE RECORD\nDate of procedure: April 18, 2019. Documented indication: right tibial shaft fracture following a recreational fall.\nProcedure: intramedullary fixation of the right tibia.\nOPERATIVE SUMMARY\nThe fictional operative record describes placement of a tibial intramedullary nail with proximal and distal locking\nscrews. The implant inventory appears on page 2.\nIMMEDIATE DOCUMENTATION\nThe operative record describes placement of the nail and locking screws during this encounter. It does not\ncontain a later healing assessment or hardware-removal procedure.\nSOURCE SCOPE\nThis operation concerns the right tibial shaft fracture described above. The procedure date and implant\ninventory are preserved for later comparison with other lower-leg records.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-tibia-procedure\nPage 1 of 2\n\nSYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nPrior right tibia fixation and implant record\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2019-04-18\nIMPLANT INVENTORY - HISTORICAL SOURCE\nImplant location: RIGHT TIBIA. Device category: intramedullary tibial nail. Retained components documented:\none nail and proximal and distal locking screws. Placement date: April 18, 2019.\nDEVICE IDENTIFICATION\nManufacturer, model, material, and serial or lot numbers are intentionally not supplied in this synthetic dataset.\nNo imaging-compatibility conclusion can be made from this inventory.\nINVENTORY SCOPE\nThis page records the components placed during the same operation as page 1. It does not record subsequent\nimaging, hardware removal, or repeat surgery.\nSOURCE BOUNDARY\nThese are invented historical details for testing source retrieval across dates and PDF pages. An operative\ninventory alone does not describe a later clinical course.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-tibia-procedure\nPage 2 of 2",
+      "pageTexts": [
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nPrior right tibia fixation and implant record\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2019-04-18\nPROCEDURE RECORD\nDate of procedure: April 18, 2019. Documented indication: right tibial shaft fracture following a recreational fall.\nProcedure: intramedullary fixation of the right tibia.\nOPERATIVE SUMMARY\nThe fictional operative record describes placement of a tibial intramedullary nail with proximal and distal locking\nscrews. The implant inventory appears on page 2.\nIMMEDIATE DOCUMENTATION\nThe operative record describes placement of the nail and locking screws during this encounter. It does not\ncontain a later healing assessment or hardware-removal procedure.\nSOURCE SCOPE\nThis operation concerns the right tibial shaft fracture described above. The procedure date and implant\ninventory are preserved for later comparison with other lower-leg records.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-tibia-procedure\nPage 1 of 2",
+        "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nREVA / SYNTHETIC SOURCE LIBRARY\nPrior right tibia fixation and implant record\nJordan Avery (Synthetic) | DOB: 1991-04-16\nSource: Sample Harbor Orthopedics (Fictional)\nSource date: 2019-04-18\nIMPLANT INVENTORY - HISTORICAL SOURCE\nImplant location: RIGHT TIBIA. Device category: intramedullary tibial nail. Retained components documented:\none nail and proximal and distal locking screws. Placement date: April 18, 2019.\nDEVICE IDENTIFICATION\nManufacturer, model, material, and serial or lot numbers are intentionally not supplied in this synthetic dataset.\nNo imaging-compatibility conclusion can be made from this inventory.\nINVENTORY SCOPE\nThis page records the components placed during the same operation as page 1. It does not record subsequent\nimaging, hardware removal, or repeat surgery.\nSOURCE BOUNDARY\nThese are invented historical details for testing source retrieval across dates and PDF pages. An operative\ninventory alone does not describe a later clinical course.\nInvented for Reva software demonstration. Not a real patient record or medical advice.\nSynthetic source ID: demo-record-tibia-procedure\nPage 2 of 2"
+      ],
+      "summary": "Demo summary: A right tibial shaft fracture was repaired in 2019 with an intramedullary nail and locking screws. The implant inventory is on page 2. This source does not document subsequent imaging or hardware removal.",
+      "sourceFilename": "reva-synthetic-tibia-procedure-2019.pdf",
+      "mimeType": "application/pdf",
+      "pageCount": 2,
+      "status": "ready",
+      "notes": "Synthetic source and authored demo summary. No AI service ran.",
+      "isDemo": true,
+      "version": 1
+    }
+  ],
+  "visits": [
+    {
+      "id": "demo-visit-primary-20260915",
+      "title": "Nausea and palpitation follow-up",
+      "type": "Primary care",
+      "provider": "Dr. Morgan Ellis (Fictional)",
+      "clinic": "Sample Grove Primary Care (Fictional)",
+      "date": "2026-09-15T09:00:00-05:00",
+      "timeZone": "America/Chicago",
+      "concern": "Intermittent nausea and brief racing-heart sensations; I want to describe the timing clearly.",
+      "goal": "Review my symptom diary, current medications, September labs and ECG, and identify what information is still missing.",
+      "questions": [
+        "Which details about episode timing and duration would be most useful to bring?",
+        "What can the existing laboratory results and ECG tell us, and what do they leave unresolved?",
+        "Should I bring a more complete record of meals, caffeine and the timing of my usual medicines?"
+      ],
+      "pinnedRecordIDs": [],
+      "notes": "Synthetic upcoming visit. The diary's individual entry date still needs confirmation.",
+      "status": "upcoming",
+      "report": null
+    },
+    {
+      "id": "demo-visit-orthopedics-20260917",
+      "title": "Broken-leg follow-up",
+      "type": "Orthopedics",
+      "provider": "Dr. Quinn Rowan (Fictional)",
+      "clinic": "Sample Harbor Orthopedics (Fictional)",
+      "date": "2026-09-17T10:30:00-05:00",
+      "timeZone": "America/Chicago",
+      "concern": "Follow-up of my August right distal fibula fracture, walking comfort, and prior right tibial hardware.",
+      "goal": "Review interval lower-leg imaging and the older tibial implant record, and prepare questions about recovery from the new fibula fracture.",
+      "questions": [
+        "What does the comparison of my August imaging reports show?",
+        "How does the old right tibial nail relate to the assessment of this new fibula injury?",
+        "Which changes in walking comfort should I describe, and what recovery milestones should we discuss?"
+      ],
+      "pinnedRecordIDs": [],
+      "notes": "Synthetic upcoming visit. The old tibial fixation and new fibula fracture are separate events.",
+      "status": "upcoming",
+      "report": null
+    },
+    {
+      "id": "demo-visit-primary-20260908",
+      "title": "Initial symptom discussion",
+      "type": "Primary care",
+      "provider": "Dr. Morgan Ellis (Fictional)",
+      "clinic": "Sample Grove Primary Care (Fictional)",
+      "date": "2026-09-08T14:00:00-05:00",
+      "timeZone": "America/Chicago",
+      "concern": "Discuss patient-reported brief palpitations and nausea.",
+      "goal": "Review existing source documents and organize unresolved questions before the follow-up visit.",
+      "questions": [
+        "Which details were missing from my first symptom diary?"
+      ],
+      "pinnedRecordIDs": [],
+      "notes": "Completed synthetic visit associated with the optional text-only sample transcript. No audio was recorded.",
+      "status": "completed",
+      "report": null
+    }
+  ],
+  "bookings": [],
+  "recordings": []
+}

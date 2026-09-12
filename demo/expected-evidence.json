@@ -1,0 +1,76 @@
+{
+  "synthetic": true,
+  "description": "Source-selection acceptance fixtures, not medical guidance.",
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "orthopedic-followup",
+      "visitID": "demo-visit-orthopedics-20260917",
+      "mustInclude": [
+        "demo-record-history",
+        "demo-record-tibia-procedure",
+        "demo-record-fibula-injury",
+        "demo-record-leg-imaging"
+      ],
+      "mustExclude": [
+        "demo-record-ear-infection",
+        "demo-record-labs",
+        "demo-record-ecg",
+        "demo-record-symptom-diary"
+      ],
+      "mayInclude": [
+        "demo-record-asthma"
+      ],
+      "sourceChecks": [
+        {
+          "recordID": "demo-record-tibia-procedure",
+          "page": 2,
+          "contains": "Implant location: RIGHT TIBIA"
+        }
+      ],
+      "rationale": "The new distal fibula injury and old tibial implant share lower-leg imaging context; general medications/allergy context remains useful."
+    },
+    {
+      "id": "nausea-palpitations-primary-care",
+      "visitID": "demo-visit-primary-20260915",
+      "mustInclude": [
+        "demo-record-history",
+        "demo-record-symptom-diary",
+        "demo-record-labs",
+        "demo-record-ecg",
+        "demo-record-asthma"
+      ],
+      "mustExclude": [
+        "demo-record-ear-infection",
+        "demo-record-leg-imaging",
+        "demo-record-fibula-injury"
+      ],
+      "mayInclude": [
+        "demo-record-tibia-procedure"
+      ],
+      "sourceChecks": [
+        {
+          "recordID": "demo-record-labs",
+          "page": 1,
+          "contains": "1.62 mIU/L"
+        }
+      ],
+      "rationale": "Symptom observations, test documentation and medication context matter. Old implant may be explicit history context but cannot be presented as the symptom cause."
+    }
+  ],
+  "pinningCase": {
+    "visitID": "demo-visit-orthopedics-20260917",
+    "pinRecordID": "demo-record-ear-infection",
+    "mustInclude": "demo-record-ear-infection"
+  },
+  "reviewCase": {
+    "recordID": "demo-record-symptom-diary",
+    "expectedStatus": "needsReview",
+    "uncertainField": "individual symptom entry date",
+    "sourceFilename": "reva-synthetic-symptom-diary-scan.png",
+    "knownDate": "2026-09-07",
+    "knownDateMeaning": "printed week-ending date",
+    "expectedText": "September 0[unclear], 2026",
+    "forbiddenBehavior": "Guessing the obscured digit or claiming OCR has been verified from the seeded reference transcription."
+  }
+}
