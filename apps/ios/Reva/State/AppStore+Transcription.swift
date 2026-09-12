@@ -12,10 +12,12 @@ extension AppStore {
         guard !isProviderBusy, let original = recording(id), !original.isSample,
             let name = original.audioFilename, let url = sourceURL(name)
         else { return }
+        let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
             let result = try await providerClient().transcribe(bytes: Data(contentsOf: url), filename: name)
+            guard context == providerContext else { return }
             guard var latest = recording(id), latest.audioFilename == original.audioFilename,
                 latest.segments == original.segments
             else {
@@ -41,6 +43,9 @@ extension AppStore {
                 try saveMemory(recordingID: id)
             }
             notice = "Transcript saved. Review the words and speaker attribution before using it."
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            guard context == providerContext else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 }

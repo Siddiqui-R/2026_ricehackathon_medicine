@@ -73,7 +73,12 @@ struct VisitDetailView: View {
                                 } else {
                                     Text("Create pre-visit brief")
                                 }
-                            }.buttonStyle(PrimaryButtonStyle()).disabled(generating)
+                            }.buttonStyle(PrimaryButtonStyle()).disabled(
+                                generating || (store.useConnectedAI && store.isProviderBusy))
+                            if store.useConnectedAI && store.isProviderBusy {
+                                Text("Working with connected service…").font(.caption).foregroundStyle(
+                                    .secondary)
+                            }
                             Text(
                                 store.useConnectedAI
                                     ? "Connected Gemini · source review required"

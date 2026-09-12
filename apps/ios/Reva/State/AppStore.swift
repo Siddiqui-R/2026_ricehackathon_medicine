@@ -4,14 +4,16 @@
 // Side effects: Reads/writes local state; recovers/reset fixtures and stores session settings.
 
 import Combine
-
 // MARK: - Observable state owner
 // Keep view state on the main actor; mutate publishes only after repository save succeeds.
 import Foundation
 
 @MainActor final class AppStore: ObservableObject {
     @Published var snapshot: AppSnapshot? {
-        didSet { snapshotGeneration = UUID() }
+        didSet {
+            snapshotGeneration = UUID()
+            if !isMutatingSnapshot { workspaceGeneration = UUID() }
+        }
     }
     @Published var errorMessage: String?
     @Published var startupError: String?
@@ -35,6 +37,8 @@ import Foundation
     var serverIdentity = ""
     private(set) var snapshotGeneration = UUID()
     private(set) var connectionGeneration = UUID()
+    private(set) var workspaceGeneration = UUID()
+    private var isMutatingSnapshot = false
     var providerDiscoveryID = UUID()
 
     // MARK: - Invalidate in-flight connection results
@@ -61,24 +65,29 @@ import Foundation
                 if loaded.recovered {
                     notice = "Recovered the last valid checkpoint. Your original files remain available."
                 }
-                // Rename only the untouched demo label. Preserve scanned wording, originals, and user edits.
-                if var sample = snapshot?.records.first(where: {
-                    $0.id == "demo-record-symptom-diary"
-                        && $0.title == "Nausea and palpitation diary - date needs review"
-                }) {
-                    sample.title = "Scanned symptom note - date needs review"
-                    try save(sample)
-                }
-                if snapshot?.bookings.contains(where: {
-                    $0.isLive != true && ["queued", "calling"].contains($0.status)
-                }) == true {
-                    try mutate { data in
-                        for i in data.bookings.indices
-                        where data.bookings[i].isLive != true
-                            && ["queued", "calling"].contains(data.bookings[i].status)
-                        { data.bookings[i].status = "needsUser" }
+                do {
+                    // Rename only the untouched demo label. Preserve scanned wording, originals, and user edits.
+                    if var sample = snapshot?.records.first(where: {
+                        $0.id == "demo-record-symptom-diary"
+                            && $0.title == "Nausea and palpitation diary - date needs review"
+                    }) {
+                        sample.title = "Scanned symptom note - date needs review"
+                        try save(sample)
                     }
-                    notice = "An interrupted demo booking needs your attention. Open it to retry."
+                    if snapshot?.bookings.contains(where: {
+                        $0.isLive != true && ["queued", "calling"].contains($0.status)
+                    }) == true {
+                        try mutate { data in
+                            for i in data.bookings.indices
+                            where data.bookings[i].isLive != true
+                                && ["queued", "calling"].contains(data.bookings[i].status)
+                            { data.bookings[i].status = "needsUser" }
+                        }
+                        notice = "An interrupted demo booking needs your attention. Open it to retry."
+                    }
+                } catch {
+                    errorMessage =
+                        "Your saved data is available, but a startup repair could not be saved: \(error.localizedDescription)"
                 }
             } else {
                 try resetDemo()
@@ -95,7 +104,13 @@ import Foundation
             return left == right ? $0.id < $1.id : left > right
         }
     }
-    var visits: [Visit] { (snapshot?.visits ?? []).sorted { $0.date < $1.date } }
+    var visits: [Visit] {
+        (snapshot?.visits ?? []).sorted {
+            let left = RevaDate.parse($0.date)
+            let right = RevaDate.parse($1.date)
+            return left == right ? $0.id < $1.id : left < right
+        }
+    }
     var bookings: [BookingRequest] { snapshot?.bookings ?? [] }
     var recordings: [VisitRecording] { snapshot?.recordings ?? [] }
     func record(_ id: String) -> MedicalRecord? { snapshot?.records.first { $0.id == id } }
@@ -112,6 +127,9 @@ import Foundation
         guard var next = snapshot else { throw RevaError.invalid("Load or reset the demo first.") }
         try action(&next)
         try repository.save(next)
+        // Ordinary field edits keep provider operations valid; direct snapshot replacements invalidate them.
+        isMutatingSnapshot = true
+        defer { isMutatingSnapshot = false }
         snapshot = next
     }
     // MARK: - UI error boundary

@@ -10,10 +10,12 @@ import Foundation
 extension AppStore {
     func summarizeWithAI(_ id: String) async {
         guard !isProviderBusy, let original = record(id) else { return }
+        let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
             let result = try await providerClient().summarize(original)
+            guard context == providerContext else { return }
             guard var latest = record(id), latest.text == original.text, latest.version == original.version
             else {
                 throw RevaError.invalid(
@@ -27,13 +29,21 @@ extension AppStore {
             latest.summaryModel = result.model
             try save(latest)
             notice = "AI summary saved. Review it against the original source."
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            guard context == providerContext else { return }
+            errorMessage = error.localizedDescription
+        }
     }
     // MARK: - Visit brief generation
     // Choose local or connected generation, validate selected IDs and protect user questions/notes.
     @discardableResult func generatePreferredReport(_ id: String) async -> Bool {
         guard useConnectedAI else { return perform { try generateReport(id) } }
-        guard !isProviderBusy, let original = visit(id) else { return false }
+        guard !isProviderBusy else {
+            notice = "A connected request is still running. Try creating the brief when it finishes."
+            return false
+        }
+        guard let original = visit(id) else { return false }
+        let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         let sources = records
@@ -48,6 +58,7 @@ extension AppStore {
                 )
             }
             let result = try await providerClient().prepare(original, records: candidates)
+            guard context == providerContext else { return false }
             guard var latest = visit(id), signature == ReportEngine.signature(visit: latest, records: records)
             else {
                 throw RevaError.invalid(
@@ -82,6 +93,7 @@ extension AppStore {
             notice = "AI-assisted brief ready. Review its overview and original source excerpts."
             return true
         } catch {
+            guard context == providerContext else { return false }
             errorMessage = error.localizedDescription
             return false
         }

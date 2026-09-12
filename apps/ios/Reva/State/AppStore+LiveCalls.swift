@@ -10,6 +10,7 @@ import Foundation
 extension AppStore {
     func placeLiveCall(_ request: BookingRequest) async {
         guard !isProviderBusy else { return }
+        let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
@@ -24,6 +25,7 @@ extension AppStore {
                     earliest: request.earliest, latest: request.latest, timeZone: request.timeZone,
                     preferences: request.preferences, patientName: snapshot?.profile.name ?? "", consent: true
                 ))
+            guard context == providerContext else { return }
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == request.id }) {
                     data.bookings[i].providerConversationID = result.conversationID
@@ -33,6 +35,7 @@ extension AppStore {
             notice =
                 "Call request accepted. Check status and review the outcome; Reva has not confirmed an appointment."
         } catch {
+            guard context == providerContext else { return }
             perform {
                 try mutate { data in
                     if let i = data.bookings.firstIndex(where: { $0.id == request.id }) {
@@ -47,10 +50,12 @@ extension AppStore {
     // Read the existing request status and transcript without starting another call.
     func refreshLiveCall(_ id: String) async {
         guard !isProviderBusy else { return }
+        let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
             let result = try await providerClient().callStatus(requestID: id)
+            guard context == providerContext else { return }
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == id }) {
                     data.bookings[i].providerConversationID = result.conversationID
@@ -58,6 +63,9 @@ extension AppStore {
                     data.bookings[i].providerTranscript = result.transcript
                 }
             }
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            guard context == providerContext else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 }

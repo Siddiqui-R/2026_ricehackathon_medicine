@@ -8,6 +8,17 @@
 import Foundation
 
 extension AppStore {
+    // MARK: - Provider publication context
+    // Connection switches and workspace replacement invalidate results, while unrelated edits remain allowed.
+    struct ProviderContext: Equatable {
+        let connection: UUID
+        let workspace: UUID
+    }
+
+    var providerContext: ProviderContext {
+        ProviderContext(connection: connectionGeneration, workspace: workspaceGeneration)
+    }
+
     func providerClient() throws -> ProviderClient {
         try ProviderClient(url: connectionURL, token: connectionToken)
     }
