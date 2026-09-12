@@ -230,7 +230,7 @@ actor DocumentImportService {
     }
 
     // MARK: - PDF page extraction
-    // Prefer embedded text, OCR weak pages, and keep one mapping slot per original page.
+    // Prefer embedded text on text-only pages, OCR raster-bearing or weak pages, and keep one mapping slot per original page.
     private nonisolated func extractPDF(data: Data, filename: String) throws -> ImportedDocument {
         guard let document = PDFDocument(data: data) else { throw DocumentImportError.invalidPDF }
         guard !document.isLocked else { throw DocumentImportError.lockedPDF }
@@ -254,7 +254,8 @@ actor DocumentImportService {
                     return ""
                 }
                 let embedded = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if embedded.count >= 20 { return embedded }
+                let mayContainRasterText = Self.hasRasterOrUninspectedContent(page)
+                if embedded.count >= 20 && !mayContainRasterText { return embedded }
                 guard ocrCount < Self.maximumOCRPages else {
                     warnings.append(
                         "Page \(index + 1) needs OCR beyond the 10-page OCR limit. Review this page or import a smaller PDF."
@@ -275,7 +276,12 @@ actor DocumentImportService {
                         "No readable text was found on page \(index + 1). Review the original and add any missing text."
                     )
                 }
-                return result.text.count > embedded.count ? result.text : embedded
+                if !embedded.isEmpty && mayContainRasterText {
+                    warnings.append(
+                        "Page \(index + 1) mixes embedded text with graphics. Recognized text was added after embedded text and may repeat it; review the complete original page."
+                    )
+                }
+                return Self.mergeRecognizedText(embedded: embedded, recognized: result.text)
             }
             pageTexts.append(limitedText(pageText, remaining: &remaining, warnings: &warnings))
         }
@@ -287,6 +293,58 @@ actor DocumentImportService {
         return ImportedDocument(
             filename: filename, mimeType: "application/pdf", data: data, text: text,
             warnings: warnings, pageCount: document.pageCount, pageTexts: pageTexts)
+    }
+
+    // Inspect actual painting operations, including inline images. A Form XObject is treated
+    // conservatively: it can contain nested raster text. Unknown/unreadable content also needs review.
+    private nonisolated static func hasRasterOrUninspectedContent(_ page: PDFPage) -> Bool {
+        guard let pageRef = page.pageRef, let operators = CGPDFOperatorTableCreate() else { return true }
+        let content = CGPDFContentStreamCreateWithPage(pageRef)
+        CGPDFOperatorTableSetCallback(operators, "BI") { _, info in
+            info?.assumingMemoryBound(to: Bool.self).pointee = true
+        }
+        CGPDFOperatorTableSetCallback(operators, "Do") { scanner, info in
+            guard let flag = info?.assumingMemoryBound(to: Bool.self) else { return }
+            var name: UnsafePointer<CChar>?
+            guard CGPDFScannerPopName(scanner, &name), let name,
+                let object = CGPDFContentStreamGetResource(
+                    CGPDFScannerGetContentStream(scanner), "XObject", name)
+            else {
+                flag.pointee = true
+                return
+            }
+            var stream: CGPDFStreamRef?
+            guard CGPDFObjectGetValue(object, .stream, &stream), let stream else {
+                flag.pointee = true
+                return
+            }
+            var subtype: UnsafePointer<CChar>?
+            guard let dictionary = CGPDFStreamGetDictionary(stream),
+                CGPDFDictionaryGetName(dictionary, "Subtype", &subtype),
+                let subtype
+            else {
+                flag.pointee = true
+                return
+            }
+            if ["Image", "Form"].contains(String(cString: subtype)) { flag.pointee = true }
+        }
+        var requiresOCR = false
+        let scanned = withUnsafeMutablePointer(to: &requiresOCR) { flag in
+            CGPDFScannerScan(CGPDFScannerCreate(content, operators, flag))
+        }
+        return requiresOCR || !scanned
+    }
+
+    private nonisolated static func mergeRecognizedText(embedded: String, recognized: String) -> String {
+        if embedded.isEmpty { return recognized }
+        let known = Set(
+            embedded.components(separatedBy: .newlines).map {
+                $0.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            })
+        let additional = recognized.components(separatedBy: .newlines).filter {
+            !known.contains($0.split(whereSeparator: \.isWhitespace).joined(separator: " "))
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return additional.isEmpty ? embedded : embedded + "\n" + additional
     }
 
     // MARK: - Bounded PDF rasterization
