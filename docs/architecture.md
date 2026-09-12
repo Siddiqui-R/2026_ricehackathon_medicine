@@ -1,6 +1,6 @@
 # Reva — as-built MVP stack
 
-**September 12, 2026 · browser implementation checkpoint `2640360` · current diagram updated before the documentation push.**
+**September 12, 2026 · browser checkpoint `2640360` · remote sync integration `77c03da` · current diagram updated before the documentation push.**
 
 Reva has a native SwiftUI iPhone app, a responsive React browser client, and a shared Swift server. Both clients run the same fictional local demo and retain source provenance. Provider adapters are implemented and tested with mocks; their accounts/credentials and a live Tiger database remain manual setup. The app never needs provider keys to demonstrate the local patient journey. The [revised MVP goal](mvp-goal.md), [setup guide](../README.md), [API contract](task-specs/mvp-api-contract.md), and [verification evidence](verification/README.md) define the delivered scope.
 
@@ -192,14 +192,14 @@ New audio never receives the sample transcript. Recording pauses when the app le
 
 | Storage | What it holds | Consistency boundary |
 | --- | --- | --- |
-| iPhone App Support | Medical profile, records including structured symptom entries, visits/reports, bookings, recordings/transcripts; original document/audio files | Atomic snapshot plus one backup; originals are separately written |
+| iPhone App Support | Medical profile, records including structured symptom entries, visits/reports, bookings, recordings/transcripts; original document/audio files | Atomic snapshot plus one backup; pulled originals stage without overwriting conflicting local bytes |
 | Browser IndexedDB | Native-compatible snapshot, local revision, original document/audio Blobs | Atomic snapshot/CAS and downloaded-original transaction; quota errors visible; no silent reset |
 | Local Swift server | Owner-scoped snapshot/revision and bounded attachments | Single writer, atomic owner-file replacement |
 | Tiger PostgreSQL | `reva_owner_state` JSONB, `reva_attachments` BYTEA, `reva_mutations` audit | Owner row lock and transactional mutation; parameter binding and verified TLS |
 | Server call-receipt directory | Reviewed request, durable intent, conversation ID/status | Owner/request identity, file sync/rename, process lock; retained independently of snapshots |
 | Provider services | Only content explicitly submitted for that operation | External account policies and credentials; no automatic account provisioning |
 
-Server snapshot push uses a base revision. Conflict resolution is explicit. Attachment transfers and snapshot commits are separate operations; a failed sync can leave already-copied files, so this MVP does not claim atomic rollback across both. Root `.env` stays untracked. Client access tokens remain in memory for the session; provider keys never enter either client. Browser originals are SHA256-checked before fixture fallback; source IDs, page/version citations and all three demo report hashes match the native engine. See the [compatibility limits](../apps/web/src/core/COMPATIBILITY.md).
+Native transfers now deduplicate filenames, capture the source snapshot and connection generation, and reject newer local edits or conflicting original bytes during pull. Browser pulls commit their downloaded originals and revision-checked snapshot in one IndexedDB transaction; the two clients retain their respective storage boundaries. Server snapshot push uses a base revision. Conflict resolution is explicit. Attachment transfers and snapshot commits are separate operations; a failed sync can leave already-copied files, so this MVP does not claim atomic rollback across both. Root `.env` stays untracked. Client access tokens remain in memory for the session; provider keys never enter either client. Browser originals are SHA256-checked before fixture fallback; source IDs, page/version citations and all three demo report hashes match the native engine. See the [compatibility limits](../apps/web/src/core/COMPATIBILITY.md).
 
 ## Three-person development map
 

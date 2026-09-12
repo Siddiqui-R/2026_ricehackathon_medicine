@@ -4,12 +4,15 @@
 // Side effects: Reads/writes local state; recovers/reset fixtures and stores session settings.
 
 import Combine
-import Foundation
 
 // MARK: - Observable state owner
 // Keep view state on the main actor; mutate publishes only after repository save succeeds.
+import Foundation
+
 @MainActor final class AppStore: ObservableObject {
-    @Published var snapshot: AppSnapshot?
+    @Published var snapshot: AppSnapshot? {
+        didSet { snapshotGeneration = UUID() }
+    }
     @Published var errorMessage: String?
     @Published var startupError: String?
     @Published var notice: String?
@@ -21,19 +24,39 @@ import Foundation
     @Published var isProviderBusy = false
     @Published var connectionURL =
         UserDefaults.standard.string(forKey: "serverURL") ?? "http://127.0.0.1:8080"
-    @Published var connectionToken = "reva-local-demo-token"
+    {
+        didSet { if connectionURL != oldValue { connectionDidChange() } }
+    }
+    @Published var connectionToken = "reva-local-demo-token" {
+        didSet { if connectionToken != oldValue { connectionDidChange() } }
+    }
     @Published var useConnectedAI = false
     let repository: LocalRepository
     var serverIdentity = ""
+    private(set) var snapshotGeneration = UUID()
+    private(set) var connectionGeneration = UUID()
+    var providerDiscoveryID = UUID()
+
+    // MARK: - Invalidate in-flight connection results
+    // A generation also catches switching away and back while an old request is suspended.
+    private func connectionDidChange() {
+        connectionGeneration = UUID()
+        serverIdentity = ""
+        serverRevision = 0
+        serverConflictRevision = nil
+        serverStatus = "Not connected"
+        providerStatus = nil
+        useConnectedAI = false
+    }
 
     // MARK: - Startup and recovery
     // Restore a valid snapshot, repair known demo labels/interrupted simulations, or load bundled fixtures.
-    init() {
+    init(repository: LocalRepository? = nil) {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Reva", isDirectory: true)
-        repository = LocalRepository(directory: root)
+        self.repository = repository ?? LocalRepository(directory: root)
         do {
-            if let loaded = try repository.load() {
+            if let loaded = try self.repository.load() {
                 snapshot = loaded.snapshot
                 if loaded.recovered {
                     notice = "Recovered the last valid checkpoint. Your original files remain available."
@@ -75,8 +98,8 @@ import Foundation
     var visits: [Visit] { (snapshot?.visits ?? []).sorted { $0.date < $1.date } }
     var bookings: [BookingRequest] { snapshot?.bookings ?? [] }
     var recordings: [VisitRecording] { snapshot?.recordings ?? [] }
-    func record(_ id: String) -> MedicalRecord? { records.first { $0.id == id } }
-    func visit(_ id: String) -> Visit? { visits.first { $0.id == id } }
+    func record(_ id: String) -> MedicalRecord? { snapshot?.records.first { $0.id == id } }
+    func visit(_ id: String) -> Visit? { snapshot?.visits.first { $0.id == id } }
     func booking(_ id: String) -> BookingRequest? { bookings.first { $0.id == id } }
     func recording(_ id: String) -> VisitRecording? { recordings.first { $0.id == id } }
     func sourceURL(_ record: MedicalRecord) -> URL? { record.sourceFilename.flatMap(sourceURL) }

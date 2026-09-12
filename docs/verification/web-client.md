@@ -1,6 +1,6 @@
 # Browser extension verification
 
-September 12, 2026 · implementation `2640360` · native/audio `480bdae` · selected palette `678e742`.
+September 12, 2026 · implementation `2640360` · native/audio `480bdae` · selected palette `678e742`. Final integration also includes remote sync checkpoint `77c03da`.
 
 The browser is a dedicated React interface using Reva's existing native JSON/API contract. It is locally served, not deployed to revamed.health. Tests and UI checks used fictional fixtures only. No live AI, transcription provider, clinic call, or Tiger database was invoked.
 
@@ -13,7 +13,8 @@ The browser is a dedicated React interface using Reva's existing native JSON/API
 | TypeScript and Vite production build | Passed; main JavaScript about 387 KB / 116 KB gzip; PDF/OCR libraries and workers load separately when used |
 | Native Swift tests | 43 passed; 1 explicitly gated real-server test skipped in this run |
 | Swift server tests | 30 passed; 1 live PostgreSQL test skipped; parameterized WebM/Ogg transcription tests retain filename, MIME and exact bytes |
-| Native Xcode simulator build | Passed with the selected heart-red patch and browser-audio interoperability changes |
+| Merged optimization harness | Six regression groups passed against production state/storage/provider logic; expanded deduplicated M4A/WebM/Ogg upload, bytes, failure and retry checks |
+| Native Xcode simulator build | Passed again after merging remote sync improvements, the selected heart-red patch and browser-audio interoperability changes |
 | Formatting and structure | Prettier, modified Swift formatting, Git whitespace check passed; 71 Swift and 50 browser source files have responsibility contracts and named sections |
 
 Reproduce the browser checks from `apps/web` with `npm ci`, `npm test`, `node --test scripts/serve.test.mjs`, `npm run format:check`, and `npm run build`. Run `python3 scripts/check_code_structure.py` from the repository root. HTTP tests open only temporary loopback listeners. Earlier native real-client/Vapor checks remain in the historical verification sheet.

@@ -141,3 +141,11 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Fixed queued visit edits, stale microphone permission callbacks, durable live-call UI state, matching report prose duplication, and header label accessibility during integration. Added a fixed-destination bounded production proxy; regression tests verify an absolute request cannot select another host. Provider keys remain server-only and no real call/paid request ran.
 - Production browser verification covered PDF values/units and retained original, local image OCR with Needs review, page-two implant citation, simulated booking, transcript correction to saved memory, real unconfigured-service discovery, fixture reset and 25 responsive route/width combinations without overflow. Development symptom/profile saves survived reload. Exact tested and untested scope is in docs/verification/web-client.md.
 - Captured desktop/phone screenshots, updated setup/three-person ownership/coding standard, and refreshed docs/architecture.md with the full native/browser/API/database/provider stack immediately before the documentation commit and push. The earlier seven-page packet and historical review worktrees remain preserved at their recorded baselines.
+
+
+## Concurrent remote integration before push
+
+- A final fetch found user commit `77c03da` (protect sync state and streamline source transfers), so delivery integrates it with a merge while retaining all checkpoints.
+- Resolved the single native sync conflict by retaining the remote deduplicated upload map and our filename-based audio MIME selection. Provider budget checks, snapshot/connection guards, staged original-file protection and the expanded credential ignore rules remain intact.
+- Re-ran the native package suite: 43 passed, one explicit gate skipped. The merged iPhone simulator build succeeded. Source responsibility checks still cover 71 Swift and 50 browser files. The remote focused optimization harness passed all six regression groups after adapting its network doubles to compile the exact production audio-type helper. The deduplicated upload regression covers M4A/WebM/Ogg MIME precedence, original bytes, failed push and explicit retry.
+- The current full-stack document now records the native staging behavior and browser IndexedDB boundary. No review worktree was changed.

@@ -3,12 +3,14 @@
 // Outputs: Decoded wire responses or user-readable transport errors.
 // Side effects: URLSession requests only; callers decide whether to persist results.
 
-import Foundation
-
 // MARK: - Wire error handling
 // Decode only the server error reason needed by the UI.
-private struct ProviderErrorBody: Decodable { var reason: String? }
+import Foundation
 
+/// Shared wire boundary. Provider secrets and provider-specific SDKs stay on the Swift server.
+// MARK: - Authenticated provider transport
+// All paid operations go through Reva rather than exposing provider credentials on the phone.
+private struct ProviderErrorBody: Decodable { var reason: String? }
 enum ProviderFailure: LocalizedError {
     case message(String)
     var errorDescription: String? {
@@ -16,10 +18,6 @@ enum ProviderFailure: LocalizedError {
         return nil
     }
 }
-
-/// Shared wire boundary. Provider secrets and provider-specific SDKs stay on the Swift server.
-// MARK: - Authenticated provider transport
-// All paid operations go through Reva rather than exposing provider credentials on the phone.
 struct ProviderClient {
     let baseURL: URL
     let token: String
@@ -65,9 +63,23 @@ struct ProviderClient {
     // MARK: - Configuration read
     // Use discovery to decide which feature controls can be offered.
     func status() async throws -> ProviderStatus { try await request("providers") }
+    // MARK: - Server request budgets
+    // Match GeminiModels' UTF-8 limits before uploading; never truncate original evidence.
+    private static func checkBudget(_ text: String, maximum: Int, field: String) throws {
+        guard text.utf8.count <= maximum else {
+            throw RevaError.invalid(
+                "\(field) exceeds the connected AI limit of \(maximum) UTF-8 bytes. Use a smaller reviewed source or local preparation. The original is unchanged."
+            )
+        }
+    }
+    private static func checkSourceBudget(_ record: MedicalRecord) throws {
+        try checkBudget(record.title, maximum: 240, field: "Source title")
+        try checkBudget(record.text, maximum: 120_000, field: "Source text for \(record.title.prefix(80))")
+    }
     // MARK: - Document summary request
     // Send only the selected record identity, title and text.
     func summarize(_ record: MedicalRecord) async throws -> AISummary {
+        try Self.checkSourceBudget(record)
         struct Input: Encodable {
             let recordID: String
             let title: String
@@ -80,6 +92,29 @@ struct ProviderClient {
     // MARK: - Visit preparation request
     // Send explicit candidate records and visit context; profile health fields are not part of this contract.
     func prepare(_ visit: Visit, records: [MedicalRecord]) async throws -> AIPreparation {
+        guard (1...100).contains(records.count), visit.questions.count <= 20 else {
+            throw RevaError.invalid(
+                "Connected preparation accepts 1–100 sources and at most 20 questions. Choose fewer sources/questions or use local preparation."
+            )
+        }
+        try Self.checkBudget(visit.type, maximum: 80, field: "Visit type")
+        try Self.checkBudget(visit.concern, maximum: 6000, field: "Visit concern")
+        try Self.checkBudget(visit.goal, maximum: 6000, field: "Visit goal")
+        for question in visit.questions {
+            try Self.checkBudget(question, maximum: 1000, field: "Discussion question")
+        }
+        var total = 0
+        for record in records {
+            try Self.checkSourceBudget(record)
+            try Self.checkBudget(record.date, maximum: 40, field: "Source date")
+            try Self.checkBudget(record.summary, maximum: 8000, field: "Source summary")
+            total += record.text.utf8.count + record.summary.utf8.count
+        }
+        guard total <= 500_000 else {
+            throw RevaError.invalid(
+                "Connected preparation accepts at most 500000 UTF-8 bytes of source text and summaries. Choose fewer sources or use local preparation. Your originals are unchanged."
+            )
+        }
         struct VisitInput: Encodable {
             let id: String
             let type: String
