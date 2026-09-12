@@ -39,7 +39,6 @@ export function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeading
-        eyebrow={account ? 'YOUR ACCOUNT' : 'YOUR WORKSPACE'}
         title="Settings & connections"
         description={
           account

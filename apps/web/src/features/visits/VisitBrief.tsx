@@ -99,7 +99,6 @@ export function VisitBrief({ visit }: { visit: Visit }) {
     <Card className="brief-card">
       <div className="section-heading no-print">
         <div>
-          <p className="eyebrow">Before your appointment</p>
           <h2>Visit brief</h2>
         </div>
         <div className="row">

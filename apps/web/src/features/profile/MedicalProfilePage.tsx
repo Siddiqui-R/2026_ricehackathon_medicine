@@ -42,7 +42,6 @@ export function MedicalProfilePage() {
   return (
     <div className="stack">
       <PageHeading
-        eyebrow="Your health at a glance"
         title="Medical profile"
         actions={
           <>

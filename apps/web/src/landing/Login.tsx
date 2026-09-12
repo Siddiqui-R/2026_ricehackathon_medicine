@@ -43,7 +43,6 @@ export function Login() {
   }
   return (
     <AccountShell
-      eyebrow="Log in"
       title="Welcome back."
       lede="Your records, questions and visit notes, exactly where you left them."
     >

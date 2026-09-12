@@ -37,7 +37,6 @@ export function VisitsPage() {
   return (
     <div className="stack">
       <PageHeading
-        eyebrow="Your care"
         title="Visits"
         description="Bring the right history and the questions that matter."
         actions={

@@ -9,12 +9,10 @@ import { Brand } from '../components/Brand';
 
 // MARK: - Page shell: the landing header/footer with a narrow reading measure for one form
 export function AccountShell({
-  eyebrow,
   title,
   lede,
   children,
 }: {
-  eyebrow?: string;
   title: string;
   lede: string;
   children: ReactNode;
@@ -27,12 +25,6 @@ export function AccountShell({
         </a>
       </header>
       <main className="landing-hero" id="main">
-        {eyebrow && (
-          <p className="landing-eyebrow">
-            <span className="landing-dot" aria-hidden="true" />
-            {eyebrow}
-          </p>
-        )}
         <h1>{title}</h1>
         <p className="landing-lede">{lede}</p>
         {children}

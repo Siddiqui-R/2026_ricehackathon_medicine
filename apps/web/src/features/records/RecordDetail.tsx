@@ -115,7 +115,6 @@ export function RecordDetail({ id }: { id: string }) {
         <ArrowLeft size={17} /> All records
       </a>
       <PageHeading
-        eyebrow={record.kind}
         title={demoLabel(record.title, record.isDemo)}
         description={`${demoLabel(record.provider, record.isDemo)} · ${formatDate(record.date)}`}
         actions={

@@ -48,7 +48,6 @@ export function Dashboard() {
     <div className="dashboard">
       <div className="dashboard-welcome">
         <div>
-          <p className="eyebrow">YOUR HEALTH, TOGETHER</p>
           <h1>
             Hello, {firstName}
             <span className="greeting-dot">.</span>

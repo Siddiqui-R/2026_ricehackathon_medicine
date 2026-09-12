@@ -54,12 +54,10 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 export function PageHeading({
-  eyebrow,
   title,
   description,
   actions,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -67,7 +65,6 @@ export function PageHeading({
   return (
     <div className="page-heading">
       <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p className="page-description">{description}</p>}
       </div>

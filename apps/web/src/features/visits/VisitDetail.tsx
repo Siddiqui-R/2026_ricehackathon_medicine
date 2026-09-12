@@ -35,7 +35,6 @@ export function VisitDetail({ id }: { id: string }) {
       </a>
       <div className="no-print">
         <PageHeading
-          eyebrow={visit.type}
           title={visit.title}
           description={demoLabel(visit.provider, snapshot?.profile.isDemo)}
           actions={

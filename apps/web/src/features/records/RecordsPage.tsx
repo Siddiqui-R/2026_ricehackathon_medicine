@@ -66,7 +66,6 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
   return (
     <div className="stack">
       <PageHeading
-        eyebrow="Your health information"
         title="Records"
         description="Documents, symptom entries, and visit memories — together in one place."
         actions={
