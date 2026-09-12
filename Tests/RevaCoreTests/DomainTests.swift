@@ -84,4 +84,27 @@ final class DomainTests: XCTestCase {
         visit.questions = []
         XCTAssertEqual(ReportEngine.generate(visit: visit, records: data.records).questions, [])
     }
+    func testDocumentCalendarDateRoundtripsWithoutTimeZoneShift() {
+        for value in ["2019-04-18", "2026-09-12", "2026-01-01"] {
+            XCTAssertEqual(RevaDate.day(RevaDate.parse(value)), value)
+        }
+    }
+    func testLongGenericImportFindsEvidenceBeyondOpeningSummary() throws {
+        let data = try fixture()
+        var visit = data.visits[0]
+        visit.type = "Orthopedics"; visit.concern = "Implant location"; visit.goal = "Review hardware"
+        var record = data.records[0]
+        record.id = "generic-long-import"; record.title = "Uploaded document"; record.tags = []
+        record.text = Array(repeating: "Administrative information retained for this appointment.", count: 40).joined(separator: "\n") + "\nImplant location: RIGHT TIBIA. Hardware retained.\nNo additional procedure documented."
+        record.summary = ReportEngine.localExcerpt(record.text)
+        record.pageTexts = [record.text]; record.pageCount = 1; record.isDemo = false
+        XCTAssertFalse(record.summary.contains("RIGHT TIBIA"))
+        let report = ReportEngine.generate(visit: visit, records: [record])
+        XCTAssertEqual(report.selectedRecordIDs, [record.id])
+        let source = try XCTUnwrap(report.sections.flatMap(\.sources).first)
+        XCTAssertTrue(source.excerpt.contains("Implant location: RIGHT TIBIA"))
+        XCTAssertTrue(source.excerpt.contains("No additional procedure documented."))
+        XCTAssertEqual(source.page, 1)
+        XCTAssertTrue(record.text.contains(source.excerpt))
+    }
 }

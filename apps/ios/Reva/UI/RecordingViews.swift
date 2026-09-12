@@ -51,6 +51,7 @@ struct RecordingDetailView: View {
     @StateObject private var playback = AudioPlayback()
     let id: String
     @State private var editing = false
+    @State private var editingTranscript = false
     @State private var deleting = false
     @State private var memorySaved = false
     var body: some View {
@@ -67,26 +68,82 @@ struct RecordingDetailView: View {
                     }
                 }
                 if !recording.isSample { StatusNotice(title: "Transcription not connected", message: "This is your actual saved audio. Add your own notes below; a generated transcript will require a configured service.") }
-                if !recording.summary.isEmpty { RevaCard { Text(recording.isSample ? "Sample visit memory" : "Your visit notes").font(.headline); Text(recording.summary).textSelection(.enabled) } }
+                if !recording.summary.isEmpty {
+                    RevaCard {
+                        Text("Separate visit notes").font(.headline)
+                        Text(recording.summary).textSelection(.enabled)
+                        Text("These editable notes are separate from the transcript. Correcting transcript text does not rewrite them.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 if !recording.segments.isEmpty {
+                    RevaCard {
+                        Text(recording.isSample ? "Local excerpt of sample transcript" : "Local excerpt of transcript").font(.headline)
+                        Text(ReportEngine.localExcerpt(recording.segments.map { "[\(RevaDate.duration($0.start))] \($0.speaker): \($0.text)" }.joined(separator: "\n\n"))).textSelection(.enabled)
+                        Text("From the current transcript text. Corrections update this excerpt and any memory already saved to Records.").font(.caption).foregroundStyle(.secondary)
+                    }
                     SectionHeading(title: "Transcript")
                     RevaCard {
                         ForEach(recording.segments) { segment in
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack { Text(segment.speaker).font(.caption.bold()).foregroundStyle(RevaTheme.accent); Spacer(); Text(RevaDate.duration(segment.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                                HStack { Text(segment.speaker).font(.caption.bold()).foregroundStyle(RevaTheme.accent); Spacer(); Text(RevaDate.duration(segment.start) + "–" + RevaDate.duration(segment.end)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                                 Text(segment.text).font(.subheadline).textSelection(.enabled)
                             }.padding(.vertical, 8)
                         }
                     }
+                    Button("Edit transcript text") { editingTranscript = true }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
                 }
                 Button("Edit visit notes") { editing = true }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
-                Button(memorySaved ? "Memory saved to Records" : "Save visit memory to Records") { if store.perform({ try store.saveMemory(recordingID: id) }) { memorySaved = true } }.buttonStyle(PrimaryButtonStyle()).disabled(recording.segments.isEmpty && recording.summary.isEmpty)
+                Button(memorySaved || store.records.contains(where: { $0.sourceRecordingID == id || $0.id == "memory-" + id }) ? "Update memory in Records" : "Save visit memory to Records") { if store.perform({ try store.saveMemory(recordingID: id) }) { memorySaved = true } }.buttonStyle(PrimaryButtonStyle()).disabled(recording.segments.isEmpty && recording.summary.isEmpty)
                 Button("Delete recording", role: .destructive) { deleting = true }.frame(maxWidth: .infinity).padding(.top, 8)
             }.navigationTitle("Visit memory").navigationBarTitleDisplayMode(.inline)
                 .sheet(isPresented: $editing) { NavigationStack { RecordingNotesEditor(recording: recording) } }
+                .sheet(isPresented: $editingTranscript) { NavigationStack { TranscriptTextEditor(recording: recording) } }
                 .confirmationDialog("Delete this recording from your local history? Saved record memories remain in Records.", isPresented: $deleting, titleVisibility: .visible) { Button("Delete recording", role: .destructive) { playback.stop(); if store.perform({ try store.mutate { $0.recordings.removeAll { $0.id == id } } }) { dismiss() } } }
                 .onDisappear { playback.stop() }
         } else { ContentUnavailableView("Recording unavailable", systemImage: "waveform") }
+    }
+}
+struct TranscriptTextEditor: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    private let recordingID: String
+    @State private var segments: [TranscriptSegment]
+
+    init(recording: VisitRecording) {
+        recordingID = recording.id
+        _segments = State(initialValue: recording.segments)
+    }
+
+    private var valid: Bool {
+        !segments.isEmpty && segments.allSatisfy { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.text.count <= 20_000 }
+            && segments.reduce(0, { $0 + $1.text.count }) <= 200_000
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Correct the words in the existing transcript. Speaker labels and recording-relative times stay the same. Your separate visit notes are kept; an already-saved memory refreshes from these corrections.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            ForEach($segments) { $segment in
+                Section {
+                    TextEditor(text: $segment.text).frame(minHeight: 140)
+                        .accessibilityLabel("Transcript text for \(segment.speaker) at \(RevaDate.duration(segment.start))")
+                } header: {
+                    Text(segment.speaker + " · " + RevaDate.duration(segment.start) + "–" + RevaDate.duration(segment.end))
+                }
+            }
+            if !valid { Text("Each segment needs text. Keep individual segments below 20,000 characters and the whole transcript below 200,000.").font(.footnote).foregroundStyle(.secondary) }
+        }
+        .navigationTitle("Edit transcript").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save corrections") {
+                    let texts = Dictionary(segments.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })
+                    if store.perform({ try store.saveMemory(recordingID: recordingID, correctedSegmentTexts: texts) }) { dismiss() }
+                }.disabled(!valid)
+            }
+        }
     }
 }
 struct RecordingNotesEditor: View {

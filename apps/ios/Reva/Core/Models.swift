@@ -29,6 +29,7 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
     var isDemo: Bool = false
     var version: Int = 1
     var pageTexts: [String]?
+    var sourceRecordingID: String? = nil
 
     var symbol: String {
         switch kind {
@@ -155,7 +156,7 @@ enum RevaDate {
         return day.date(from: text) ?? .distantPast
     }
     static func iso(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
-    static func day(_ date: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date) }
+    static func day(_ date: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(secondsFromGMT: 0); return f.string(from: date) }
     static func display(_ text: String, time: Bool = false, zone: String? = nil) -> String {
         let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = time ? .short : .none
         f.timeZone = time ? (zone.flatMap(TimeZone.init(identifier:)) ?? .current) : TimeZone(secondsFromGMT: 0)

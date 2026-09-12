@@ -139,8 +139,7 @@ struct ReportView: View {
     @EnvironmentObject private var store: AppStore
     let visitID: String
     @State private var edit = false
-    @State private var exportURL: URL?
-    @State private var export = false
+    @State private var exportDocument: ExportDocument?
     var body: some View {
         Group {
             if let visit = store.visit(visitID), let report = visit.report {
@@ -171,17 +170,21 @@ struct ReportView: View {
                 }.sheet(isPresented: $edit) { NavigationStack { ReportEditorView(visit: visit) } }
             } else { ContentUnavailableView("No brief yet", systemImage: "doc.text", description: Text("Generate a brief from the visit screen.")) }
         }.navigationTitle("Visit brief").navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $export) { if let exportURL { SourcePreview(url: exportURL, title: "Visit brief") } }
+            .sheet(item: $exportDocument) { document in SourcePreview(url: document.url, title: "Visit brief") }
     }
     private func exportReport(_ visit: Visit, _ report: VisitReport) {
         store.perform {
             var sections = report.sections.map { section in PDFSection(title: section.title, body: section.body + (section.sources.isEmpty ? "" : "\n\nSource: " + section.sources.map { "\(store.record($0.recordID)?.title ?? "Missing") · \($0.locationLabel)" }.joined(separator: "; "))) }
             sections.append(PDFSection(title: "Questions to bring", body: report.questions.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")))
             if !report.notes.isEmpty { sections.append(PDFSection(title: "Your notes", body: report.notes)) }
-            exportURL = try ReportPDFRenderer.render(title: "Reva · " + visit.title, subtitle: "Local demo brief · " + RevaDate.display(visit.date, time: true, zone: visit.timeZone), sections: sections, sources: report.selectedRecordIDs.compactMap { store.record($0) }.map { "\($0.title) · \(RevaDate.display($0.date)) · source version \($0.version)" })
-            export = true
+            let url = try ReportPDFRenderer.render(title: "Reva · " + visit.title, subtitle: "Local demo brief · " + RevaDate.display(visit.date, time: true, zone: visit.timeZone), sections: sections, sources: report.selectedRecordIDs.compactMap { store.record($0) }.map { "\($0.title) · \(RevaDate.display($0.date)) · source version \($0.version)" })
+            exportDocument = ExportDocument(url: url)
         }
     }
+}
+struct ExportDocument: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 struct ReportEditorView: View {
     @EnvironmentObject private var store: AppStore

@@ -34,7 +34,7 @@ For a physical iPhone, choose your own development team/signing in Xcode. Camera
 - **Visits:** compare the orthopedic brief, including the historical implant inventory on page2. Open its source, pin additional records, and edit questions.
 - **Records:** search/filter, open an original, add a fictional sample or import a PDF/text/image, review its extraction and save. Edit a source and regenerate an out-of-date brief.
 - **Booking:** review a clinic/date window and run an explicitly simulated success, needs-input, or no-answer scenario. Confirming updates the existing local visit once.
-- **Visit memory:** open the separate fictional transcript, edit notes, and save its memory to Records. New microphone recordings never receive this sample transcript.
+- **Visit memory:** open the separate fictional transcript, correct its text or edit separate notes, and save its memory to Records. Saved memories link back to their transcript. New microphone recordings never receive this sample transcript.
 - **Share:** export the current visit brief to a paginated PDF using the native preview/share control.
 - **Profile & settings:** choose appearance, inspect connection status, and explicitly restore the fictional demo.
 
@@ -68,7 +68,7 @@ swift build -j 6
 swift run --skip-build RevaAPI
 ```
 
-Local defaults: `http://127.0.0.1:8080`, public demo token `reva-local-demo-token`, loopback only. In the simulator, **Profile & settings → Developer server connection** offers explicit probe/push/pull. The local snapshot remains authoritative between these actions. Conflicts are visible and require choosing which snapshot to keep; no network failure silently swaps in demo data.
+Local defaults: `http://127.0.0.1:8080`, public demo token `reva-local-demo-token`, loopback only. In the simulator, **Profile & settings → Developer server connection** offers explicit probe/push/pull. The local snapshot remains authoritative between these actions. Conflicts are visible and require choosing which snapshot to keep; no network failure silently swaps in demo data. Attachment transfers and snapshot commits are separate operations, so a failed sync can leave already-transferred files; this developer tool does not provide atomic file-plus-state rollback.
 
 The working folder’s root `.env` is intentionally **zero bytes** and ignored by Git. A fresh clone can create it with `touch .env`. [Root example](.env.example) and [server example](server/.env.example) contain documentation/placeholders only. The server reads exported environment variables; it does not automatically load dotenv files. The iOS app does not read server secrets or `.env`. No API configuration is needed to run the demo.
 

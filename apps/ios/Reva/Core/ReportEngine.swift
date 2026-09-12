@@ -36,7 +36,7 @@ enum ReportEngine {
         if terms.contains("nausea") || terms.contains("palpitations") { terms.formUnion(groups[3]) }
         return records.compactMap { record -> (MedicalRecord, Int)? in
             if visit.pinnedRecordIDs.contains(record.id) { return (record, 1000) }
-            let index = (record.title + " " + record.tags.joined(separator: " ") + " " + record.summary).lowercased()
+            let index = (record.title + " " + record.tags.joined(separator: " ") + " " + record.summary + " " + record.text).lowercased()
             let context = record.tags.contains { ["context", "medications", "allergies", "medical-history", "medical history"].contains($0.lowercased()) }
             let indexedWords = Set(index.split { !$0.isLetter }.map { String($0) })
             let count = terms.intersection(indexedWords).count
@@ -65,7 +65,7 @@ enum ReportEngine {
                 return left == right ? lhs.offset < rhs.offset : left < right
             }?.offset ?? 0
             let pageText = pages.indices.contains(pageIndex) ? pages[pageIndex] : record.text
-            let excerpt = localExcerpt(pageText)
+            let excerpt = relevantExcerpt(pageText, focusWords: focusWords)
             let caveat = record.needsReview ? "Needs review: verify this extraction against the original.\n\n" : ""
             let sourcePage = (record.pageTexts?.isEmpty == false) ? pageIndex + 1 : 0
             sections.append(ReportSection(title: record.title, body: caveat + excerpt, sources: [SourceReference(recordID: record.id, page: sourcePage, excerpt: excerpt, sourceVersion: record.version)]))
@@ -73,6 +73,20 @@ enum ReportEngine {
         sections.append(ReportSection(title: "Information to confirm", body: selected.isEmpty ? "No matching records were found. Add records or pin documents you want to discuss. Missing records do not establish that a condition is absent." : "Confirm current medications, allergies, symptom timing, and any changes since these records were written. This brief contains selected source excerpts; it is not a clinical assessment.", sources: []))
         let suggested = ["Which parts of my history matter most for this concern?", "What should I track before our next visit?", "What are the next steps, and when should I follow up?"]
         return VisitReport(visitID: visit.id, sourceSignature: signature(visit: visit, records: records), sections: sections, questions: visit.questions.isEmpty && visit.report == nil ? suggested : visit.questions, notes: visit.notes, selectedRecordIDs: selected.map(\.id))
+    }
+
+    /// Keep a contiguous source passage. If the opening excerpt has no focus terms,
+    /// look deeper in a long page instead of citing an unrelated introduction.
+    private static func relevantExcerpt(_ text: String, focusWords: Set<String>) -> String {
+        let opening = localExcerpt(text)
+        func score(_ value: String) -> Int {
+            focusWords.intersection(Set(value.lowercased().split { !$0.isLetter }.map(String.init))).count
+        }
+        guard score(opening) == 0 else { return opening }
+        let lines = contentLines(text)
+        guard let match = lines.indices.max(by: { score(lines[$0]) < score(lines[$1]) }), score(lines[match]) > 0 else { return opening }
+        let start = max(0, match - 2)
+        return String(lines.dropFirst(start).prefix(24).joined(separator: "\n").prefix(1800))
     }
 }
 

@@ -15,7 +15,7 @@ struct RecordsView: View {
     var filtered: [MedicalRecord] {
         store.records.filter { record in
             (filter == "All" || (filter == "Needs review" ? record.needsReview : record.kind == filter)) &&
-            (query.isEmpty || (record.title + " " + record.provider + " " + record.tags.joined(separator: " ") + " " + record.text).localizedCaseInsensitiveContains(query))
+            (query.isEmpty || ([record.title, record.provider, record.tags.joined(separator: " "), record.text, record.summary, record.date, RevaDate.display(record.date)].joined(separator: " ")).localizedCaseInsensitiveContains(query))
         }
     }
     var body: some View {
@@ -69,6 +69,13 @@ struct RecordDetailView: View {
                     if store.sourceURL(record) != nil {
                         Button { original = true } label: { Label(sourcePage > 0 ? "Open original · page \(sourcePage)" : "Open original", systemImage: "doc.richtext") }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
                     }
+                    if let recordingID = record.sourceRecordingID {
+                        if store.recording(recordingID) != nil {
+                            NavigationLink { RecordingDetailView(id: recordingID) } label: { Label("Open visit transcript", systemImage: "text.bubble") }.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
+                        } else {
+                            StatusNotice(title: "Source transcript unavailable", message: "The originating recording was deleted or is no longer available. This saved memory retains its text.", symbol: "text.bubble")
+                        }
+                    }
                     if !record.notes.isEmpty { RevaCard { Text("Notes").font(.headline); Text(record.notes).textSelection(.enabled) } }
                     RevaCard {
                         DisclosureGroup("Full extracted text") { Text(record.text.isEmpty ? "No text extracted. Add a correction using Edit." : record.text).font(.subheadline).textSelection(.enabled).padding(.top, 10) }
@@ -96,7 +103,7 @@ struct RecordEditorView: View {
     private var textPresent: Bool { !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
         Form {
-            Section("Record details") { TextField("Title", text: $record.title); TextField("Provider", text: $record.provider); DatePicker("Record date", selection: Binding(get: { RevaDate.parse(record.date) }, set: { record.date = RevaDate.day($0) }), displayedComponents: .date) }
+            Section("Record details") { TextField("Title", text: $record.title); TextField("Provider", text: $record.provider); DatePicker("Record date", selection: Binding(get: { RevaDate.parse(record.date) }, set: { record.date = RevaDate.day($0) }), displayedComponents: .date).environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current) }
             Section { TextEditor(text: $record.text).frame(minHeight: 220) } header: { Text("Extracted text") } footer: { Text("Keep the original wording, values, and units. Changing text refreshes the local excerpt and marks existing briefs out of date. Check source details again after a correction. Title, date, and notes edits keep the summary.") }
             Section("Your notes") { TextEditor(text: $record.notes).frame(minHeight: 100) }
             Section { Toggle("I checked the text against the source", isOn: $reviewed) }
@@ -192,7 +199,7 @@ struct AddRecordView: View {
     private func preview(_ item: ImportedDocument) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             ModeBadge(text: "ON-DEVICE EXTRACTION")
-            RevaCard { TextField("Title", text: $title).font(.headline); DatePicker("Record date", selection: $recordDate, displayedComponents: .date); Text("Choose the date shown on your record.").font(.caption).foregroundStyle(.secondary) }
+            RevaCard { TextField("Title", text: $title).font(.headline); DatePicker("Record date", selection: $recordDate, displayedComponents: .date).environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current); Text("Choose the date shown on your record.").font(.caption).foregroundStyle(.secondary) }
             ForEach(item.warnings, id: \.self) { warning in StatusNotice(title: "Check the extraction", message: warning, symbol: "exclamationmark.circle") }
             RevaCard { Text("Extracted text").font(.headline); TextEditor(text: $text).frame(minHeight: 220); Toggle("I reviewed the text against the source", isOn: $verified) }
             RevaCard { Text("Local excerpt").font(.headline); Text(ReportEngine.localExcerpt(text).isEmpty ? "No readable text. Add a transcription above or save for review." : ReportEngine.localExcerpt(text)).font(.subheadline); Text("Generated automatically on this device. No cloud model ran.").font(.caption).foregroundStyle(.secondary) }
