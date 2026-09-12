@@ -1,5 +1,12 @@
+// Purpose: Define persisted patient, record, visit and snapshot contracts.
+// Inputs: Decoded JSON and user/domain values.
+// Outputs: Codable value types and snapshot validation errors.
+// Side effects: None; file references describe originals without opening them.
+
 import Foundation
 
+// MARK: - Persistent medical profile
+// Quick-reference health fields; optional additions preserve decoding of older snapshots.
 struct PatientProfile: Codable, Equatable {
     var id: String
     var name: String
@@ -13,6 +20,8 @@ struct PatientProfile: Codable, Equatable {
     var careNotes: String? = nil
 }
 
+// MARK: - Versioned source record
+// Keep original provenance, extracted wording, summary origin and optional symptom structure together.
 struct MedicalRecord: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var title: String
@@ -47,9 +56,14 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
         }
     }
     var needsReview: Bool { status == "needsReview" }
-    var summaryLabel: String { summaryModel.map { "AI summary · " + $0 } ?? (symptomEntry != nil ? "Your entry" : isDemo ? "Demo summary" : "Local excerpt") }
+    var summaryLabel: String {
+        summaryModel.map { "AI summary · " + $0 }
+            ?? (symptomEntry != nil ? "Your entry" : isDemo ? "Demo summary" : "Local excerpt")
+    }
 }
 
+// MARK: - Report citation
+// Identify exact source record/version and page; page zero denotes unpaginated record text.
 struct SourceReference: Codable, Identifiable, Equatable {
     var recordID: String
     var page: Int
@@ -58,12 +72,18 @@ struct SourceReference: Codable, Identifiable, Equatable {
     var id: String { "\(recordID)-\(page)" }
     var locationLabel: String { page > 0 ? "p. \(page)" : "record text" }
 }
+// MARK: - Report section
+// Group readable content with its source references without performing selection.
 struct ReportSection: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var title: String
     var body: String
     var sources: [SourceReference]
 }
+// MARK: - Saved visit brief
+// Persist the source signature, evidence sections and user-facing questions/notes.
+// MARK: - Appointment context
+// Keep appointment intent, source pins and user-owned questions with the optional generated brief.
 struct VisitReport: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var visitID: String
@@ -92,6 +112,8 @@ struct Visit: Codable, Identifiable, Equatable {
     var status: String = "upcoming"
     var report: VisitReport?
 }
+// MARK: - Booking lifecycle value
+// Separate simulated and live state while preserving the stable request identity.
 struct BookingRequest: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var visitID: String
@@ -110,6 +132,8 @@ struct BookingRequest: Codable, Identifiable, Equatable {
     var providerConversationID: String? = nil
     var providerTranscript: String? = nil
 }
+// MARK: - Audio-relative transcript segment
+// Retain speaker text and offsets measured from the start of the source recording.
 struct TranscriptSegment: Codable, Identifiable, Equatable {
     var id: String
     var speaker: String
@@ -117,6 +141,8 @@ struct TranscriptSegment: Codable, Identifiable, Equatable {
     var end: Double
     var text: String
 }
+// MARK: - Visit recording and memory source
+// Tie optional original audio, reviewed segments and transcription provenance to a visit.
 struct VisitRecording: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var visitID: String
@@ -130,6 +156,8 @@ struct VisitRecording: Codable, Identifiable, Equatable {
     var status: String = "saved"
     var transcriptionModel: String? = nil
 }
+// MARK: - Persistence aggregate
+// Group related domain values for one atomic save and validate cross-object references.
 struct AppSnapshot: Codable, Equatable {
     var schemaVersion: Int = 1
     var profile: PatientProfile
@@ -139,38 +167,71 @@ struct AppSnapshot: Codable, Equatable {
     var recordings: [VisitRecording] = []
 
     func validate() throws {
-        guard schemaVersion == 1, !profile.id.isEmpty, !profile.name.isEmpty else { throw RevaError.invalid("This data version or profile is not supported.") }
+        guard schemaVersion == 1, !profile.id.isEmpty, !profile.name.isEmpty else {
+            throw RevaError.invalid("This data version or profile is not supported.")
+        }
         for ids in [records.map(\.id), visits.map(\.id), bookings.map(\.id), recordings.map(\.id)] {
-            guard Set(ids).count == ids.count, !ids.contains("") else { throw RevaError.invalid("The data contains duplicate or empty identifiers.") }
+            guard Set(ids).count == ids.count, !ids.contains("") else {
+                throw RevaError.invalid("The data contains duplicate or empty identifiers.")
+            }
         }
         let visitIDs = Set(visits.map(\.id))
-        guard bookings.allSatisfy({ visitIDs.contains($0.visitID) }), recordings.allSatisfy({ visitIDs.contains($0.visitID) }) else { throw RevaError.invalid("A booking or recording refers to a missing visit.") }
+        guard bookings.allSatisfy({ visitIDs.contains($0.visitID) }),
+            recordings.allSatisfy({ visitIDs.contains($0.visitID) })
+        else { throw RevaError.invalid("A booking or recording refers to a missing visit.") }
         let filenames = records.compactMap(\.sourceFilename) + recordings.compactMap(\.audioFilename)
-        guard filenames.allSatisfy(Self.safeFilename) else { throw RevaError.invalid("An attachment filename is invalid.") }
+        guard filenames.allSatisfy(Self.safeFilename) else {
+            throw RevaError.invalid("An attachment filename is invalid.")
+        }
     }
     static func safeFilename(_ name: String) -> Bool {
-        !name.isEmpty && name != "." && name != ".." && name.count <= 240 && !name.contains("/") && !name.contains("\\") && !name.contains("\0")
+        !name.isEmpty && name != "." && name != ".." && name.count <= 240 && !name.contains("/")
+            && !name.contains("\\") && !name.contains("\0")
     }
 }
+// MARK: - Domain errors
+// Carry user-readable validation failures without unrelated diagnostic payloads.
 enum RevaError: LocalizedError {
     case invalid(String)
-    var errorDescription: String? { switch self { case .invalid(let message): return message } }
+    var errorDescription: String? {
+        switch self {
+        case .invalid(let message): return message
+        }
+    }
 }
+// MARK: - Date and duration conventions
+// Normalize calendar days in UTC and display actual instants in the supplied zone.
 enum RevaDate {
     static var now: String { ISO8601DateFormatter().string(from: Date()) }
     static func parse(_ text: String) -> Date {
         if let date = ISO8601DateFormatter().date(from: text) { return date }
-        let formatter = ISO8601DateFormatter(); formatter.formatOptions.insert(.withFractionalSeconds)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions.insert(.withFractionalSeconds)
         if let date = formatter.date(from: text) { return date }
-        let day = DateFormatter(); day.locale = Locale(identifier: "en_US_POSIX"); day.dateFormat = "yyyy-MM-dd"; day.timeZone = TimeZone(secondsFromGMT: 0)
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.dateFormat = "yyyy-MM-dd"
+        day.timeZone = TimeZone(secondsFromGMT: 0)
         return day.date(from: text) ?? .distantPast
     }
     static func iso(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
-    static func day(_ date: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(secondsFromGMT: 0); return f.string(from: date) }
+    static func day(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f.string(from: date)
+    }
     static func display(_ text: String, time: Bool = false, zone: String? = nil) -> String {
-        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = time ? .short : .none
-        f.timeZone = time ? (zone.flatMap(TimeZone.init(identifier:)) ?? .current) : TimeZone(secondsFromGMT: 0)
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = time ? .short : .none
+        f.timeZone =
+            time ? (zone.flatMap(TimeZone.init(identifier:)) ?? .current) : TimeZone(secondsFromGMT: 0)
         return f.string(from: parse(text))
     }
-    static func duration(_ seconds: Double) -> String { let value = max(0, Int(seconds)); return String(format: "%d:%02d", value / 60, value % 60) }
+    static func duration(_ seconds: Double) -> String {
+        let value = max(0, Int(seconds))
+        return String(format: "%d:%02d", value / 60, value % 60)
+    }
 }

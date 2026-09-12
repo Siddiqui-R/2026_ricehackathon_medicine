@@ -1,14 +1,25 @@
+// Purpose: Exercise the real native client against the opt-in temporary localhost Vapor test server.
+// Inputs: Harness-supplied listener and owner tokens plus checked-in synthetic snapshots and source files.
+// Outputs: XCTest assertions and a verification message for auth, revisions, attachments, and owner isolation.
+// Side effects: When explicitly enabled, sends real loopback requests that mutate test-owner state and attachments; invalidates its session afterward.
+
 import Foundation
 import XCTest
+
 @testable import RevaCore
 
 /// Real URLSession requests, enabled only by scripts/test_client_server.py.
 final class LiveServerTests: XCTestCase {
+    // MARK: - Fixture location and expected failure helpers
+
     private var root: URL {
-        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
-    private func expectEmpty(_ client: ServerClient, revision: Int, file: StaticString = #filePath, line: UInt = #line) async {
+    private func expectEmpty(
+        _ client: ServerClient, revision: Int, file: StaticString = #filePath, line: UInt = #line
+    ) async {
         do {
             _ = try await client.pull()
             XCTFail("Expected missing state with revision \(revision).", file: file, line: line)
@@ -20,8 +31,10 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
-    private func expectConflict(_ client: ServerClient, snapshot: AppSnapshot, revision: Int,
-                                file: StaticString = #filePath, line: UInt = #line) async {
+    private func expectConflict(
+        _ client: ServerClient, snapshot: AppSnapshot, revision: Int,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
         do {
             _ = try await client.push(snapshot, revision: revision)
             XCTFail("Expected a stale-revision conflict.", file: file, line: line)
@@ -32,8 +45,10 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
-    private func expectHTTPFailure<T>(_ status: Int, operation: () async throws -> T,
-                                      file: StaticString = #filePath, line: UInt = #line) async {
+    private func expectHTTPFailure<T>(
+        _ status: Int, operation: () async throws -> T,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
         do {
             _ = try await operation()
             XCTFail("Expected HTTP \(status).", file: file, line: line)
@@ -45,10 +60,16 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
+    // MARK: - Opt-in localhost integration
+
     func testNativeURLSessionClientAgainstLocalVapor() async throws {
+        // MARK: - Harness gate and isolated owner sessions
+
         let environment = ProcessInfo.processInfo.environment
         guard environment["REVA_RUN_LIVE_CLIENT_TESTS"] == "1" else {
-            throw XCTSkip("Run python3 scripts/test_client_server.py to enable the temporary localhost server integration test.")
+            throw XCTSkip(
+                "Run python3 scripts/test_client_server.py to enable the temporary localhost server integration test."
+            )
         }
         let address = try XCTUnwrap(environment["REVA_LIVE_TEST_URL"])
         let baseURL = try XCTUnwrap(URL(string: address))
@@ -65,7 +86,10 @@ final class LiveServerTests: XCTestCase {
         defer { session.invalidateAndCancel() }
         let client = try ServerClient(baseURL: baseURL, token: token, session: session)
         let otherOwner = try ServerClient(baseURL: baseURL, token: otherToken, session: session)
-        let invalidIdentity = try ServerClient(baseURL: baseURL, token: "unconfigured-synthetic-token", session: session)
+        let invalidIdentity = try ServerClient(
+            baseURL: baseURL, token: "unconfigured-synthetic-token", session: session)
+
+        // MARK: - Initial health, authentication, and owner isolation
 
         let health = try await client.health()
         XCTAssertEqual(health, "Connected · local")
@@ -73,7 +97,10 @@ final class LiveServerTests: XCTestCase {
         await expectEmpty(otherOwner, revision: 0)
         await expectHTTPFailure(401) { try await invalidIdentity.pull() }
 
-        let seed = try JSONDecoder().decode(AppSnapshot.self, from: Data(contentsOf: root.appendingPathComponent("demo/seed.json")))
+        // MARK: - Snapshot round-trip and stale revision rejection
+
+        let seed = try JSONDecoder().decode(
+            AppSnapshot.self, from: Data(contentsOf: root.appendingPathComponent("demo/seed.json")))
         try seed.validate()
         XCTAssertTrue(seed.profile.isDemo)
         XCTAssertTrue(seed.records.allSatisfy(\.isDemo))
@@ -92,11 +119,16 @@ final class LiveServerTests: XCTestCase {
         edited.visits[0].questions.append("Synthetic integration preparation question?")
         edited.visits[0].report = ReportEngine.generate(visit: edited.visits[0], records: edited.records)
         let visit = edited.visits[0]
-        edited.bookings.append(BookingRequest(id: "synthetic-live-test-booking", visitID: visit.id,
-            clinic: visit.clinic, phone: "+1 202 555 0100", reason: "Fictional local integration test only",
-            earliest: "2026-09-15T14:00:00Z", latest: "2026-09-18T18:00:00Z", timeZone: visit.timeZone,
-            preferences: "No real call", status: "draft", scenario: "Appointment available"))
-        let sampleRecording = try JSONDecoder().decode(VisitRecording.self, from: Data(contentsOf: root.appendingPathComponent("demo/sample-transcript.json")))
+        edited.bookings.append(
+            BookingRequest(
+                id: "synthetic-live-test-booking", visitID: visit.id,
+                clinic: visit.clinic, phone: "+1 202 555 0100",
+                reason: "Fictional local integration test only",
+                earliest: "2026-09-15T14:00:00Z", latest: "2026-09-18T18:00:00Z", timeZone: visit.timeZone,
+                preferences: "No real call", status: "draft", scenario: "Appointment available"))
+        let sampleRecording = try JSONDecoder().decode(
+            VisitRecording.self,
+            from: Data(contentsOf: root.appendingPathComponent("demo/sample-transcript.json")))
         XCTAssertTrue(sampleRecording.isSample)
         XCTAssertNil(sampleRecording.audioFilename)
         edited.recordings.append(sampleRecording)
@@ -111,7 +143,10 @@ final class LiveServerTests: XCTestCase {
         XCTAssertFalse(updatedRead.snapshot.recordings.isEmpty)
         XCTAssertNotNil(updatedRead.snapshot.visits[0].report)
 
-        let sourceDirectory = root.appendingPathComponent("demo/sources", isDirectory: true).resolvingSymlinksInPath()
+        // MARK: - Original attachment bytes and per-owner access
+
+        let sourceDirectory = root.appendingPathComponent("demo/sources", isDirectory: true)
+            .resolvingSymlinksInPath()
         var uploadedIDs: [String] = []
         var representativeBytes: Data?
         for record in seed.records {
@@ -128,7 +163,8 @@ final class LiveServerTests: XCTestCase {
             let id = ServerClient.attachmentID(for: filename)
             let metadata = ServerClient.attachmentMetadataName(filename)
             XCTAssertEqual(id.count, 64)
-            try await client.uploadAttachment(id: id, filename: metadata, data: bytes, type: record.mimeType ?? "application/octet-stream")
+            try await client.uploadAttachment(
+                id: id, filename: metadata, data: bytes, type: record.mimeType ?? "application/octet-stream")
             let downloaded = try await client.attachment(id: id)
             XCTAssertEqual(downloaded, bytes, "Original bytes changed for \(filename).")
             await expectHTTPFailure(404) { try await otherOwner.attachment(id: id) }
@@ -142,7 +178,8 @@ final class LiveServerTests: XCTestCase {
         let safeMetadata = ServerClient.attachmentMetadataName(unicodeName)
         XCTAssertNotEqual(safeMetadata, unicodeName)
         let pdfBytes = try XCTUnwrap(representativeBytes)
-        try await client.uploadAttachment(id: unicodeID, filename: safeMetadata, data: pdfBytes, type: "application/pdf")
+        try await client.uploadAttachment(
+            id: unicodeID, filename: safeMetadata, data: pdfBytes, type: "application/pdf")
         var metadataRequest = URLRequest(url: baseURL.appendingPathComponent("v1/attachments/" + unicodeID))
         metadataRequest.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         let (metadataBytes, metadataResponse) = try await session.data(for: metadataRequest)
@@ -157,6 +194,8 @@ final class LiveServerTests: XCTestCase {
         try await client.deleteAttachment(id: unicodeID)
         await expectHTTPFailure(404) { try await client.attachment(id: unicodeID) }
         try await client.deleteAttachment(id: unicodeID)
+
+        // MARK: - Deletion tombstones and explicit restoration
 
         let otherDeletedRevision = try await otherOwner.deleteState()
         XCTAssertEqual(otherDeletedRevision, 0)
@@ -175,6 +214,8 @@ final class LiveServerTests: XCTestCase {
         XCTAssertEqual(restored.revision, restoredRevision)
         XCTAssertEqual(restored.snapshot, seed)
         await expectEmpty(otherOwner, revision: 0)
-        print("Verified real client/server health, auth, full snapshot domains, stale conflict, \(uploadedIDs.count) original sources, Unicode metadata, isolation and deletion tombstones.")
+        print(
+            "Verified real client/server health, auth, full snapshot domains, stale conflict, \(uploadedIDs.count) original sources, Unicode metadata, isolation and deletion tombstones."
+        )
     }
 }

@@ -1,41 +1,66 @@
+// Purpose: Register authenticated provider discovery and Gemini JSON endpoints, then attach voice routes.
+// Inputs: An already owner-authenticated /v1 route group, server provider settings, and transport/storage boundaries.
+// Outputs: Public configuration flags or validated summary/preparation DTOs with bounded request bodies.
+// Side effects: Creates provider services and dispatches configured AI requests when their routes are invoked.
+// Boundary: Discovery exposes configuration status only. JSON/media validation occurs before service dispatch.
+
 import Vapor
 
+// MARK: - Public discovery contract without provider credentials
 struct ProviderStatus: Content {
-    struct Service: Codable, Sendable { let configured: Bool; let model: String }
+    struct Service: Codable, Sendable {
+        let configured: Bool
+        let model: String
+    }
     let gemini: Service
     let transcription: Service
     let booking: Service
     let liveCallsEnabled: Bool
 }
 
-func registerProviderRoutes(_ secured: any RoutesBuilder, configuration: ProviderConfiguration,
-                            directory: URL, geminiTransport: GeminiHTTPTransport = .live) {
+// MARK: - Register discovery and bounded JSON operations
+func registerProviderRoutes(
+    _ secured: any RoutesBuilder, configuration: ProviderConfiguration,
+    directory: URL, geminiTransport: GeminiHTTPTransport = .live
+) {
     secured.get("providers") { _ async -> ProviderStatus in
-        ProviderStatus(gemini: .init(configured: configuration.geminiConfigured, model: configuration.geminiModel),
-                       transcription: .init(configured: configuration.transcriptionConfigured, model: configuration.transcriptionModel),
-                       booking: .init(configured: configuration.bookingConfigured, model: "elevenlabs-agent"),
-                       liveCallsEnabled: configuration.liveCallsEnabled)
+        ProviderStatus(
+            gemini: .init(configured: configuration.geminiConfigured, model: configuration.geminiModel),
+            transcription: .init(
+                configured: configuration.transcriptionConfigured, model: configuration.transcriptionModel),
+            booking: .init(configured: configuration.bookingConfigured, model: "elevenlabs-agent"),
+            liveCallsEnabled: configuration.liveCallsEnabled)
     }
+    // MARK: - Decode requests before handing source data to Gemini
     let gemini = GeminiService(configuration: configuration, transport: geminiTransport)
-    secured.on(.POST, "ai", "summarize", body: .collect(maxSize: "256kb")) { request async throws -> GeminiSummaryResponse in
+    secured.on(.POST, "ai", "summarize", body: .collect(maxSize: "256kb")) {
+        request async throws -> GeminiSummaryResponse in
         try requireProviderJSON(request)
         let input: GeminiSummaryRequest
-        do { input = try request.content.decode(GeminiSummaryRequest.self) }
-        catch { throw Abort(.badRequest, reason: "Expected recordID, title and text strings for Gemini summary.") }
+        do { input = try request.content.decode(GeminiSummaryRequest.self) } catch {
+            throw Abort(.badRequest, reason: "Expected recordID, title and text strings for Gemini summary.")
+        }
         return try await gemini.summarize(input)
     }
-    secured.on(.POST, "ai", "prepare", body: .collect(maxSize: "1mb")) { request async throws -> GeminiPreparationResponse in
+    secured.on(.POST, "ai", "prepare", body: .collect(maxSize: "1mb")) {
+        request async throws -> GeminiPreparationResponse in
         try requireProviderJSON(request)
         let input: GeminiPreparationRequest
-        do { input = try request.content.decode(GeminiPreparationRequest.self) }
-        catch { throw Abort(.badRequest, reason: "Expected a visit object and candidate record objects for Gemini preparation.") }
+        do { input = try request.content.decode(GeminiPreparationRequest.self) } catch {
+            throw Abort(
+                .badRequest,
+                reason: "Expected a visit object and candidate record objects for Gemini preparation.")
+        }
         return try await gemini.prepare(input)
     }
     registerVoiceProviderRoutes(secured, configuration: configuration, directory: directory)
 }
 
+// MARK: - Require explicit JSON media type
 private func requireProviderJSON(_ request: Request) throws {
-    guard let type = request.headers.contentType, type.type.lowercased() == "application", type.subType.lowercased() == "json" else {
+    guard let type = request.headers.contentType, type.type.lowercased() == "application",
+        type.subType.lowercased() == "json"
+    else {
         throw Abort(.unsupportedMediaType, reason: "Provider JSON requests require application/json.")
     }
 }

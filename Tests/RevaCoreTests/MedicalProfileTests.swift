@@ -1,15 +1,26 @@
+// Purpose: Protect medical-profile decoding compatibility and independent durable profile updates.
+// Inputs: Legacy profile JSON, the synthetic snapshot, and profile edits including unspecified fields.
+// Outputs: XCTest assertions that medical fields round-trip without changing records or visits.
+// Side effects: Repository tests write temporary snapshots and remove their directories with defer.
+
 import XCTest
+
 @testable import RevaCore
 
 final class MedicalProfileTests: XCTestCase {
+    // MARK: - Legacy profile compatibility
+
     func testLegacyProfileDecodesWithoutNewMedicalFields() throws {
-        let json = #"{"id":"legacy-profile","name":"Sam Rivera","dateOfBirth":"1991-05-10","initials":"SR","allergies":[],"medications":["Fictional sample"],"conditions":[],"isDemo":true}"#
+        let json =
+            #"{"id":"legacy-profile","name":"Sam Rivera","dateOfBirth":"1991-05-10","initials":"SR","allergies":[],"medications":["Fictional sample"],"conditions":[],"isDemo":true}"#
         let profile = try JSONDecoder().decode(PatientProfile.self, from: Data(json.utf8))
         XCTAssertNil(profile.surgeriesAndImplants)
         XCTAssertNil(profile.careNotes)
         XCTAssertEqual(profile.allergies, [])
         XCTAssertEqual(profile.dateOfBirth, "1991-05-10")
     }
+
+    // MARK: - Durable profile edits and unspecified values
 
     func testMedicalProfileUpdatesPersistWithoutChangingOtherHistory() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -54,8 +65,12 @@ final class MedicalProfileTests: XCTestCase {
         XCTAssertNil(saved.careNotes)
     }
 
+    // MARK: - Synthetic snapshot fixture
+
     private func fixture() throws -> AppSnapshot {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        return try JSONDecoder().decode(AppSnapshot.self, from: Data(contentsOf: root.appendingPathComponent("demo/seed.json")))
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try JSONDecoder().decode(
+            AppSnapshot.self, from: Data(contentsOf: root.appendingPathComponent("demo/seed.json")))
     }
 }

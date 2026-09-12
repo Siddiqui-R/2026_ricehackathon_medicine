@@ -3,6 +3,12 @@
 
 No shared Xcode project changes, credentials, camera, or microphone access. Harness.swift.in
 is a template so the app project generator does not include a second executable entrypoint.
+
+Purpose: Compile the production device adapters into a separate native verification app.
+Inputs: Adapter Swift files, Harness.swift.in, Xcode tools, an already booted simulator, and output/restoration options.
+Outputs: Harness results, exported PDF/page artifacts, or a bounded runtime/compile failure.
+Side effects: Builds/signs/installs/launches a temporary harness app and attempts to restore the chosen foreground app.
+Retention: Scratch build files and the installed harness remain for inspection; copied QA artifacts are retained.
 """
 import argparse
 import pathlib
@@ -13,6 +19,7 @@ import tempfile
 import time
 
 
+# --- Checked subprocess helpers for compiler and simulator tools ---
 def run(*args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
 
@@ -21,6 +28,7 @@ def output(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
+# --- Resolve an already booted simulator and prepare a separate harness bundle ---
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default="booted", help="An already booted iPhone simulator UUID")
@@ -42,6 +50,7 @@ def main():
         "UIDeviceFamily": [1], "LSRequiresIPhoneOS": True, "UILaunchScreen": {},
     }
     (app / "Info.plist").write_bytes(plistlib.dumps(info))
+    # --- Compile production adapters with strict concurrency and ad-hoc sign the harness ---
     sdk = output("xcrun", "--sdk", "iphonesimulator", "--show-sdk-path")
     compiler = output("xcrun", "--find", "swiftc")
     run(compiler, "-swift-version", "6", "-strict-concurrency=complete", "-sdk", sdk,
@@ -49,9 +58,11 @@ def main():
         *(str(p) for p in sorted(device_dir.glob("*.swift"))), str(harness),
         "-o", str(app / "DeviceHarness"))
     run("/usr/bin/codesign", "--force", "--sign", "-", str(app))
+    # --- Install and launch only the dedicated verification bundle ---
     subprocess.run(["xcrun", "simctl", "terminate", args.device, identifier], capture_output=True)
     run("xcrun", "simctl", "install", args.device, str(app))
     run("xcrun", "simctl", "launch", args.device, identifier)
+    # --- Wait for explicit harness completion and retain generated QA evidence ---
     try:
         container = pathlib.Path(output("xcrun", "simctl", "get_app_container", args.device, identifier, "data")) / "Documents"
         result_file = container / "results.txt"
@@ -72,6 +83,7 @@ def main():
         print(f"QA artifacts: {destination}")
         if "ALL CHECKS PASSED" not in text:
             raise RuntimeError("A device adapter check failed.")
+    # --- Stop the harness and attempt to restore the requested app ---
     finally:
         subprocess.run(["xcrun", "simctl", "terminate", args.device, identifier], capture_output=True)
         if args.restore_app:

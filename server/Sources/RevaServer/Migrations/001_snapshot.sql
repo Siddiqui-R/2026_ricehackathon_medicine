@@ -1,5 +1,12 @@
--- Reva aggregate schema v1. All prototype domain arrays live in snapshot.
--- Snapshots and source/audio bytes are owner-scoped and committed transactionally.
+-- Purpose: Define schema v1 for owner snapshots, original bytes, and bounded mutation metadata.
+-- Inputs: This checked-in SQL is loaded by PostgresStore.migrate under an advisory transaction lock.
+-- Outputs: Aggregate tables and an audit lookup index with structural, identity, and byte constraints.
+-- Side effects: Creates database objects. Schema-version bookkeeping is handled by the migration runner.
+-- Ownership: Runtime queries supply the authenticated owner and bind their values as parameters.
+-- Each store mutation is transactional. Separate snapshot and attachment requests have separate commits.
+
+-- MARK: - Owner aggregate and retained revision after snapshot deletion
+-- All native domain arrays remain inside JSONB, including optional profile and symptom fields.
 CREATE TABLE IF NOT EXISTS reva_owner_state (
     owner_id TEXT PRIMARY KEY CHECK (owner_id ~ '^[A-Za-z0-9_-]{1,80}$'),
     revision BIGINT NOT NULL DEFAULT 0 CHECK (revision >= 0),
@@ -19,6 +26,9 @@ CREATE TABLE IF NOT EXISTS reva_owner_state (
         AND octet_length(snapshot::text) <= 8388608
     ))
 );
+
+-- MARK: - Original document/audio bytes scoped by owner and attachment identity
+-- Per-owner aggregate quotas are enforced by the adapter while it holds the owner's row lock.
 CREATE TABLE IF NOT EXISTS reva_attachments (
     owner_id TEXT NOT NULL REFERENCES reva_owner_state(owner_id) ON DELETE CASCADE,
     attachment_id TEXT NOT NULL CHECK (attachment_id ~ '^[A-Za-z0-9_-]{1,80}$'),
@@ -28,6 +38,9 @@ CREATE TABLE IF NOT EXISTS reva_attachments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (owner_id, attachment_id)
 );
+
+-- MARK: - Metadata-only mutation history
+-- The adapter retains the most recent 128 entries per owner without copying patient text into audit rows.
 CREATE TABLE IF NOT EXISTS reva_mutations (
     owner_id TEXT NOT NULL REFERENCES reva_owner_state(owner_id) ON DELETE CASCADE,
     mutation_id UUID NOT NULL,
@@ -36,4 +49,6 @@ CREATE TABLE IF NOT EXISTS reva_mutations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (owner_id, mutation_id)
 );
+
+-- MARK: - Support bounded per-owner audit retention
 CREATE INDEX IF NOT EXISTS reva_mutations_owner_created ON reva_mutations(owner_id, created_at DESC);

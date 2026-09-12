@@ -1,14 +1,24 @@
+// Purpose: Own microphone recording and local playback through one coordinated audio session.
+// Inputs: User consent flow, local file URLs and AVFoundation/foreground notifications.
+// Outputs: Observable capture/playback state and a validated original audio file.
+// Side effects: Microphone permission, audio-session activation, draft file writes/deletion and timed tasks.
+
 import AVFoundation
 import Combine
 import UIKit
 
+// MARK: - Audio adapter failures
+// Expose actionable permission, availability and original-file errors to the recording UI.
 enum DeviceAudioError: LocalizedError {
-    case permissionDenied, unavailableInput, busy, invalidDirectory, startFailed, noRecording, emptyRecording, invalidAudio
+    case permissionDenied, unavailableInput, busy, invalidDirectory, startFailed, noRecording, emptyRecording,
+        invalidAudio
 
     var errorDescription: String? {
         switch self {
-        case .permissionDenied: return "Microphone access is off. Enable it for Reva in Settings to record a visit."
-        case .unavailableInput: return "No microphone input is available. Connect a microphone or try on your iPhone."
+        case .permissionDenied:
+            return "Microphone access is off. Enable it for Reva in Settings to record a visit."
+        case .unavailableInput:
+            return "No microphone input is available. Connect a microphone or try on your iPhone."
         case .busy: return "Pause the other audio session before starting this one."
         case .invalidDirectory: return "The recording folder is unavailable. Please try saving again."
         case .startFailed: return "Recording could not start. Check microphone access and try again."
@@ -20,6 +30,8 @@ enum DeviceAudioError: LocalizedError {
 }
 
 /// Ownership prevents a paused or dismissed controller from deactivating another one's audio.
+// MARK: - Shared audio-session ownership
+// Only the current owner may deactivate the session; recording and playback coordinate this resource.
 @MainActor
 private final class DeviceAudioSession {
     static let shared = DeviceAudioSession()
@@ -29,7 +41,8 @@ private final class DeviceAudioSession {
         guard owner == nil || owner == newOwner else { throw DeviceAudioError.busy }
         let session = AVAudioSession.sharedInstance()
         if recording {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setCategory(
+                .playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         } else {
             try session.setCategory(.playback, mode: .spokenAudio)
         }
@@ -49,6 +62,8 @@ private final class DeviceAudioSession {
     }
 }
 
+// MARK: - Microphone capture lifecycle
+// Own a unique draft and one-hour capture limit; background/interruption events pause rather than resume silently.
 @MainActor
 final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     /// True while a recording session exists, including when paused.
@@ -69,10 +84,18 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     override init() {
         super.init()
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
-        center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
-        center.addObserver(self, selector: #selector(enteredBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        center.addObserver(self, selector: #selector(mediaServicesReset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(enteredBackground), name: UIApplication.didEnterBackgroundNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(mediaServicesReset),
+            name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
     }
 
     deinit {
@@ -82,6 +105,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         Task { @MainActor in DeviceAudioSession.shared.release(owner: id) }
     }
 
+    // MARK: - Capture start and permission
+    // Track the pending start identity across permission awaits and retain only this recorder's draft.
     func start(directory: URL) async throws {
         guard !isRecording, recorder == nil, startID == nil else { throw DeviceAudioError.busy }
         guard directory.isFileURL else { throw DeviceAudioError.invalidDirectory }
@@ -94,24 +119,32 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             try Task.checkCancellation()
             guard startID == attempt else { throw CancellationError() }
             guard granted else { throw DeviceAudioError.permissionDenied }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                                    attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
             let properties = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            guard properties.isDirectory == true, properties.isSymbolicLink != true else { throw DeviceAudioError.invalidDirectory }
+            guard properties.isDirectory == true, properties.isSymbolicLink != true else {
+                throw DeviceAudioError.invalidDirectory
+            }
             try DeviceAudioSession.shared.activate(owner: sessionID, recording: true)
-            guard AVAudioSession.sharedInstance().isInputAvailable else { throw DeviceAudioError.unavailableInput }
-            let url = directory.appendingPathComponent("recording-\(UUID().uuidString).m4a", isDirectory: false)
+            guard AVAudioSession.sharedInstance().isInputAvailable else {
+                throw DeviceAudioError.unavailableInput
+            }
+            let url = directory.appendingPathComponent(
+                "recording-\(UUID().uuidString).m4a", isDirectory: false)
             ownedDraftURL = url
             let settings: [String: Any] = [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 22_050.0,
                 AVNumberOfChannelsKey: 1,
                 AVEncoderBitRateKey: 32_000,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
             ]
             let capture = try AVAudioRecorder(url: url, settings: settings)
             capture.delegate = self
-            guard capture.prepareToRecord(), capture.record(forDuration: Self.maximumDuration) else { throw DeviceAudioError.startFailed }
+            guard capture.prepareToRecord(), capture.record(forDuration: Self.maximumDuration) else {
+                throw DeviceAudioError.startFailed
+            }
             recorder = capture
             audioURL = url
             elapsed = 0
@@ -128,6 +161,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 
+    // MARK: - Capture pause and resume
+    // Keep captured bytes while releasing session ownership; resume requires a still-valid recorder.
     func pause() {
         guard isRecording, !isPaused, let recorder else { return }
         elapsed = max(elapsed, recorder.currentTime)
@@ -141,13 +176,18 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func resume() {
         guard isRecording, isPaused, let recorder else { return }
         guard !reachedEnd, elapsed < Self.maximumDuration else {
-            errorMessage = "The one-hour recording limit was reached. Save this recording before starting another."
+            errorMessage =
+                "The one-hour recording limit was reached. Save this recording before starting another."
             return
         }
         do {
             try DeviceAudioSession.shared.activate(owner: sessionID, recording: true)
-            guard AVAudioSession.sharedInstance().isInputAvailable else { throw DeviceAudioError.unavailableInput }
-            guard recorder.record(forDuration: Self.maximumDuration - elapsed) else { throw DeviceAudioError.startFailed }
+            guard AVAudioSession.sharedInstance().isInputAvailable else {
+                throw DeviceAudioError.unavailableInput
+            }
+            guard recorder.record(forDuration: Self.maximumDuration - elapsed) else {
+                throw DeviceAudioError.startFailed
+            }
             isPaused = false
             errorMessage = nil
             beginTicker()
@@ -157,6 +197,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 
+    // MARK: - Validate and hand off original audio
+    // Return a nonempty playable original file; mark it committed so cleanup does not delete saved audio.
     func finish() throws -> URL {
         guard let recorder, let url = ownedDraftURL else { throw DeviceAudioError.noRecording }
         elapsed = max(elapsed, recorder.currentTime)
@@ -173,7 +215,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             guard size > 0, verification.duration > 0.1 else { throw DeviceAudioError.emptyRecording }
             elapsed = verification.duration
             self.recorder = nil
-            ownedDraftURL = nil // ownership transfers to caller; cancel cannot delete a saved recording
+            ownedDraftURL = nil  // ownership transfers to caller; cancel cannot delete a saved recording
             isRecording = false
             isPaused = false
             errorMessage = nil
@@ -185,6 +227,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 
+    // MARK: - Draft cleanup
+    // Cancel pending work and remove only the owned uncommitted draft.
     func cancel() {
         startID = nil
         cleanUpDraft()
@@ -208,6 +252,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DeviceAudioSession.shared.release(owner: sessionID)
     }
 
+    // MARK: - Capture progress and duration bound
+    // A cancellable 200 ms task stops on cancellation/pause/missing recorder and enforces maximumDuration.
     private func beginTicker() {
         ticker?.cancel()
         ticker = Task { @MainActor [weak self] in
@@ -218,7 +264,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 if self.elapsed >= Self.maximumDuration {
                     self.pause()
                     self.reachedEnd = true
-                    self.errorMessage = "The one-hour recording limit was reached. Save this recording before starting another."
+                    self.errorMessage =
+                        "The one-hour recording limit was reached. Save this recording before starting another."
                 }
             }
         }
@@ -230,28 +277,52 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         errorMessage = message
     }
 
+    // MARK: - Capture interruption callbacks
+    // Hop back to the main actor before state changes; never automatically resume after a device event.
     @objc nonisolated private func interrupted(_ notification: Notification) {
-        let began = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
-        if began { Task { @MainActor [weak self] in self?.pauseForEvent("Recording paused for an audio interruption. Resume when ready, or save what was captured.") } }
+        let began =
+            (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+            == AVAudioSession.InterruptionType.began.rawValue
+        if began {
+            Task { @MainActor [weak self] in
+                self?.pauseForEvent(
+                    "Recording paused for an audio interruption. Resume when ready, or save what was captured."
+                )
+            }
+        }
     }
 
     @objc nonisolated private func routeChanged(_ notification: Notification) {
-        let removed = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
-        if removed { Task { @MainActor [weak self] in self?.pauseForEvent("Recording paused because an audio device disconnected. Check the microphone before resuming.") } }
+        let removed =
+            (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
+            == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+        if removed {
+            Task { @MainActor [weak self] in
+                self?.pauseForEvent(
+                    "Recording paused because an audio device disconnected. Check the microphone before resuming."
+                )
+            }
+        }
     }
 
     @objc nonisolated private func enteredBackground() {
-        Task { @MainActor [weak self] in self?.pauseForEvent("Recording paused when Reva left the screen. Return to Reva and resume when ready.") }
+        Task { @MainActor [weak self] in
+            self?.pauseForEvent(
+                "Recording paused when Reva left the screen. Return to Reva and resume when ready.")
+        }
     }
 
     @objc nonisolated private func mediaServicesReset() {
         Task { @MainActor [weak self] in
             guard let self, self.isRecording else { return }
-            self.pauseForEvent("Audio services restarted. Save what was captured, then start a new recording.")
+            self.pauseForEvent(
+                "Audio services restarted. Save what was captured, then start a new recording.")
             self.reachedEnd = true
         }
     }
 
+    // MARK: - Recorder delegate reconciliation
+    // Ignore callbacks from replaced recorder instances and keep recoverable captured audio.
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         let identity = ObjectIdentifier(recorder)
         Task { @MainActor [weak self] in
@@ -262,7 +333,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             self.ticker?.cancel()
             self.ticker = nil
             DeviceAudioSession.shared.release(owner: self.sessionID)
-            self.errorMessage = flag
+            self.errorMessage =
+                flag
                 ? "Recording stopped. Save the captured audio before starting another recording."
                 : "Recording stopped unexpectedly. Try saving the captured audio before starting again."
         }
@@ -279,6 +351,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 }
 
+// MARK: - Original audio playback
+// Load only valid local audio; coordinate session ownership and publish recording-relative position.
 @MainActor
 final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published private(set) var isPlaying = false
@@ -293,10 +367,18 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
     override init() {
         super.init()
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
-        center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
-        center.addObserver(self, selector: #selector(enteredBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        center.addObserver(self, selector: #selector(mediaServicesReset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(enteredBackground), name: UIApplication.didEnterBackgroundNotification,
+            object: nil)
+        center.addObserver(
+            self, selector: #selector(mediaServicesReset),
+            name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
     }
 
     deinit {
@@ -306,13 +388,19 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
         Task { @MainActor in DeviceAudioSession.shared.release(owner: id) }
     }
 
+    // MARK: - Playback start
+    // Validate the file/player and activate the shared session; failed start publishes an error and pauses.
     func play(url: URL) throws {
         do {
-            guard url.isFileURL, FileManager.default.fileExists(atPath: url.path) else { throw DeviceAudioError.invalidAudio }
+            guard url.isFileURL, FileManager.default.fileExists(atPath: url.path) else {
+                throw DeviceAudioError.invalidAudio
+            }
             if loadedURL != url || player == nil {
                 stop()
                 let audio = try AVAudioPlayer(contentsOf: url)
-                guard audio.duration.isFinite, audio.duration > 0, audio.prepareToPlay() else { throw DeviceAudioError.invalidAudio }
+                guard audio.duration.isFinite, audio.duration > 0, audio.prepareToPlay() else {
+                    throw DeviceAudioError.invalidAudio
+                }
                 audio.delegate = self
                 player = audio
                 loadedURL = url
@@ -333,6 +421,8 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    // MARK: - Playback pause and cleanup
+    // Release only this player's session and cancel progress work when playback stops.
     func pause() {
         player?.pause()
         if let player { currentTime = player.currentTime }
@@ -356,14 +446,21 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
         DeviceAudioSession.shared.release(owner: sessionID)
     }
 
+    // MARK: - Clamped seeking
+    // Reject nonfinite positions and clamp movement to the loaded audio duration.
     func seek(to time: TimeInterval) {
         guard let player, time.isFinite else { return }
         let target = min(max(0, time), player.duration)
         player.currentTime = target
         currentTime = target
-        if target >= player.duration, isPlaying { pause(); currentTime = duration }
+        if target >= player.duration, isPlaying {
+            pause()
+            currentTime = duration
+        }
     }
 
+    // MARK: - Playback progress task
+    // This lifecycle loop exits when cancelled, stopped or detached from its player.
     private func beginTicker() {
         ticker?.cancel()
         ticker = Task { @MainActor [weak self] in
@@ -375,13 +472,19 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    // MARK: - Playback interruption callbacks
+    // Dispatch device events to the main actor and pause; resumption remains a user action.
     @objc nonisolated private func interrupted(_ notification: Notification) {
-        let began = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
+        let began =
+            (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+            == AVAudioSession.InterruptionType.began.rawValue
         if began { Task { @MainActor [weak self] in self?.pause() } }
     }
 
     @objc nonisolated private func routeChanged(_ notification: Notification) {
-        let removed = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+        let removed =
+            (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
+            == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
         if removed { Task { @MainActor [weak self] in self?.pause() } }
     }
 
@@ -396,14 +499,19 @@ final class AudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    // MARK: - Player delegate reconciliation
+    // Ignore stale player callbacks and preserve the last valid playhead on failure.
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         let identity = ObjectIdentifier(player)
         Task { @MainActor [weak self] in
             guard let self, let current = self.player, ObjectIdentifier(current) == identity else { return }
             self.pause()
             self.currentTime = flag ? self.duration : current.currentTime
-            if flag { current.currentTime = current.duration }
-            else { self.errorMessage = "Playback stopped before the audio finished." }
+            if flag {
+                current.currentTime = current.duration
+            } else {
+                self.errorMessage = "Playback stopped before the audio finished."
+            }
         }
     }
 

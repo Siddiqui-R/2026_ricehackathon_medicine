@@ -1,6 +1,13 @@
+// Purpose: Keep user observations structured and convert them to quotable records.
+// Inputs: An occurrence instant/zone, symptom and optional observation fields.
+// Outputs: Validated entries and self-reported MedicalRecords.
+// Side effects: None; AppStore owns persistence and source-version increments.
+
 import Foundation
 
 /// The user's own observations, retained separately from the readable record text.
+// MARK: - User-authored observation
+// Keep the original occurrence instant/zone separate from the derived record calendar day.
 struct SymptomEntry: Codable, Equatable {
     var observedAt: String = RevaDate.now
     var timeZone: String = TimeZone.current.identifier
@@ -13,13 +20,16 @@ struct SymptomEntry: Codable, Equatable {
 
     static let severities = ["mild", "moderate", "severe"]
 
+    // MARK: - Input normalization and validation
+    // Trim supplied fields, reject invalid/future times and bound text sizes without inventing severity.
     func validated(now: Date = Date()) throws -> SymptomEntry {
         func trimmed(_ value: String) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
         var value = self
         value.symptom = trimmed(symptom)
         guard !value.symptom.isEmpty else { throw RevaError.invalid("Enter the symptom you noticed.") }
         guard value.symptom.count <= 120, !value.symptom.contains(where: \.isNewline) else {
-            throw RevaError.invalid("Keep the symptom under 120 characters on one line. Add the rest in Details.")
+            throw RevaError.invalid(
+                "Keep the symptom under 120 characters on one line. Add the rest in Details.")
         }
         value.observedAt = trimmed(observedAt)
         value.timeZone = trimmed(timeZone)
@@ -39,16 +49,22 @@ struct SymptomEntry: Codable, Equatable {
         value.triggers = trimmed(triggers)
         value.whatHelped = trimmed(whatHelped)
         guard value.details.count <= 12_000,
-              [value.duration, value.triggers, value.whatHelped].allSatisfy({ $0.count <= 2_000 }) else {
-            throw RevaError.invalid("Keep Details under 12,000 characters and each extra detail under 2,000 characters.")
+            [value.duration, value.triggers, value.whatHelped].allSatisfy({ $0.count <= 2_000 })
+        else {
+            throw RevaError.invalid(
+                "Keep Details under 12,000 characters and each extra detail under 2,000 characters.")
         }
         return value
     }
 
     /// Exact labelled observations become the searchable, quotable source. Unset fields stay absent.
+    // MARK: - Canonical source wording
+    // Serialize only supplied observations so search and citation text remain faithful.
     var recordText: String {
-        var lines = ["User symptom entry", "Self-reported by the user.", "Symptom: " + symptom,
-                     "Occurred at: \(observedAt) (\(timeZone))"]
+        var lines = [
+            "User symptom entry", "Self-reported by the user.", "Symptom: " + symptom,
+            "Occurred at: \(observedAt) (\(timeZone))",
+        ]
         if let severity { lines.append("Severity: " + severity.capitalized) }
         if !duration.isEmpty { lines.append("Duration: " + duration) }
         if !details.isEmpty { lines += ["Details:", details] }
@@ -65,13 +81,20 @@ struct SymptomEntry: Codable, Equatable {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: - Record projection
+    // Preserve existing identity/creation time; this layer never increments source versions or writes disk.
     func makeRecord(existingRecord: MedicalRecord? = nil, now: Date = Date()) throws -> MedicalRecord {
         let entry = try validated(now: now)
         if let existingRecord, existingRecord.symptomEntry == nil {
-            throw RevaError.invalid("This source is not a symptom entry. Create a new entry to keep its original text intact.")
+            throw RevaError.invalid(
+                "This source is not a symptom entry. Create a new entry to keep its original text intact.")
         }
-        var record = existingRecord ?? MedicalRecord(title: entry.symptom, kind: "User symptom entry",
-            provider: "Self-reported", date: entry.observedAt, text: entry.recordText, summary: entry.localSummary)
+        var record =
+            existingRecord
+            ?? MedicalRecord(
+                title: entry.symptom, kind: "User symptom entry",
+                provider: "Self-reported", date: entry.observedAt, text: entry.recordText,
+                summary: entry.localSummary)
         record.title = entry.symptom
         record.kind = "User symptom entry"
         record.provider = "Self-reported"
@@ -94,9 +117,12 @@ struct SymptomEntry: Codable, Equatable {
         return record
     }
 
+    // MARK: - Strict occurrence parsing
+    // Reject malformed instants and impossible calendar dates before Foundation can normalize them.
     private static func timestamp(_ text: String) -> Date? {
         // Require a full ISO instant. Check the calendar day too: ISO parsers can normalize February 30.
-        let pattern = #"^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"#
+        let pattern =
+            #"^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$"#
         guard text.range(of: pattern, options: .regularExpression) != nil else { return nil }
         let calendar = DateFormatter()
         calendar.locale = Locale(identifier: "en_US_POSIX")
@@ -105,7 +131,9 @@ struct SymptomEntry: Codable, Equatable {
         calendar.dateFormat = "yyyy-MM-dd"
         calendar.isLenient = false
         let day = String(text.prefix(10))
-        guard let dateOnly = calendar.date(from: day), calendar.string(from: dateOnly) == day else { return nil }
+        guard let dateOnly = calendar.date(from: day), calendar.string(from: dateOnly) == day else {
+            return nil
+        }
         let formatter = ISO8601DateFormatter()
         if let date = formatter.date(from: text) { return date }
         formatter.formatOptions.insert(.withFractionalSeconds)

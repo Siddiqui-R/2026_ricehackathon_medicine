@@ -1,11 +1,23 @@
+// Purpose: Verify report selection and citations against the checked-in synthetic acceptance scenarios.
+// Inputs: demo/seed.json and demo/expected-evidence.json, including page and review expectations.
+// Outputs: XCTest assertions for allowed evidence, exact source pages, pinning, and review caveats.
+// Side effects: Reads fixture files and generates reports in memory; no files or network state are changed.
+
 import XCTest
+
 @testable import RevaCore
 
 /// Executes the checked-in synthetic acceptance scenarios against the real engine.
 final class FixtureEvidenceTests: XCTestCase {
+    // MARK: - Acceptance fixture schema
+
     private struct Expectations: Decodable {
         struct Scenario: Decodable {
-            struct SourceCheck: Decodable { let recordID: String; let page: Int; let contains: String }
+            struct SourceCheck: Decodable {
+                let recordID: String
+                let page: Int
+                let contains: String
+            }
             let id: String
             let visitID: String
             let mustInclude: [String]
@@ -13,7 +25,11 @@ final class FixtureEvidenceTests: XCTestCase {
             let mayInclude: [String]
             let sourceChecks: [SourceCheck]
         }
-        struct PinningCase: Decodable { let visitID: String; let pinRecordID: String; let mustInclude: String }
+        struct PinningCase: Decodable {
+            let visitID: String
+            let pinRecordID: String
+            let mustInclude: String
+        }
         struct ReviewCase: Decodable {
             let recordID: String
             let expectedStatus: String
@@ -27,17 +43,23 @@ final class FixtureEvidenceTests: XCTestCase {
         let reviewCase: ReviewCase
     }
 
+    // MARK: - Fixture loading and whitespace comparison
+
     private var root: URL {
-        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
     private func load<T: Decodable>(_ filename: String, as: T.Type) throws -> T {
-        try JSONDecoder().decode(T.self, from: Data(contentsOf: root.appendingPathComponent("demo/" + filename)))
+        try JSONDecoder().decode(
+            T.self, from: Data(contentsOf: root.appendingPathComponent("demo/" + filename)))
     }
 
     private func normalized(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
+
+    // MARK: - Scenario selection and original-page citations
 
     func testEveryExpectedScenarioSelectsAndExcludesItsDeclaredRecords() throws {
         let snapshot = try load("seed.json", as: AppSnapshot.self)
@@ -61,24 +83,35 @@ final class FixtureEvidenceTests: XCTestCase {
                 XCTAssertFalse(selected.contains(id), "Included unrelated record \(id). " + detail)
             }
             let allowed = Set(scenario.mustInclude + scenario.mayInclude)
-            XCTAssertTrue(selected.isSubset(of: allowed), "Unexpected evidence outside fixture allowance. " + detail)
+            XCTAssertTrue(
+                selected.isSubset(of: allowed), "Unexpected evidence outside fixture allowance. " + detail)
 
             let references = report.sections.flatMap(\.sources)
             for check in scenario.sourceChecks {
                 let record = try XCTUnwrap(snapshot.records.first { $0.id == check.recordID })
-                guard let reference = references.first(where: { $0.recordID == check.recordID && $0.page == check.page }) else {
-                    XCTFail("\(scenario.id) must link \(check.recordID), page \(check.page); actual pages \(references.filter { $0.recordID == check.recordID }.map(\.page))")
+                guard
+                    let reference = references.first(where: {
+                        $0.recordID == check.recordID && $0.page == check.page
+                    })
+                else {
+                    XCTFail(
+                        "\(scenario.id) must link \(check.recordID), page \(check.page); actual pages \(references.filter { $0.recordID == check.recordID }.map(\.page))"
+                    )
                     continue
                 }
                 let pages = try XCTUnwrap(record.pageTexts)
                 XCTAssertTrue(pages.indices.contains(reference.page - 1))
                 guard pages.indices.contains(reference.page - 1) else { continue }
-                XCTAssertTrue(normalized(reference.excerpt).contains(normalized(check.contains)), "Expected clinical detail missing from generated excerpt")
-                XCTAssertTrue(normalized(pages[reference.page - 1]).contains(normalized(check.contains)),
+                XCTAssertTrue(
+                    normalized(reference.excerpt).contains(normalized(check.contains)),
+                    "Expected clinical detail missing from generated excerpt")
+                XCTAssertTrue(
+                    normalized(pages[reference.page - 1]).contains(normalized(check.contains)),
                     "Expected evidence phrase is absent from the actual referenced page: \(check.contains)")
             }
         }
-        XCTAssertGreaterThan(Set(selectedByScenario).count, 1, "The distinct visit goals produced identical evidence sets.")
+        XCTAssertGreaterThan(
+            Set(selectedByScenario).count, 1, "The distinct visit goals produced identical evidence sets.")
     }
 
     func testEveryGeneratedReferenceResolvesToItsVersionAndOriginalPage() throws {
@@ -100,11 +133,14 @@ final class FixtureEvidenceTests: XCTestCase {
                     continue
                 }
                 XCTAssertFalse(reference.excerpt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                XCTAssertTrue(normalized(pages[reference.page - 1]).contains(normalized(reference.excerpt)),
+                XCTAssertTrue(
+                    normalized(pages[reference.page - 1]).contains(normalized(reference.excerpt)),
                     "Excerpt is not grounded in \(record.id), page \(reference.page)")
             }
         }
     }
+
+    // MARK: - Explicit pins and ambiguous-source review
 
     func testExplicitFixturePinOverridesBaselineExclusion() throws {
         let snapshot = try load("seed.json", as: AppSnapshot.self)
@@ -134,8 +170,11 @@ final class FixtureEvidenceTests: XCTestCase {
         for scenario in expected.scenarios where scenario.mustInclude.contains(review.recordID) {
             let visit = try XCTUnwrap(snapshot.visits.first { $0.id == scenario.visitID })
             let report = ReportEngine.generate(visit: visit, records: snapshot.records)
-            let section = try XCTUnwrap(report.sections.first { $0.sources.contains { $0.recordID == review.recordID } })
-            XCTAssertTrue(section.body.contains("Needs review"), "Ambiguous source was presented without its review warning.")
+            let section = try XCTUnwrap(
+                report.sections.first { $0.sources.contains { $0.recordID == review.recordID } })
+            XCTAssertTrue(
+                section.body.contains("Needs review"),
+                "Ambiguous source was presented without its review warning.")
         }
     }
 }
