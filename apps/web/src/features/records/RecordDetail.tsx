@@ -6,7 +6,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, CalendarDays, FileText, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { formatDate, localExcerpt, localExcerptDetails, excerptOmissionNotice } from '../../core/domain';
+import {
+  formatDate,
+  localExcerpt,
+  localExcerptDetails,
+  excerptOmissionNotice,
+  hasAuthoredDemoSummary,
+} from '../../core/domain';
 import type { SymptomEntry } from '../../core/models';
 import { Badge, Button, Card, EmptyState, Modal, PageHeading } from '../../components/ui';
 import { RecordEditor } from './RecordEditor';
@@ -85,7 +91,7 @@ export function RecordDetail({ id }: { id: string }) {
         </EmptyState>
       </Card>
     );
-  const authoredDemo = record.isDemo && record.summary !== localExcerpt(record.text, record.isDemo);
+  const authoredDemo = hasAuthoredDemoSummary(record);
   const linkedRecording = record.sourceRecordingID
     ? snapshot?.recordings.find((item) => item.id === record.sourceRecordingID)
     : undefined;

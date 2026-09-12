@@ -71,6 +71,8 @@ struct SourceReference: Codable, Identifiable, Equatable {
     var sourceVersion: Int?
     var excerptOmitted: Bool? = nil
     var id: String { "\(recordID)-\(page)" }
+    static let excerptOmissionNotice =
+        "Selected passage; additional source text omitted. Open the original for full context."
     var omissionNotice: String? {
         guard let excerptOmitted else {
             return "This older excerpt may have been shortened. Regenerate the brief and review the original."
@@ -78,7 +80,7 @@ struct SourceReference: Codable, Identifiable, Equatable {
         guard excerptOmitted else { return nil }
         return excerpt.isEmpty
             ? "No complete source line fits in this excerpt. Open the original for full context."
-            : ReportEngine.omissionNotice
+            : Self.excerptOmissionNotice
     }
     var locationLabel: String { page > 0 ? "p. \(page)" : "record text" }
 }

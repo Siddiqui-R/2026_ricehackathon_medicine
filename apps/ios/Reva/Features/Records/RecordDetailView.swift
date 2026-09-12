@@ -161,6 +161,6 @@ struct RecordDetailView: View {
             ? record.summary : ReportEngine.localExcerpt(record.text, isDemo: record.isDemo)
     }
     private func hasAuthoredSummary(_ record: MedicalRecord) -> Bool {
-        record.isDemo && record.summary != ReportEngine.localExcerpt(record.text, isDemo: record.isDemo)
+        ReportEngine.hasAuthoredDemoSummary(record)
     }
 }

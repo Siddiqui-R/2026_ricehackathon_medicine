@@ -10,6 +10,7 @@ import {
   reportIsStale,
   localExcerpt,
   localExcerptDetails,
+  hasAuthoredDemoSummary,
   selectedRecords,
   validateSnapshot,
 } from '../domain';
@@ -34,6 +35,14 @@ describe('source integrity regressions', () => {
     expect(audited.slice(0, 1800).slice(-8)).toBe('dose: 10');
     expect(localExcerptDetails(audited)).toEqual({ text: '', omitted: true });
   });
+  it('does not mistake an old demo local cut for an authored summary', () => {
+    const record = seed().records[0];
+    expect(hasAuthoredDemoSummary(record)).toBe(true);
+    record.text = 'x'.repeat(1792) + 'dose: 100 mg';
+    record.summary = record.text.slice(0, 1800);
+    expect(hasAuthoredDemoSummary(record)).toBe(false);
+    expect(localExcerptDetails(record.text, true).omitted).toBe(true);
+  });
   it('preserves contiguous whitespace and full lines', () => {
     const text = '  dose: 100 mg\r\n\r\n  Do not discontinue.\r\n👩🏽‍⚕️ reviewed café.';
     expect(localExcerpt(text)).toBe(text);
@@ -52,6 +61,9 @@ describe('source integrity regressions', () => {
       'SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nSource date: 2026-09-01\nPotassium 4.1 mmol/L\nInvented for Reva software demonstration. Not a real patient record or medical advice.';
     expect(localExcerpt(wrapper)).toBe(wrapper);
     expect(localExcerpt(wrapper, true)).toBe('Potassium 4.1 mmol/L');
+    expect(localExcerpt(wrapper + '\nCorrected dose: 100 mg', true)).toBe(
+      wrapper + '\nCorrected dose: 100 mg',
+    );
   });
   it('excludes unrelated ear note for completed palpitation visit and retains pins', () => {
     const data = seed(),
@@ -63,6 +75,20 @@ describe('source integrity regressions', () => {
     expect(selectedRecords(visit, data.records).map((record) => record.id)).toContain(
       'demo-record-ear-infection',
     );
+  });
+  it('indexes full record text when page mapping is an empty array', () => {
+    const data = seed(),
+      visit = data.visits[0],
+      record = data.records[0];
+    Object.assign(visit, { type: 'Review', concern: 'Thyroid', goal: 'Review', pinnedRecordIDs: [] });
+    Object.assign(record, {
+      title: 'Document',
+      tags: [],
+      summary: '',
+      text: 'Thyroid result: exact source.',
+      pageTexts: [],
+    });
+    expect(selectedRecords(visit, [record]).map((item) => item.id)).toEqual([record.id]);
   });
   it('keeps omission metadata outside quote and through saved validation', async () => {
     const data = seed(),
