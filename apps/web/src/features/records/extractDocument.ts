@@ -11,6 +11,7 @@ import type { Worker as OCRWorker } from 'tesseract.js';
 export const MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_TEXT_BYTES = 120_000;
 const MAX_PAGES = 24;
+const MAX_OCR_PAGES = 10;
 const MAX_CANVAS_SIDE = 2200;
 const encoder = new TextEncoder();
 
@@ -31,6 +32,17 @@ export function boundedText(text: string, maximum = MAX_TEXT_BYTES) {
   let end = maximum;
   while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
   return new TextDecoder().decode(bytes.slice(0, end));
+}
+function mergeRecognizedText(embedded: string, recognized: string): string {
+  if (!embedded) return recognized;
+  const normalized = (line: string) => line.trim().replace(/\s+/g, ' ');
+  const known = new Set(embedded.split(/\r?\n/).map(normalized));
+  const additional = recognized
+    .split(/\r?\n/)
+    .filter((line) => !known.has(normalized(line)))
+    .join('\n')
+    .trim();
+  return additional ? `${embedded}\n${additional}` : embedded;
 }
 function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new DOMException('Extraction cancelled.', 'AbortError');
@@ -154,6 +166,7 @@ export async function extractDocument(
   let textLimitReached = false;
   let closed = false;
   let ocrFailure: Error | undefined;
+  let ocrPages = 0;
   const deadline = Date.now() + 180_000;
   const remainingTime = (limit: number) => Math.min(limit, Math.max(1, deadline - Date.now()));
   const cancel = () => {
@@ -240,7 +253,7 @@ export async function extractDocument(
       appendPage(text.trim());
     } else if (type === 'application/pdf') {
       progress('Opening PDF on this device…');
-      const { getDocument, GlobalWorkerOptions } = await localWork(
+      const { getDocument, GlobalWorkerOptions, OPS } = await localWork(
         import('pdfjs-dist'),
         signal,
         remainingTime(30_000),
@@ -286,7 +299,36 @@ export async function extractDocument(
               `Page ${number}: Embedded text could not be read; local image recognition was attempted.`,
             );
           }
-          if (text.replace(/\s/g, '').length < 35) {
+          let rasterOrUnknown = true;
+          try {
+            const operations = await localWork(page.getOperatorList(), signal, remainingTime(15_000));
+            const imageOperations = new Set([
+              OPS.paintImageXObject,
+              OPS.paintInlineImageXObject,
+              OPS.paintImageMaskXObject,
+              OPS.paintImageXObjectRepeat,
+              OPS.paintInlineImageXObjectGroup,
+              OPS.paintImageMaskXObjectGroup,
+              OPS.paintImageMaskXObjectRepeat,
+              OPS.paintSolidColorImageMask,
+            ]);
+            rasterOrUnknown = operations.fnArray.some((operation) => imageOperations.has(operation));
+          } catch {
+            checkAbort(signal);
+            result.warnings.push(
+              `Page ${number}: Graphic content could not be inspected; review the original for missing text.`,
+            );
+          }
+          if (text.replace(/\s/g, '').length < 35 || rasterOrUnknown) {
+            if (ocrPages >= MAX_OCR_PAGES) {
+              result.incomplete = true;
+              result.warnings.push(
+                `Page ${number}: Needs OCR beyond the ${MAX_OCR_PAGES}-page OCR limit. Review this page or import a smaller PDF.`,
+              );
+              appendPage(text);
+              continue;
+            }
+            ocrPages += 1;
             const base = page.getViewport({ scale: 1 });
             const viewport = page.getViewport({
               scale: Math.min(2, MAX_CANVAS_SIDE / Math.max(base.width, base.height)),
@@ -299,7 +341,25 @@ export async function extractDocument(
               await localWork(rendering.promise, signal, remainingTime(30_000));
               rendering = undefined;
               const recognized = await readImage(canvas);
-              if (recognized) text = recognized;
+              if (text && rasterOrUnknown)
+                result.warnings.push(
+                  `Page ${number}: Embedded text and graphics were read together. OCR text follows embedded text and may repeat it; review the complete original page.`,
+                );
+              if (!recognized && rasterOrUnknown) {
+                result.incomplete = true;
+                result.warnings.push(
+                  `Page ${number}: No raster text was recognized. Review the original for missing text.`,
+                );
+              }
+              text = mergeRecognizedText(text, recognized);
+            } catch (error) {
+              rendering?.cancel();
+              rendering = undefined;
+              checkAbort(signal);
+              result.incomplete = true;
+              result.warnings.push(
+                `Page ${number}: Text recognition did not complete. Embedded text was retained; review the original for missing text. ${error instanceof Error ? error.message : ''}`,
+              );
             } finally {
               canvas.width = 1;
               canvas.height = 1;
