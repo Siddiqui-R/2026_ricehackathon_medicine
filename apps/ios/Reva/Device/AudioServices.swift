@@ -283,7 +283,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     private func pauseForEvent(_ message: String) {
-        guard isRecording else { return }
+        guard isRecording, !finishFailed else { return }
         pause()
         errorMessage = message
     }
@@ -325,7 +325,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     @objc nonisolated private func mediaServicesReset() {
         Task { @MainActor [weak self] in
-            guard let self, self.isRecording else { return }
+            guard let self, self.isRecording, !self.finishFailed else { return }
             self.pauseForEvent(
                 "Audio services restarted. Save what was captured, then start a new recording.")
             self.reachedEnd = true
@@ -333,11 +333,13 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     // MARK: - Recorder delegate reconciliation
-    // Ignore callbacks from replaced recorder instances and keep recoverable captured audio.
+    // Ignore replaced recorders and terminal finalization failures; preserve their accurate recovery guidance.
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         let identity = ObjectIdentifier(recorder)
         Task { @MainActor [weak self] in
-            guard let self, let current = self.recorder, ObjectIdentifier(current) == identity else { return }
+            guard let self, !self.finishFailed, let current = self.recorder,
+                ObjectIdentifier(current) == identity
+            else { return }
             self.elapsed = max(self.elapsed, current.currentTime)
             self.isPaused = true
             self.reachedEnd = true
@@ -355,7 +357,9 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let identity = ObjectIdentifier(recorder)
         let message = error?.localizedDescription ?? "An audio encoding error occurred."
         Task { @MainActor [weak self] in
-            guard let self, let current = self.recorder, ObjectIdentifier(current) == identity else { return }
+            guard let self, !self.finishFailed, let current = self.recorder,
+                ObjectIdentifier(current) == identity
+            else { return }
             self.pauseForEvent("\(message) Try saving what was captured.")
             self.reachedEnd = true
         }

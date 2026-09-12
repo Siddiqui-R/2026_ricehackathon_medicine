@@ -19,10 +19,12 @@ protocol AVAudioRecorderDelegate: AnyObject {}
 protocol AVAudioPlayerDelegate: AnyObject {}
 
 final class AVAudioRecorder {
+    static weak var lastCreated: AVAudioRecorder?
     weak var delegate: AVAudioRecorderDelegate?
     var currentTime = 0.05
     init(url: URL, settings: [String: Any]) throws {
         try Data("Synthetic encoded draft".utf8).write(to: url)
+        Self.lastCreated = self
     }
     func prepareToRecord() -> Bool { true }
     func record(forDuration duration: TimeInterval) -> Bool { true }
