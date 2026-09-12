@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
 
+// MARK: - Real PDF parsing with a controlled recognition boundary
 const state = vi.hoisted(() => ({ pages: 0, failOCR: false, recognize: vi.fn(), terminate: vi.fn() }));
 vi.mock('pdfjs-dist', async () => {
   const actual = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -63,6 +64,7 @@ async function mixedPDF() {
   );
   return new File([bytes], 'mixed-content.pdf', { type: 'application/pdf' });
 }
+// MARK: - Mixed source success, recognition failure and resource bounds
 describe('mixed PDF extraction', () => {
   it('reads raster body despite a long embedded header and preserves real page mapping', async () => {
     const result = await extractDocument(await mixedPDF(), new AbortController().signal, () => {});

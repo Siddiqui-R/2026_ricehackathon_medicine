@@ -16,6 +16,7 @@ import {
 } from '../domain';
 import { seed } from './fixtures';
 
+// MARK: - Exact source spans, provenance and saved citation metadata
 describe('source integrity regressions', () => {
   it('never splits doses, units, negation or Unicode at the cap', () => {
     for (const ending of [
