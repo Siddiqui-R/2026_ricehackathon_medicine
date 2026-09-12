@@ -1,6 +1,6 @@
 # Reva — as-built MVP stack
 
-**September12,2026 · implementation checkpoint `8f52577` · final documentation prepared immediately before GitHub push.**
+**September 12, 2026 · latest implementation checkpoint `ffcbf6c` · diagram updated immediately before the follow-up GitHub push.**
 
 Reva is a native SwiftUI iPhone app with a working local demo and a Swift server. Provider adapters are implemented and tested with mocks; their accounts/credentials and a live Tiger database remain manual setup. The app never needs provider keys to demonstrate the local patient journey. The [revised MVP goal](mvp-goal.md), [setup guide](../README.md), [API contract](task-specs/mvp-api-contract.md), and [verification evidence](verification/README.md) define the delivered scope.
 
@@ -11,7 +11,7 @@ Blue nodes work locally. Gold nodes are implemented provider/database boundaries
 ```mermaid
 flowchart TB
     subgraph PHONE["Native iPhone app · SwiftUI · iOS18+"]
-        UI["Summary / Records / Visits / Settings"]
+        UI["Summary / Records / Visits / Medical profile / Settings"]
         FEATURES["Feature modules and AppStore extensions"]
         CORE["Codable domain models / source versions / report engine"]
         LOCAL["LocalRepository: atomic JSON + one backup + original files"]
@@ -78,6 +78,8 @@ The verified Gemini default uses a current documented model ID. The earlier plan
 
 ```mermaid
 flowchart TD
+    SYMPTOM["Log symptoms: observed time + optional severity/details"] --> OBSERVATION["Save self-reported MedicalRecord + structured SymptomEntry"]
+    OBSERVATION --> MEMORY
     IMPORT["Files / photo / supported iPhone scan"] --> EXTRACT["Extract text and page mapping on device"]
     EXTRACT --> REVIEW["Preview original + text + warnings; correct date/text"]
     REVIEW --> SAVE["Save original bytes + record + local excerpt"]
@@ -96,10 +98,33 @@ flowchart TD
     BRIEF --> PDF["Paginated PDF → native preview/share"]
     MEMORY -->|"Source changes"| STALE["Mark prior briefs stale; regenerate before export"]
     classDef reva fill:#E1ECEE,stroke:#0A5B6C,color:#0A5B6C;
-    class IMPORT,EXTRACT,REVIEW,SAVE,MEMORY,ENABLED,SUMMARY,VALID,VISIT,MODE,LOCAL,AI,QUOTES,BRIEF,SOURCE,PDF,STALE reva;
+    class SYMPTOM,OBSERVATION,IMPORT,EXTRACT,REVIEW,SAVE,MEMORY,ENABLED,SUMMARY,VALID,VISIT,MODE,LOCAL,AI,QUOTES,BRIEF,SOURCE,PDF,STALE reva;
 ```
 
 Local excerpts quote source wording; authored fictional summaries are labeled separately. Connected summaries/overviews identify the model and require review. Gemini selects only supplied IDs; the client constructs original-source quotes and page references. OCR is reviewable, with explicit uncertainty; perfect extraction is not claimed. Imported unreadable text remains a needs-review record rather than pretending AI processing succeeded.
+
+## Medical profile and symptom entry structure
+
+```mermaid
+flowchart TD
+    AVATAR["Summary avatar / Medical profile tab"] --> PROFILE["Persistent medical profile"]
+    PROFILE --> EDIT["Edit identity, allergies, medications, conditions, procedures, care notes"]
+    EDIT --> PATIENT["PatientProfile in AppSnapshot"]
+    PROFILE --> SETTINGS["Gear → service and app Settings"]
+    LOG["Summary Log symptoms / Records add menu"] --> FORM["Required observation and time; optional severity and detail"]
+    FORM --> ENTRY["SymptomEntry + self-reported MedicalRecord"]
+    ENTRY --> RECORDS["Searchable Records / Symptoms filter / edit / delete"]
+    RECORDS --> PREP["Relevant source selection and exact quotes for visit briefs"]
+    PATIENT --> JSON["Local atomic snapshot / explicit server push and pull"]
+    ENTRY --> JSON
+    ALL["Recent records footer: View all records"] --> RECORDS
+    classDef reva fill:#FAF4F4,stroke:#0A5B6C,color:#0A5B6C;
+    class AVATAR,PROFILE,EDIT,PATIENT,SETTINGS,LOG,FORM,ENTRY,RECORDS,PREP,JSON,ALL reva;
+```
+
+The medical profile is editable quick-reference data, separate from historical source documents. Optional `surgeriesAndImplants` and `careNotes` fields preserve earlier snapshots. The preparation contract currently uses records, so profile edits do not silently rewrite evidence. User symptom entries contain their structured observation and exact labelled source text; edits preserve identity and creation time while the usual source versioning marks prior briefs stale. Full ISO occurrence time and time zone are preserved, and the record list uses the observation's local calendar day.
+
+The opaque page canvas is exact Sky `#E1ECEE`, with Ivory `#FAF4F4` cards and Teal `#0A5B6C` actions. The [follow-up verification](verification/profile-symptoms.md) covers persistence, navigation, relevance, and screenshot pixel checks.
 
 ## Booking: simulation and configured calls
 
@@ -151,7 +176,7 @@ New audio never receives the sample transcript. Recording pauses when the app le
 
 | Storage | What it holds | Consistency boundary |
 | --- | --- | --- |
-| iPhone App Support | Profile, records, visits/reports, bookings, recordings/transcripts; original document/audio files | Atomic snapshot plus one backup; originals are separately written |
+| iPhone App Support | Medical profile, records including structured symptom entries, visits/reports, bookings, recordings/transcripts; original document/audio files | Atomic snapshot plus one backup; originals are separately written |
 | Local Swift server | Owner-scoped snapshot/revision and bounded attachments | Single writer, atomic owner-file replacement |
 | Tiger PostgreSQL | `reva_owner_state` JSONB, `reva_attachments` BYTEA, `reva_mutations` audit | Owner row lock and transactional mutation; parameter binding and verified TLS |
 | Server call-receipt directory | Reviewed request, durable intent, conversation ID/status | Owner/request identity, file sync/rename, process lock; retained independently of snapshots |
@@ -163,7 +188,7 @@ Server snapshot push uses a base revision. Conflict resolution is explicit. Atta
 
 ```mermaid
 flowchart LR
-    P1["Person1 / records and preparation"] --> R["Features/Records + Preparation; AppStore Records + Visits"]
+    P1["Person1 / records and preparation"] --> R["Features/Records + Preparation; AppStore Records + Symptoms + Visits"]
     P2["Person2 / booking and visit memory"] --> V["Features/Visits; AppStore Bookings + Recordings; device services"]
     P3["Person3 / server and providers"] --> S["server modules / SQL / HTTP / Gemini / Whisper / ElevenLabs"]
     CAP["Integration captain"] --> SHARED["Core DTOs/models; Shared UI/theme; AppStore Providers + Sync; project generator"]

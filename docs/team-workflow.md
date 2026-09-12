@@ -85,3 +85,8 @@ Provider adapters and native entry points are now implemented and tested with mo
 | Person 3 | Finish configuration and manual setup handoff. | Actual environment variables, provider setup, limits and optional Tiger path match code; a credentialed smoke procedure is documented without claiming it ran. |
 
 Existing evidence is in [build-progress.md](build-progress.md), [verification](verification/README.md), and the feature [task specifications](task-specs/). Use the latest execution entry when an earlier review still describes a subsequently fixed failure.
+
+
+## Profile and symptom follow-up ownership
+
+Records/preparation owns `Core/SymptomEntry.swift`, `Features/Records/SymptomEntryView.swift`, and `State/AppStore+Symptoms.swift`. The integration captain owns the Medical profile feature (`Features/Profile/MedicalProfileView.swift`, `State/AppStore+Profile.swift`), root tab routing, Settings, and palette roles. Profile extension fields and `MedicalRecord.symptomEntry` are optional Codable properties; coordinate changes to `Core/Models.swift`. Symptoms use existing record storage, source versions, and preparation providers. The backend preserves these additional snapshot fields without a new endpoint. Profile edits are quick-reference data and do not automatically rewrite historical source documents or feed the current records-only preparation contract.

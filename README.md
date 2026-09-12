@@ -31,7 +31,7 @@ Follow the [presentation walkthrough](demo/demo-script.md) using the [standalone
 - Review a booking request and run the clearly labeled simulated outcome. Confirmation updates the existing local visit once.
 - Open the separate sample transcript, correct text or add notes, save a visit memory, and follow its source link. New microphone audio never receives an unrelated sample transcript.
 
-Profile & settings exposes server configuration and explicit demo reset. Local state survives relaunch. Deleted/reset items leave active history, while original files and one previous-state backup remain in app storage for recovery; uninstalling clears that sandbox. No real records are bundled or automatically imported.
+The gear in Medical profile opens Settings for server configuration and explicit demo reset. Local state survives relaunch. Deleted/reset items leave active history, while original files and one previous-state backup remain in app storage for recovery; uninstalling clears that sandbox. No real records are bundled or automatically imported.
 
 ## Configurable APIs
 
@@ -84,3 +84,9 @@ python3 scripts/check_provider_api.py
 Build the server before running the two Python checks. [Progress](docs/build-progress.md), [verification evidence](docs/verification/README.md), and [review history](docs/reviews/review-log.md) distinguish executed checks from manual setup.
 
 Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider accounts/keys/agent/number and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, web wrapping, custom encryption and additional production hardening are outside this MVP.
+
+### Medical profile and symptom log
+
+Open **Medical profile** (or the Summary avatar) for persistent allergies, medications, conditions, surgeries/implants, and care notes. Its gear opens Settings. Use **Log symptoms** on Summary or the Records add menu to save a dated **User symptom entry**. Optional fields capture severity, duration, details, possible triggers, and what helped; entries can be edited, searched, and used as sources during visit preparation. **View all records** at the bottom of Recent records switches to the full Records tab.
+
+The light theme uses exact Sky `#E1ECEE` behind Ivory `#FAF4F4` cards. See the [follow-up verification](docs/verification/profile-symptoms.md).

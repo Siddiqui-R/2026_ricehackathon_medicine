@@ -1,3 +1,5 @@
+> **Latest follow-up:** [Medical profile and symptom log verification](profile-symptoms.md) records the current Sky-background/Ivory-card design and 43 passing core tests. Earlier screenshots below describe the initial MVP.
+
 # Reva MVP verification evidence
 
 Current scope is the [user's two-hour MVP revision](../mvp-goal.md). All application content used below is fictional. No paid AI request, actual clinic call, or live Tiger database operation was executed.

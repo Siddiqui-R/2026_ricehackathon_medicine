@@ -103,3 +103,6 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Renamed only the untouched fictional diary label to “Scanned symptom note - date needs review”; original image, extracted text, uncertain date, and user-edited labels remain intact.
 - Measured prior screenshot flat RGB values: cards (225,236,238) and canvas (250,244,244), exactly Sky and Ivory. Revised roles to an opaque Sky page background and Ivory cards; explicit sRGB tokens preserve all six supplied values. Palette choice was asked asynchronously; this is the stated default pending other feedback.
 - Verification and checkpoint results are recorded in [profile-symptoms.md](verification/profile-symptoms.md). This follow-up adds no provider configuration or paid requests.
+
+- Checkpoint `ffcbf6c`: implemented medical profile, symptom logging, navigation, and palette roles. Final native build succeeded; 43 core tests passed with one live-server gate skipped. Native save/edit/filter/view-all/relaunch checks passed. Temporary QA data removed through the app.
+- Updated the as-built stack diagram immediately before the follow-up documentation commit and GitHub push.
