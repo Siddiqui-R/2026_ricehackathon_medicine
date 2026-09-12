@@ -1,5 +1,7 @@
 # Reva — revised two-hour MVP goal
 
+> Historical deadline milestone. Later user requests added the heart-red light-only palette, Medical profile and symptom entries, a responsive browser, a broad Fable audit, and real browser accounts/Tiger setup. Use [the current project specification](reva-stack-spec.md) and [account contract](task-specs/accounts-and-tiger.md) for active scope/status; the browser/review/palette deferrals below no longer control those later tasks. Live services and new account functionality still require their own evidence.
+
 User scope revision received September12,2026 at07:28CDT /12:28UTC. Target delivery by09:28CDT /14:28UTC. This supersedes the earlier exhaustive completion loop and task list where they conflict. The active goal tool's original text cannot be edited through its available status-only API; this document and the user's latest instruction control remaining work.
 
 ## Deliver now

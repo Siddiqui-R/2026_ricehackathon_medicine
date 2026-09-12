@@ -1,4 +1,4 @@
-> Superseded where scope conflicts by [the user’s two-hour MVP revision](mvp-goal.md). Remaining work follows that shorter delivery scope; this original checklist is retained for history and later manual feedback.
+> Historical initial gates, first superseded by the [two-hour MVP revision](mvp-goal.md) and subsequently by [the current project specification](reva-stack-spec.md). Later user decisions select heart-red light-only appearance, add browser/profile/symptom functionality, authorize the broad Fable audit, and require real browser accounts with Tiger setup. The original palette/dark-mode, web and account/review deferrals below are retained as history, not current requirements. Live deployment remains unverified until evidenced.
 
 # Reva hackathon prototype — binding completion criteria
 

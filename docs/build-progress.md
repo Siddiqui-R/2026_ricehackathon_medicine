@@ -2,7 +2,7 @@
 
 ## Current objective
 
-Implement and verify the native Swift hackathon prototype against [completion criteria](completion-criteria.md). The latest user authorizes frequent checkpoint commits and pushing the completed work. Isolated worktrees should be used for later code reviews and targeted revisions. Never rewrite checkpoint history to conceal changes.
+Maintain the native/browser MVP and reconcile the active account/Tiger extension and independent audit against [the current project specification](reva-stack-spec.md). The original [completion criteria](completion-criteria.md) and dated entries below preserve earlier milestones. This collaborator retains the user's focused checkpoint/push workflow; Claude's concurrent application changes remain owned by its implementation workflow. Use isolated worktrees for reviews and targeted revisions, and never rewrite checkpoint history to conceal changes.
 
 ## Decisions and corrections
 
@@ -158,3 +158,11 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Clean npm ci (including development build/OCR packages) and the exact production build command passed. Generated index, JS/CSS, demo/seed.json and OCR worker/model exist under apps/web/dist. Added docs/deployment-vercel.md and linked the browser guide.
 - The unique deployment URL redirected to Vercel login. Computer access to Google Chrome was denied; no credentials or browser protections were bypassed. GitHub deployment status remains available for following the new build, and the public URL has been requested for visual verification.
 - This fixes frontend publishing. Hosted provider/sync routes still require a separately deployed Swift backend; no local loopback proxy or provider key is silently exposed on Vercel.
+
+## Independent Fable audit and specification reconciliation — September 12
+
+- Checkpoint `475eee7`, pushed to `origin/main`, saves the 67-check audit packet, 19 worker task assignments, frozen-source manifest and separate Claude launch receipt. Snapshot `.worktrees/fable-audit-20260912-114322` preserves `cfe0997` plus captured WIP; 267 hashes were verified by Claude.
+- Through Computer, created **Reva intensive code-review workflow** in Claude Desktop Code with Fable 5.1 / Ultracode. Actual workflow `reva-fable-audit-w1` (`wf_74d707c0-9d8`) launched the runner and six Wave A workers; later source waves and validators are queued. Review completion and findings remain pending in `docs/audits/fable-20260912-114322`.
+- At the user's request, obtained a summary-only handoff from **Reva architecture review** while its three-track accounts/Tiger implementation continued. Reconciled the handoff with source and Git history; saved `docs/reviews/05-claude-project-handoff.md` with evidence boundaries and corrections to stale claims.
+- Replaced the planning-only stack spec with the current product/technology specification, route/API/configuration maps, precise heart palette, account/Tiger requirements, verification gates and full-stack interaction diagram. Preserved the initial proposal and added explicit current-spec links to historical goal/contracts.
+- Account/landing/Gemini/Tiger changes remain uncommitted WIP at this refresh. Existing browser/native tests do not establish new account or hosted deployment success. Application code, README/architecture/Tiger setup and examples remain with their implementation owners. No tests, credentials, live service calls or hosting changes were performed by this documentation task.

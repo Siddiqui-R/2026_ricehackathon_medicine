@@ -1,5 +1,7 @@
 # Reva prototype implementation contract v1
 
+> Historical baseline wire/device contract. See [the current project specification](reva-stack-spec.md) for later scope and [accounts-and-tiger.md](task-specs/accounts-and-tiger.md) for the active account extension: public signup/login, hashed sessions, optional static-token identities with accounts enabled, browser account mode and migration 002. Older requirements below for a nonempty static-token map in every PostgreSQL deployment do not override that newer contract. Existing snapshot/provider compatibility requirements remain in force.
+
 This contract makes the user goal concrete for concurrent work. Primary agent owns domain types, app state, UI, report relevance/generation, app/server integration, and final audit. Contributors own only their assigned paths. All dates in JSON are ISO 8601 strings; use UUID-shaped strings or stable fixture IDs consistently. All sample material is explicitly fictional. Data persists locally with no credentials; live service work is deferred.
 
 ## App state and fixture JSON

@@ -1,5 +1,7 @@
 # Two-hour MVP API implementation contract
 
+> Baseline provider contract, retained for history. The later [account contract](accounts-and-tiger.md) adds public `/v1/auth/signup` and `/v1/auth/login`; state, attachment and provider routes remain authenticated. [Current project scope](../reva-stack-spec.md) also includes browser WebM/Ogg audio support added after this initial MIME list. Do not use this older deadline or “all /v1” wording to override those changes.
+
 Deadline14:28UTC September12. No live keys/calls; provider calls tested with mocks. Existing bearer middleware secures all /v1 routes. Provider hosts fixed, credentials server-only. POSTs are explicit user actions or enabled automatic document summarization after upload. Disable cleanly when unconfigured, return safe503 errors, never fall back silently.
 
 ## JSON wire shapes (client and server implement exactly)
