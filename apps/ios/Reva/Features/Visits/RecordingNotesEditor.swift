@@ -23,7 +23,13 @@ struct RecordingNotesEditor: View {
         }.navigationTitle("Visit notes").toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { if store.perform({ try store.save(recording) }) { dismiss() } }
+                Button("Save") {
+                    if store.perform({
+                        try store.saveRecordingNotes(recording.summary, recordingID: recording.id)
+                    }) {
+                        dismiss()
+                    }
+                }
             }
         }
     }
