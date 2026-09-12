@@ -13,7 +13,9 @@
     "prebuild": "npm run assets",
     "build": "tsc -b && vite build",
     "serve": "node scripts/serve.mjs",
+    "pretypecheck": "npm run assets",
     "typecheck": "tsc -b",
+    "pretest": "npm run assets",
     "test": "vitest run src",
     "format": "prettier --write src scripts vite.config.ts",
     "format:check": "prettier --check src scripts vite.config.ts"
