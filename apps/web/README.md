@@ -22,6 +22,7 @@ Open `http://127.0.0.1:5173`. `npm run assets` copies native fictional fixtures 
 | Path | What it shows |
 | --- | --- |
 | `/` | Public landing with **Sign up**, **Log in** and **View the demo**. With a live session the actions become **Open your workspace**, **View the demo** and **Log out**. |
+| `/test`   | Experimental landing with the same entry actions, followed by an ordinary scrolling tour of records, visit preparation, and appointment memory. Small layered illustrations include sample record filters, an inspectable citation, and transcript/summary controls. Pieces make gently eased horizontal shifts one at a time, with consecutive entry and reverse-order exit ranges around a central reading zone. Native CSS scroll timelines keep neighboring previews from moving simultaneously. Scrolling stays unrestricted. Motion pause, reduced-motion preferences, and browsers without view-timeline support show the complete static illustrations. The original `/` page stays unchanged. |
 | `/signup` | Creates an account (`POST /v1/auth/signup`), stores the returned session and opens `/app`. |
 | `/login` | Logs an existing account in (`POST /v1/auth/login`). `/login?reason=session` shows a quiet "Your session ended" notice after a rejected session. |
 | `/app` | The signed-in workspace. It keeps the workspace's `#/…` hash routes and redirects to `/login` when no live session is stored. |
@@ -61,7 +62,7 @@ REVA_API_ORIGIN=http://127.0.0.1:8081 npm run dev
 
 The proxy accepts only the configured local destination; the browser has no arbitrary API URL field. In the demo workspace's **Settings & connections**, enter the server's workspace bearer token and choose **Check connection**. The public local demo token is `reva-local-demo-token`. The demo token, provider capabilities, and connected-AI toggle live only in memory and reset on reload. Apart from the account session described below, private credentials are not persisted to IndexedDB/localStorage or embedded in the bundle.
 
-On Vercel, keep the project at the repository root and use its canonical `vercel.json`, which includes the build, output, security headers, and `/demo`, `/login`, `/signup`, and `/app` entry-page rewrites. To reach a hosted Swift server, configure explicit `/v1/:path*` and `/health` rewrites to that server's HTTPS origin, or configure `VITE_REVA_API_ORIGIN` with the CSP and CORS requirements below. The bounded loopback proxy is for local use only.
+On Vercel, keep the project at the repository root and use its canonical `vercel.json`, which includes the build, output, security headers, and `/test`, `/demo`, `/login`, `/signup`, and `/app` entry-page rewrites. To reach a hosted Swift server, configure explicit `/v1/:path*` and `/health` rewrites to that server's HTTPS origin, or configure `VITE_REVA_API_ORIGIN` with the CSP and CORS requirements below. The bounded loopback proxy is for local use only.
 
 ### `VITE_REVA_API_ORIGIN`
 

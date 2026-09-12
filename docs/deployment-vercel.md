@@ -20,6 +20,8 @@ Keep the repository root: asset preparation reads native fictional assets and th
 
 The API reuses the Swift snapshot, attachment, account and session tables and migration lock. Two additive tables store shared throttles and temporary upload chunks. It never stores patient data in Vercel's temporary filesystem. Passwords use bcrypt; sessions store only hashed opaque tokens. Accounts have separate data; state writes require the expected revision and return 409 on conflicts.
 
+The experimental `/test` landing tour uses its own entry-page rewrite. The `/demo`, `/login`, `/signup`, and `/app` routes and the authenticated API rewrites remain intact.
+
 ## Environment variables
 
 Store secrets in **Vercel → revamed → Environment Variables → Production → Secret**. Never prefix secrets with `VITE_`. Local `.env`, `secrets/` and generated test artifacts are Git-ignored. This deployment uses Production values; configure Preview separately before expecting authenticated previews to work.

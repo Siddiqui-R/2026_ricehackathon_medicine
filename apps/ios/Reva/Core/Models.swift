@@ -158,6 +158,7 @@ struct TranscriptSegment: Codable, Identifiable, Equatable {
 // Tie optional original audio, reviewed segments and transcription provenance to a visit.
 struct VisitRecording: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
+    // Empty for standalone web sessions; otherwise references a saved visit.
     var visitID: String
     var title: String
     var createdAt: String = RevaDate.now
@@ -214,7 +215,7 @@ struct AppSnapshot: Codable, Equatable {
         }
         let visitIDs = Set(visits.map(\.id))
         guard bookings.allSatisfy({ visitIDs.contains($0.visitID) }),
-            recordings.allSatisfy({ visitIDs.contains($0.visitID) })
+            recordings.allSatisfy({ $0.visitID.isEmpty || visitIDs.contains($0.visitID) })
         else { throw RevaError.invalid("A booking or recording refers to a missing visit.") }
         let filenames = records.compactMap(\.sourceFilename) + recordings.compactMap(\.audioFilename)
         guard filenames.allSatisfy(Self.safeFilename) else {

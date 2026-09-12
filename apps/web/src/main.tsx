@@ -15,6 +15,7 @@ import { readSession } from './core/session';
 import { App } from './App';
 import { Brand } from './components/Brand';
 import { Landing } from './landing/Landing';
+import { TestLanding } from './landing/TestLanding';
 import { Login } from './landing/Login';
 import { Signup } from './landing/Signup';
 import './styles/tokens.css';
@@ -37,6 +38,7 @@ function Entry() {
         <App />
       </RevaProvider>
     );
+  if (path === '/test') return <TestLanding />;
   if (path === '/app') return <AccountEntry />;
   if (path === '/login') return <Login />;
   if (path === '/signup') return <Signup />;

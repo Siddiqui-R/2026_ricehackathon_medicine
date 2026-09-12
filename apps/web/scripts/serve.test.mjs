@@ -356,6 +356,9 @@ test(
     await t.test('serves only public compiled/demo assets with safe types and HEAD behavior', async () => {
       for (const [target, type] of [
         ['/', 'text/html; charset=utf-8'],
+        ['/test', 'text/html; charset=utf-8'],
+        ['/test/', 'text/html; charset=utf-8'],
+        ['/test?preview=1', 'text/html; charset=utf-8'],
         ['/demo', 'text/html; charset=utf-8'],
         ['/demo/', 'text/html; charset=utf-8'],
         ['/login', 'text/html; charset=utf-8'],
@@ -379,6 +382,7 @@ test(
       assert.ok(Number(head.headers['content-length']) > 0);
       for (const target of [
         '/account',
+        '/test/missing',
         '/app/records',
         '/demo/records',
         '/private-settings.txt',

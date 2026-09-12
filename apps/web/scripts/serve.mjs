@@ -1,6 +1,6 @@
 // Purpose: Serve a built web client and proxy its authenticated requests to the local Swift API.
 // Inputs: dist assets, optional PORT/HOST, and a loopback REVA_API_ORIGIN.
-// Outputs: A same-origin browser application (/, /demo, /login, /signup, /app) with bounded API forwarding.
+// Outputs: A same-origin browser application (/, /test, /demo, /login, /signup, /app) with bounded API forwarding.
 // Side effects: Opens one HTTP listener and forwards explicitly allowed API routes only.
 
 import { createServer, request as requestHTTP } from 'node:http';
@@ -107,8 +107,8 @@ function readBody(incoming, maximum) {
   });
 }
 
-// MARK: - Only compiled assets, bundled fictional data and the five application routes are readable
-const appRoutes = new Set(['/', '/demo', '/login', '/signup', '/app']);
+// MARK: - Only compiled assets, bundled fictional data and the six application routes are readable
+const appRoutes = new Set(['/', '/test', '/demo', '/login', '/signup', '/app']);
 function appRoute(pathname) {
   return appRoutes.has(pathname.length > 1 ? pathname.replace(/\/+$/u, '') : pathname);
 }
