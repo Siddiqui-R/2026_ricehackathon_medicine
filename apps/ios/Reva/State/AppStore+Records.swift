@@ -46,7 +46,7 @@ extension AppStore {
         let textPresent = !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if textChanged {
             latest.text = draft.text
-            latest.summary = ReportEngine.localExcerpt(draft.text)
+            latest.summary = ReportEngine.localExcerpt(draft.text, isDemo: latest.isDemo)
             latest.summaryModel = nil
             latest.pageTexts = nil
             latest.status = reviewed && textPresent ? "ready" : "needsReview"
