@@ -17,6 +17,9 @@ it('keeps all three people separate through saves, reset and reopening', async (
     const data = await repository.seed();
     expect(data.profile.initials).toBe(person.initials);
     expect(data.records.length).toBeGreaterThan(0);
+    expect(
+      data.records.every((record) => ['Notes', 'Labs', 'Imaging', 'Procedure', 'Scan'].includes(record.kind)),
+    ).toBe(true);
     expect(data.visits.length).toBeGreaterThan(0);
     expect(data.profile.isDemo).toBe(true);
     if (person.id !== 'jordan') {

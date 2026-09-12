@@ -94,7 +94,7 @@ export function demoSnapshot(base: AppSnapshot, id: DemoPersonID): AppSnapshot {
   const records: MedicalRecord[] = entries.map(([title, kind, text, tags], index) => ({
     id: `demo-${id}-record-${index + 1}`,
     title,
-    kind: kind === 'Symptoms' ? 'Notes' : kind,
+    kind: kind === 'Symptoms' || kind === 'Visit' ? 'Notes' : kind,
     provider:
       index === 2 && isMaya
         ? 'Dr. Leah Brooks'
