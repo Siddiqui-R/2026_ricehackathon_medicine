@@ -2,9 +2,11 @@ import SwiftUI
 
 struct SummaryView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var settings = false
+    let showAllRecords: () -> Void
+    let showMedicalProfile: () -> Void
     @State private var addRecord = false
     @State private var addVisit = false
+    @State private var logSymptoms = false
     var nextVisit: Visit? { store.visits.first { $0.status == "upcoming" } }
     var body: some View {
         Page {
@@ -30,6 +32,17 @@ struct SummaryView: View {
                 Button { addRecord = true } label: { quickAction("Add record", symbol: "plus.rectangle.on.folder") }
                 Button { addVisit = true } label: { quickAction("Add visit", symbol: "calendar.badge.plus") }
             }.buttonStyle(.plain)
+            Button { logSymptoms = true } label: {
+                HStack(spacing: 14) {
+                    IconTile(symbol: "square.and.pencil")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Log symptoms").font(.headline)
+                        Text("Keep track of what you’re feeling.").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(RevaTheme.accent)
+                }.padding(18).background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+            }.buttonStyle(.plain)
             if store.records.contains(where: \.needsReview) {
                 SectionHeading(title: "Needs your review")
                 RevaCard {
@@ -44,14 +57,18 @@ struct SummaryView: View {
                     if index > 0 { Divider() }
                     NavigationLink { RecordDetailView(id: record.id) } label: { RecordRow(record: record) }.buttonStyle(.plain)
                 }
+                Divider()
+                Button(action: showAllRecords) {
+                    HStack { Text("View all records").font(.headline); Spacer(); Image(systemName: "arrow.right") }
+                        .frame(minHeight: 32).contentShape(Rectangle())
+                }.accessibilityHint("Opens the Records tab with all records")
             }
-            StatusNotice(title: "Your history stays with you", message: "This prototype saves on this device. You decide which records to add and what to bring to your visit.", symbol: "iphone")
         }
         .navigationTitle("Summary")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { settings = true } label: { Text(store.snapshot?.profile.initials ?? "R").font(.caption.bold()).foregroundStyle(RevaTheme.accent).frame(width: 36, height: 36).background(RevaTheme.soft, in: Circle()) }.accessibilityLabel("Profile and settings") } }
-        .sheet(isPresented: $settings) { NavigationStack { SettingsView() } }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(action: showMedicalProfile) { Text(store.snapshot?.profile.initials ?? "R").font(.caption.bold()).foregroundStyle(RevaTheme.accent).frame(width: 36, height: 36).background(RevaTheme.soft, in: Circle()) }.accessibilityLabel("Medical profile") } }
         .sheet(isPresented: $addRecord) { NavigationStack { AddRecordView() } }
         .sheet(isPresented: $addVisit) { NavigationStack { VisitEditorView() } }
+        .sheet(isPresented: $logSymptoms) { NavigationStack { SymptomEntryEditorView() } }
     }
     private func quickAction(_ title: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 14) { Image(systemName: symbol).font(.title2).foregroundStyle(RevaTheme.accent); Text(title).font(.headline) }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: 20))

@@ -25,6 +25,11 @@ import Combine
             if let loaded = try repository.load() {
                 snapshot = loaded.snapshot
                 if loaded.recovered { notice = "Recovered the last valid checkpoint. Your original files remain available." }
+                // Rename only the untouched demo label. Preserve scanned wording, originals, and user edits.
+                if var sample = snapshot?.records.first(where: { $0.id == "demo-record-symptom-diary" && $0.title == "Nausea and palpitation diary - date needs review" }) {
+                    sample.title = "Scanned symptom note - date needs review"
+                    try save(sample)
+                }
                 if snapshot?.bookings.contains(where: { $0.isLive != true && ["queued", "calling"].contains($0.status) }) == true {
                     try mutate { data in for i in data.bookings.indices where data.bookings[i].isLive != true && ["queued", "calling"].contains(data.bookings[i].status) { data.bookings[i].status = "needsUser" } }
                     notice = "An interrupted demo booking needs your attention. Open it to retry."
@@ -32,7 +37,14 @@ import Combine
             } else { try resetDemo() }
         } catch { startupError = error.localizedDescription }
     }
-    var records: [MedicalRecord] { (snapshot?.records ?? []).sorted { $0.date > $1.date } }
+    var records: [MedicalRecord] {
+        (snapshot?.records ?? []).sorted {
+            if $0.date != $1.date { return $0.date > $1.date }
+            let left = RevaDate.parse($0.symptomEntry?.observedAt ?? $0.uploadedAt)
+            let right = RevaDate.parse($1.symptomEntry?.observedAt ?? $1.uploadedAt)
+            return left == right ? $0.id < $1.id : left > right
+        }
+    }
     var visits: [Visit] { (snapshot?.visits ?? []).sorted { $0.date < $1.date } }
     var bookings: [BookingRequest] { snapshot?.bookings ?? [] }
     var recordings: [VisitRecording] { snapshot?.recordings ?? [] }

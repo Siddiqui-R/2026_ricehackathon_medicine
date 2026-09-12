@@ -22,7 +22,7 @@
   "records": [
     {
       "id": "demo-record-symptom-diary",
-      "title": "Nausea and palpitation diary - date needs review",
+      "title": "Scanned symptom note - date needs review",
       "kind": "Scan",
       "provider": "Patient-authored sample (Fictional)",
       "date": "2026-09-07",

@@ -93,3 +93,13 @@ The user's deadline changed at07:28CDT. docs/mvp-goal.md and /Users/tempadmin/go
 ## Final stack document and delivery
 
 Created docs/architecture.md after implementation and the bounded MVP verification, immediately before the final commit/push as requested. It diagrams native/client/server/Tiger/provider boundaries, document-to-brief, booking, recording/memory and three-person ownership. README links it. Final remote alignment is verified after push and reported in the delivery message; Git history supplies the final commit identity.
+
+
+## Follow-up — medical profile, symptom entries, dashboard (September 12)
+
+- User requested persistent health information on its own medical profile page, removal of Appearance and the “Your history stays with you” tile, a Recent records footer linking to the Records tab, an exact-palette background adjustment, and an intuitive symptom log.
+- Added fourth Medical profile tab and Summary avatar routing. Profile overview/editor includes name/date of birth, allergies, medications, conditions, surgeries/implants, and care notes; settings now contains service/app controls. Optional profile fields preserve old snapshots.
+- Added a structured User symptom entry, available from Summary and Records. Occurrence time/zone, optional severity, duration, details, possible triggers, and what helped persist as a self-reported record. Entry edits preserve identity and original creation time, use normal source versions, and remain available for search and visit preparation. Imported scanned material remains a separate source.
+- Renamed only the untouched fictional diary label to “Scanned symptom note - date needs review”; original image, extracted text, uncertain date, and user-edited labels remain intact.
+- Measured prior screenshot flat RGB values: cards (225,236,238) and canvas (250,244,244), exactly Sky and Ivory. Revised roles to an opaque Sky page background and Ivory cards; explicit sRGB tokens preserve all six supplied values. Palette choice was asked asynchronously; this is the stated default pending other feedback.
+- Verification and checkpoint results are recorded in [profile-symptoms.md](verification/profile-symptoms.md). This follow-up adds no provider configuration or paid requests.

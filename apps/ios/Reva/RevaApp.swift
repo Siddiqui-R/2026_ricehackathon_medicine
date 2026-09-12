@@ -13,6 +13,8 @@ struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @State private var welcome = false
+    @State private var selectedTab: RevaTab = .summary
+    @State private var recordsGeneration = 0
     var body: some View {
         Group {
             if let error = store.startupError {
@@ -20,10 +22,13 @@ struct RootView: View {
                     Button("Restore fictional demo") { store.perform { try store.resetDemo() } }.buttonStyle(.borderedProminent)
                 }
             } else {
-                TabView {
-                    NavigationStack { SummaryView() }.tabItem { Label("Summary", systemImage: "heart.text.square") }
-                    NavigationStack { RecordsView() }.tabItem { Label("Records", systemImage: "folder") }
-                    NavigationStack { VisitsView() }.tabItem { Label("Visits", systemImage: "calendar") }
+                TabView(selection: $selectedTab) {
+                    NavigationStack {
+                        SummaryView(showAllRecords: { recordsGeneration += 1; selectedTab = .records }, showMedicalProfile: { selectedTab = .medicalProfile })
+                    }.tabItem { Label("Summary", systemImage: "heart.text.square") }.tag(RevaTab.summary)
+                    NavigationStack { RecordsView() }.id(recordsGeneration).tabItem { Label("Records", systemImage: "folder") }.tag(RevaTab.records)
+                    NavigationStack { VisitsView() }.tabItem { Label("Visits", systemImage: "calendar") }.tag(RevaTab.visits)
+                    NavigationStack { MedicalProfileView() }.tabItem { Label("Medical profile", systemImage: "person.text.rectangle") }.tag(RevaTab.medicalProfile)
                 }
             }
         }
@@ -32,6 +37,7 @@ struct RootView: View {
         .onAppear { if !hasSeenWelcome { welcome = true } }
     }
 }
+private enum RevaTab: Hashable { case summary, records, visits, medicalProfile }
 struct WelcomeView: View {
     let enter: () -> Void
     var body: some View {

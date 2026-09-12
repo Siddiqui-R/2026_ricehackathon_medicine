@@ -9,6 +9,8 @@ struct PatientProfile: Codable, Equatable {
     var medications: [String]
     var conditions: [String]
     var isDemo: Bool
+    var surgeriesAndImplants: [String]? = nil
+    var careNotes: String? = nil
 }
 
 struct MedicalRecord: Codable, Identifiable, Equatable {
@@ -31,6 +33,7 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
     var pageTexts: [String]?
     var sourceRecordingID: String? = nil
     var summaryModel: String? = nil
+    var symptomEntry: SymptomEntry? = nil
 
     var symbol: String {
         switch kind {
@@ -39,11 +42,12 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
         case "Procedure": return "cross.case"
         case "Recording": return "waveform"
         case "Scan": return "doc.viewfinder"
+        case "User symptom entry": return "heart.text.clipboard"
         default: return "doc.text"
         }
     }
     var needsReview: Bool { status == "needsReview" }
-    var summaryLabel: String { summaryModel.map { "AI summary · " + $0 } ?? (isDemo ? "Demo summary" : "Local excerpt") }
+    var summaryLabel: String { summaryModel.map { "AI summary · " + $0 } ?? (symptomEntry != nil ? "Your entry" : isDemo ? "Demo summary" : "Local excerpt") }
 }
 
 struct SourceReference: Codable, Identifiable, Equatable {

@@ -4,8 +4,9 @@ enum RevaTheme {
     // Exact six-color user palette, reaffirmed September12. No adaptive color substitutions.
     static let ivory = Color(hex: 0xFAF4F4), gold = Color(hex: 0xC8A07D), slate = Color(hex: 0xA2B7BC)
     static let teal = Color(hex: 0x0A5B6C), aqua = Color(hex: 0x6FABB6), sky = Color(hex: 0xE1ECEE)
-    static let canvas = ivory
-    static let surface = sky
+    // Opaque supplied Sky backdrop and warm Ivory cards, with no blended blue substitute.
+    static let canvas = sky
+    static let surface = ivory
     static let accent = teal
     static let soft = sky
     static let buttonText = ivory
@@ -14,7 +15,12 @@ enum RevaTheme {
 extension UIColor {
     convenience init(hex: UInt) { self.init(red: CGFloat((hex >> 16) & 255)/255, green: CGFloat((hex >> 8) & 255)/255, blue: CGFloat(hex & 255)/255, alpha: 1) }
 }
-extension Color { init(hex: UInt) { self.init(uiColor: UIColor(hex: hex)) } }
+extension Color {
+    init(hex: UInt) {
+        self.init(.sRGB, red: Double((hex >> 16) & 255) / 255,
+                  green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255, opacity: 1)
+    }
+}
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15).padding(.horizontal, 12)

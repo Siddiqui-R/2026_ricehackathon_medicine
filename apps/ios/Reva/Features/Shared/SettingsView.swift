@@ -8,12 +8,6 @@ struct SettingsView: View {
     @State private var confirmOverwrite = false
     var body: some View {
         RevaForm {
-            if let profile = store.snapshot?.profile {
-                Section { HStack(spacing: 16) { Text(profile.initials).font(.title2.bold()).frame(width: 60, height: 60).foregroundStyle(RevaTheme.accent).background(RevaTheme.soft, in: Circle()); VStack(alignment: .leading, spacing: 5) { Text(profile.name).font(.headline); Text("Fictional demo profile").font(.caption).foregroundStyle(.secondary) } }; LabeledContent("Date of birth", value: RevaDate.display(profile.dateOfBirth)) }
-                Section("Allergies · demo history") { ForEach(profile.allergies, id: \.self) { Text($0) } }
-                Section("Medications · demo history") { ForEach(profile.medications, id: \.self) { Text($0) } }
-            }
-            Section("Appearance") { HStack { Text("Reva palette"); Spacer(); ForEach([RevaTheme.ivory, RevaTheme.gold, RevaTheme.slate, RevaTheme.teal, RevaTheme.aqua, RevaTheme.sky].indices, id: \.self) { i in Circle().fill([RevaTheme.ivory, RevaTheme.gold, RevaTheme.slate, RevaTheme.teal, RevaTheme.aqua, RevaTheme.sky][i]).frame(width: 18, height: 18) } } }
             Section("Connected services") {
                 TextField("Server URL", text: $store.connectionURL).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                 SecureField("Server access token", text: $store.connectionToken).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -42,7 +36,7 @@ struct SettingsView: View {
             Section { Text("Reva · revamed.health").font(.headline); Text("Making every appointment count.").foregroundStyle(.secondary); Text("Hackathon prototype · 0.1.0").font(.caption).foregroundStyle(.secondary) }
         }.onChange(of: store.connectionURL) { _, _ in store.providerStatus = nil; store.useConnectedAI = false }
             .onChange(of: store.connectionToken) { _, _ in store.providerStatus = nil; store.useConnectedAI = false }
-            .navigationTitle("Profile & settings").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .confirmationDialog("Restore the fictional demo and replace your local changes?", isPresented: $reset, titleVisibility: .visible) { Button("Restore demo", role: .destructive) { store.perform { try store.resetDemo() } } }
             .confirmationDialog("Replace local data with the server snapshot? Unsynced local changes will leave the active view.", isPresented: $confirmPull, titleVisibility: .visible) { Button("Pull server snapshot") { Task { await store.sync(url: store.connectionURL, token: store.connectionToken, action: "pull") } } }

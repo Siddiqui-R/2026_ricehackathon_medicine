@@ -349,7 +349,7 @@ def make_seed() -> dict:
              sourceFilename=source("asthma-context", "txt"), mimeType="text/plain", pageCount=1,
              status="ready", notes="Synthetic plain-text source and authored demo summary. No AI service ran.",
              isDemo=True, version=1),
-        dict(id=rid("symptom-diary"), title="Nausea and palpitation diary - date needs review", kind="Scan",
+        dict(id=rid("symptom-diary"), title="Scanned symptom note - date needs review", kind="Scan",
              provider="Patient-authored sample (Fictional)", date="2026-09-07", uploadedAt=UPLOAD,
              tags=["primary care", "nausea", "palpitations", "symptom diary", "needs review"],
              text=DIARY_TEXT.strip(), pageTexts=[DIARY_TEXT.strip()],

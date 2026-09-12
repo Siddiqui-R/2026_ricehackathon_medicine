@@ -29,7 +29,7 @@ enum ReportEngine {
             ["ear", "otitis", "infection"],
             ["lab", "labs", "blood", "thyroid", "electrolyte"]
         ]
-        let stopWords = Set("want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptoms recent next right left source record details together information recent ongoing routine explain planning plan".split(separator: " ").map { String($0) })
+        let stopWords = Set("want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptom symptoms entry entries user recent next right left source record details together information recent ongoing routine explain planning plan".split(separator: " ").map { String($0) })
         let focusWords = Set(focus.split { !$0.isLetter }.map { String($0) })
         var terms = focusWords.filter { $0.count > 3 && !stopWords.contains($0) }
         for group in groups where !focusWords.isDisjoint(with: group) { terms.formUnion(group) }
