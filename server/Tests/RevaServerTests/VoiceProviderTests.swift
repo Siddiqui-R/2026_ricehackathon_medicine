@@ -91,6 +91,29 @@ private func expectVoiceAbort(_ status: HTTPResponseStatus, _ action: () async t
 // MARK: - Whisper multipart fidelity and transcript validation
 @Suite("Voice provider adapters — mocked transport only")
 struct VoiceProviderTests {
+    // MARK: - Browser originals preserve bytes and MIME across storage and transcription boundaries
+    @Test(arguments: ["webm", "ogg"])
+    func browserAudioOriginalsAreAcceptedWithoutRelabeling(format: String) async throws {
+        let audio = Data([0, 1, 255, 13, 10, 65])
+        let contentType = "audio/" + format
+        let filename = "Synthetic-browser-visit." + format
+        try Validation.attachment(
+            StoredAttachment(
+                id: "browser-audio", filename: filename, contentType: contentType,
+                data: audio, updatedAt: Date()))
+        let mock = VoiceMockHTTP([.response(200, whisperJSON)])
+        let service = VoiceTranscriptionService(
+            configuration: try voiceConfiguration(), transport: mock.transport)
+        let result = try await service.transcribe(audio: audio, filename: filename, contentType: contentType)
+        #expect(result.model == "whisper-1")
+        let request = try #require(await mock.requests.first)
+        let body = try #require(request.httpBody)
+        #expect(body.range(of: audio) != nil)
+        #expect(body.range(of: Data(("Content-Type: " + contentType).utf8)) != nil)
+        #expect(body.range(of: Data(("filename=\"" + filename + "\"").utf8)) != nil)
+        #expect(await mock.count == 1)
+    }
+
     @Test func whisperMultipartTimestampsAndNeutralSpeaker() async throws {
         let mock = VoiceMockHTTP([.response(200, whisperJSON)])
         let service = VoiceTranscriptionService(

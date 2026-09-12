@@ -275,6 +275,8 @@ final class ProviderClientTests: XCTestCase {
             ("Fictional café.M4A", "audio/mp4", "Fictional caf_.M4A"),
             ("synthetic.wav", "audio/wav", "synthetic.wav"),
             ("synthetic.mp3", "audio/mpeg", "synthetic.mp3"),
+            ("synthetic.webm", "audio/webm", "synthetic.webm"),
+            ("synthetic.ogg", "audio/ogg", "synthetic.ogg"),
         ]
         for (filename, type, metadata) in formats {
             let transport = try ProviderTestTransport { request in

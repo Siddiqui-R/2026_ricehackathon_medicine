@@ -56,10 +56,22 @@ struct ServerClient {
         let type = type?.lowercased() ?? "application/octet-stream"
         let accepted = [
             "application/pdf", "text/plain", "image/png", "image/jpeg", "image/heic", "image/heif",
-            "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mpeg", "audio/wav", "audio/x-wav",
+            "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/webm",
+            "audio/ogg",
             "application/octet-stream",
         ]
         return accepted.contains(type) ? type : "application/octet-stream"
+    }
+    // MARK: - Cross-client audio metadata
+    // Keep browser WebM/Ogg originals correctly labeled when the native app syncs or transcribes them.
+    static func audioContentType(filename: String) -> String {
+        switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
+        case "wav": return "audio/wav"
+        case "mp3", "mpeg": return "audio/mpeg"
+        case "webm": return "audio/webm"
+        case "ogg": return "audio/ogg"
+        default: return "audio/mp4"
+        }
     }
     // MARK: - Endpoint validation
     // Allow HTTPS or explicit loopback HTTP and reject missing credentials before network use.

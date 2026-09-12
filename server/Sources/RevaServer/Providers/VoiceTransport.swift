@@ -53,7 +53,10 @@ enum VoiceProviderLimits {
     static let audioBytes = 16 * 1024 * 1024
     static let responseBytes = 4 * 1024 * 1024
     static let transcriptCharacters = 200_000
-    static let allowedAudioTypes: Set<String> = ["audio/mp4", "audio/m4a", "audio/wav", "audio/mpeg"]
+    // Browser MediaRecorder originals keep their WebM/Ogg type through storage and Whisper upload.
+    static let allowedAudioTypes: Set<String> = [
+        "audio/mp4", "audio/m4a", "audio/wav", "audio/mpeg", "audio/webm", "audio/ogg",
+    ]
 
     static func validateAudio(_ audio: Data, filename: String, contentType: String) throws {
         guard !audio.isEmpty else { throw Abort(.badRequest, reason: "Provide nonempty audio bytes.") }
@@ -63,7 +66,9 @@ enum VoiceProviderLimits {
         guard allowedAudioTypes.contains(contentType) else {
             throw Abort(
                 .unsupportedMediaType,
-                reason: "Transcription accepts audio/mp4, audio/m4a, audio/wav, or audio/mpeg.")
+                reason:
+                    "Transcription accepts audio/mp4, audio/m4a, audio/wav, audio/mpeg, audio/webm, or audio/ogg."
+            )
         }
         guard !filename.isEmpty, filename.count <= 180, filename != ".", filename != "..",
             filename.utf8.allSatisfy({ byte in

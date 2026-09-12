@@ -116,8 +116,7 @@ struct ProviderClient {
         guard !bytes.isEmpty, bytes.count <= 16 * 1024 * 1024 else {
             throw RevaError.invalid("Choose a nonempty recording under 16 MiB.")
         }
-        let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
-        let type = ext == "wav" ? "audio/wav" : ext == "mp3" ? "audio/mpeg" : "audio/mp4"
+        let type = ServerClient.audioContentType(filename: filename)
         return try await request(
             "audio/transcribe", method: "POST", bytes: bytes, contentType: type, filename: filename)
     }

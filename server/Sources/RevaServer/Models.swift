@@ -128,7 +128,8 @@ enum Validation {
     static let maxAttachmentCount = 128
     static let contentTypes: Set<String> = [
         "application/pdf", "text/plain", "image/png", "image/jpeg", "image/heic", "image/heif", "audio/mp4",
-        "audio/x-m4a", "audio/m4a", "audio/mpeg", "audio/wav", "audio/x-wav", "application/octet-stream",
+        "audio/x-m4a", "audio/m4a", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/webm", "audio/ogg",
+        "application/octet-stream",
     ]
 
     static func safeID(_ value: String) -> Bool {

@@ -49,7 +49,7 @@ extension AppStore {
                         try await client.uploadAttachment(
                             id: ServerClient.attachmentID(for: name),
                             filename: ServerClient.attachmentMetadataName(name), data: Data(contentsOf: url),
-                            type: "audio/mp4")
+                            type: ServerClient.audioContentType(filename: name))
                     }
                 }
                 serverRevision = try await client.push(snapshot, revision: serverRevision)
