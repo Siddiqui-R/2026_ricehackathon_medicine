@@ -68,7 +68,15 @@ function sourceContent(text: string, isDemo: boolean): string {
     )
       trailer = index;
   });
-  return metadata >= 0 && metadata + 1 < trailer
+  const knownFooter = lines
+    .slice(trailer + 1)
+    .every(
+      (line) =>
+        /^Synthetic source ID: demo-record-[a-z0-9-]+$/.test(line.text) ||
+        /^Page \d+ of \d+$/.test(line.text) ||
+        line.text === 'SYNTHETIC SCAN | 1 page | no real patient data',
+    );
+  return metadata >= 0 && metadata + 1 < trailer && knownFooter
     ? text.slice(lines[metadata + 1].start, lines[trailer - 1].end)
     : text;
 }
@@ -91,6 +99,27 @@ export function localExcerptDetails(text: string, isDemo = false): SourceExcerpt
 }
 export function localExcerpt(text: string, isDemo = false): string {
   return localExcerptDetails(text, isDemo).text;
+}
+// Recognize old generated summaries only for provenance; their unsafe cuts are never displayed.
+export function hasAuthoredDemoSummary(record: MedicalRecord): boolean {
+  if (!record.isDemo || record.summary === localExcerpt(record.text, true)) return false;
+  const lines = record.text
+    .split(/\r\n|[\n\r\v\f\u0085\u2028\u2029]/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let start = 0,
+    end = lines.length;
+  lines.slice(0, 10).forEach((line, index) => {
+    if (line.startsWith('Source date:') || line.startsWith('Week ending:')) start = index + 1;
+  });
+  lines.forEach((line, index) => {
+    if (line.startsWith('Invented for Reva software demonstration.')) end = index;
+  });
+  const legacy = prefixCharacters(
+    (start < end ? lines.slice(start, end) : lines).slice(0, 24).join('\n'),
+    1800,
+  );
+  return record.summary !== legacy;
 }
 const words = (text: string): Set<string> =>
   new Set(
@@ -163,7 +192,7 @@ export function selectedRecords(visit: Visit, records: MedicalRecord[]): Medical
     .map((record) => {
       if (visit.pinnedRecordIDs.includes(record.id)) return { record, score: 1000 };
       const index = words(
-        `${record.title} ${record.tags.join(' ')} ${record.summary} ${(record.pageTexts ?? [record.text]).map((page) => sourceContent(page, record.isDemo)).join(' ')}`,
+        `${record.title} ${record.tags.join(' ')} ${record.summary} ${(record.pageTexts?.length ? record.pageTexts : [record.text]).map((page) => sourceContent(page, record.isDemo)).join(' ')}`,
       );
       const context = record.tags.some((tag) =>
         ['context', 'medications', 'allergies', 'medical-history', 'medical history'].includes(

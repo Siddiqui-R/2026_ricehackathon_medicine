@@ -29,6 +29,14 @@ final class ExcerptIntegrityTests: XCTestCase {
         XCTAssertEqual(ReportEngine.localExcerptDetails(audited).text, "")
         XCTAssertTrue(ReportEngine.localExcerptDetails(audited).omitted)
     }
+    func testOldDemoLocalCutsAreNotMistakenForAuthoredSummaries() throws {
+        var record = try seed().records[0]
+        XCTAssertTrue(ReportEngine.hasAuthoredDemoSummary(record))
+        record.text = String(repeating: "x", count: 1792) + "dose: 100 mg"
+        record.summary = String(record.text.prefix(1800))
+        XCTAssertFalse(ReportEngine.hasAuthoredDemoSummary(record))
+        XCTAssertTrue(ReportEngine.localExcerptDetails(record.text, isDemo: true).omitted)
+    }
     func testContiguousSourceWhitespaceAndFullLinesArePreserved() {
         let text = "  dose: 100 mg\r\n\r\n  Do not discontinue.\r\n👩🏽‍⚕️ reviewed café."
         XCTAssertEqual(ReportEngine.localExcerpt(text), text)
@@ -47,6 +55,9 @@ final class ExcerptIntegrityTests: XCTestCase {
             "SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD\nSource date: 2026-09-01\nPotassium 4.1 mmol/L\nInvented for Reva software demonstration. Not a real patient record or medical advice."
         XCTAssertEqual(ReportEngine.localExcerpt(wrapper), wrapper)
         XCTAssertEqual(ReportEngine.localExcerpt(wrapper, isDemo: true), "Potassium 4.1 mmol/L")
+        XCTAssertEqual(
+            ReportEngine.localExcerpt(wrapper + "\nCorrected dose: 100 mg", isDemo: true),
+            wrapper + "\nCorrected dose: 100 mg")
     }
     func testCompletedPalpitationVisitExcludesUnrelatedEarNoteAndRetainsPins() throws {
         let snapshot = try seed()
@@ -60,6 +71,21 @@ final class ExcerptIntegrityTests: XCTestCase {
             ReportEngine.selectedRecords(visit: visit, records: snapshot.records).contains {
                 $0.id == "demo-record-ear-infection"
             })
+    }
+    func testEmptyPageMappingStillIndexesFullRecordText() throws {
+        let snapshot = try seed()
+        var visit = snapshot.visits[0]
+        var record = snapshot.records[0]
+        visit.type = "Review"
+        visit.concern = "Thyroid"
+        visit.goal = "Review"
+        visit.pinnedRecordIDs = []
+        record.title = "Document"
+        record.tags = []
+        record.summary = ""
+        record.text = "Thyroid result: exact source."
+        record.pageTexts = []
+        XCTAssertEqual(ReportEngine.selectedRecords(visit: visit, records: [record]).map(\.id), [record.id])
     }
     func testReportOmitsNoticeFromQuotedFieldAndRoundTripsMetadata() throws {
         var snapshot = try seed()

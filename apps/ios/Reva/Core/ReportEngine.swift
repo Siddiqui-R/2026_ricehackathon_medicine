@@ -15,14 +15,28 @@ enum ReportEngine {
         let text: String
         let omitted: Bool
     }
-    static let omissionNotice =
-        "Selected passage; additional source text omitted. Open the original for full context."
+    static let omissionNotice = SourceReference.excerptOmissionNotice
 
     static func localExcerpt(_ text: String, isDemo: Bool = false) -> String {
         localExcerptDetails(text, isDemo: isDemo).text
     }
     static func localExcerptDetails(_ text: String, isDemo: Bool = false) -> Excerpt {
         boundedExcerpt(sourceContent(text, isDemo: isDemo))
+    }
+    // Legacy local summaries used a lossy character cut. Recognize that exact old output only
+    // to classify it, then display a fresh safe excerpt; never quote the legacy transformed value.
+    static func hasAuthoredDemoSummary(_ record: MedicalRecord) -> Bool {
+        guard record.isDemo, record.summary != localExcerpt(record.text, isDemo: true) else { return false }
+        let lines = record.text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let start =
+            (lines.prefix(10).lastIndex {
+                $0.hasPrefix("Source date:") || $0.hasPrefix("Week ending:")
+            }).map { $0 + 1 } ?? 0
+        let end = lines.lastIndex { $0.hasPrefix("Invented for Reva software demonstration.") } ?? lines.count
+        let legacyLines = start < end ? Array(lines[start..<end]) : lines
+        let legacy = String(legacyLines.prefix(24).joined(separator: "\n").prefix(1800))
+        return record.summary != legacy
     }
     private struct SourceLine {
         let text: String
@@ -49,7 +63,13 @@ enum ReportEngine {
             let trailer = lines.lastIndex(where: {
                 $0.text
                     == "Invented for Reva software demonstration. Not a real patient record or medical advice."
-            }), metadata + 1 < trailer
+            }), metadata + 1 < trailer,
+            lines.dropFirst(trailer + 1).allSatisfy({ line in
+                line.text.range(
+                    of: #"^Synthetic source ID: demo-record-[a-z0-9-]+$"#, options: .regularExpression) != nil
+                    || line.text.range(of: #"^Page \d+ of \d+$"#, options: .regularExpression) != nil
+                    || line.text == "SYNTHETIC SCAN | 1 page | no real patient data"
+            })
         else { return text }
         return String(text[lines[metadata + 1].range.lowerBound..<lines[trailer - 1].range.upperBound])
     }
@@ -117,7 +137,9 @@ enum ReportEngine {
             if visit.pinnedRecordIDs.contains(record.id) { return (record, 1000) }
             let index =
                 (record.title + " " + record.tags.joined(separator: " ") + " " + record.summary + " "
-                + (record.pageTexts ?? [record.text]).map { sourceContent($0, isDemo: record.isDemo) }
+                + (record.pageTexts?.isEmpty == false ? record.pageTexts! : [record.text]).map {
+                    sourceContent($0, isDemo: record.isDemo)
+                }
                 .joined(separator: " ")).lowercased()
             let context = record.tags.contains {
                 ["context", "medications", "allergies", "medical-history", "medical history"].contains(
