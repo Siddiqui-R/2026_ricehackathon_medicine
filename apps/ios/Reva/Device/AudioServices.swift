@@ -23,7 +23,7 @@ enum DeviceAudioError: LocalizedError {
         case .invalidDirectory: return "The recording folder is unavailable. Please try saving again."
         case .startFailed: return "Recording could not start. Check microphone access and try again."
         case .noRecording: return "There is no recording to save. Start recording first."
-        case .emptyRecording: return "No usable audio was captured. Record a little longer and try again."
+        case .emptyRecording: return "No usable audio was captured. Discard this recording and start again."
         case .invalidAudio: return "This audio file could not be played. It may be missing or damaged."
         }
     }
@@ -69,6 +69,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     /// True while a recording session exists, including when paused.
     @Published private(set) var isRecording = false
     @Published private(set) var isPaused = false
+    @Published private(set) var finishFailed = false
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var audioURL: URL?
     @Published private(set) var errorMessage: String?
@@ -149,6 +150,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             audioURL = url
             elapsed = 0
             reachedEnd = false
+            finishFailed = false
             isRecording = true
             isPaused = false
             beginTicker()
@@ -175,9 +177,15 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     func resume() {
         guard isRecording, isPaused, let recorder else { return }
+        guard !finishFailed else {
+            errorMessage = "This recording could not be finalized. Discard it and start a new recording."
+            return
+        }
         guard !reachedEnd, elapsed < Self.maximumDuration else {
             errorMessage =
-                "The one-hour recording limit was reached. Save this recording before starting another."
+                elapsed >= Self.maximumDuration
+                ? "The one-hour recording limit was reached. Save this recording before starting another."
+                : "Recording has stopped. Save the captured audio before starting another recording."
             return
         }
         do {
@@ -222,7 +230,9 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             audioURL = url
             return url
         } catch {
-            errorMessage = "The recording could not be saved: \(error.localizedDescription)"
+            finishFailed = true
+            errorMessage =
+                "This recording could not be finalized. Discard it and start a new recording. \(error.localizedDescription)"
             throw error
         }
     }
@@ -248,6 +258,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         isRecording = false
         isPaused = false
         reachedEnd = false
+        finishFailed = false
         audioURL = nil
         DeviceAudioSession.shared.release(owner: sessionID)
     }

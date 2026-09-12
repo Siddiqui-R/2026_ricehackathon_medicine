@@ -17,6 +17,17 @@ extension AppStore {
             }
         }
     }
+    // MARK: - Separate notes merge
+    // Resolve the current recording by identity; saving notes cannot replace a newer transcript or audio link.
+    func saveRecordingNotes(_ notes: String, recordingID: String) throws {
+        try mutate { data in
+            guard let index = data.recordings.firstIndex(where: { $0.id == recordingID }) else {
+                throw RevaError.invalid("This recording is no longer available.")
+            }
+            data.recordings[index].summary = notes
+        }
+    }
+
     // MARK: - Fictional transcript access
     // The fixture remains attached to its own demo visit and never supplies transcript text for new audio.
     func loadSample(visitID: String) throws -> String {
@@ -128,4 +139,21 @@ extension AppStore {
             : "Transcript corrections saved. Any saved memory was updated; your separate notes were kept."
     }
 
+}
+
+// MARK: - Finalized recording save draft
+// Keep the same metadata and audio reference across failed writes; only a successful save clears the draft.
+@MainActor struct RecordingSaveDraft {
+    private(set) var recording: VisitRecording?
+
+    mutating func retain(_ recording: VisitRecording) {
+        self.recording = recording
+    }
+
+    mutating func save(to store: AppStore) throws -> String {
+        guard let recording else { throw RevaError.invalid("There is no finished recording to save.") }
+        try store.save(recording)
+        self.recording = nil
+        return recording.id
+    }
 }

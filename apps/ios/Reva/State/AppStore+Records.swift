@@ -25,6 +25,37 @@ extension AppStore {
             data.records[i] = revised
         }
     }
+    // MARK: - Reviewed editor merge
+    // Apply only edited fields to the latest source so a background summary or newer metadata survives.
+    func saveRecordEdits(_ draft: MedicalRecord, original: MedicalRecord, reviewed: Bool) throws {
+        guard var latest = record(original.id) else {
+            throw RevaError.invalid("This record is no longer available.")
+        }
+        let textChanged = draft.text != original.text
+        if textChanged || reviewed {
+            guard latest.text == original.text else {
+                throw RevaError.invalid(
+                    "The source text changed while this editor was open. Reopen the record to review the current text."
+                )
+            }
+        }
+        if draft.title != original.title { latest.title = draft.title }
+        if draft.provider != original.provider { latest.provider = draft.provider }
+        if draft.date != original.date { latest.date = draft.date }
+        if draft.notes != original.notes { latest.notes = draft.notes }
+        let textPresent = !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if textChanged {
+            latest.text = draft.text
+            latest.summary = ReportEngine.localExcerpt(draft.text)
+            latest.summaryModel = nil
+            latest.pageTexts = nil
+            latest.status = reviewed && textPresent ? "ready" : "needsReview"
+        } else if reviewed, textPresent, latest.status == "needsReview" {
+            latest.status = "ready"
+        }
+        try save(latest)
+    }
+
     // MARK: - Active record deletion
     // Remove record and pin references in one snapshot mutation; leave attachment cleanup separate.
     func deleteRecord(_ id: String) throws {

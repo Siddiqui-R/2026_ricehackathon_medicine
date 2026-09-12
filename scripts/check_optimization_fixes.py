@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build/optimization-checks"
 SOURCES = [
     "Core/Models.swift", "Core/SymptomEntry.swift", "Core/LocalRepository.swift",
-    "Core/ProviderContracts.swift", "State/AppStore.swift",
+    "Core/ProviderContracts.swift", "Core/ReportEngine.swift", "State/AppStore.swift",
     "State/AppStore+Records.swift", "State/AppStore+Sync.swift",
     "State/AppStore+Providers.swift",
 ]
