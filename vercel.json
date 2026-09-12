@@ -4,6 +4,13 @@
   "installCommand": "npm ci --include=dev --prefix apps/web",
   "buildCommand": "npm run build --prefix apps/web",
   "outputDirectory": "apps/web/dist",
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/demo", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/app", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

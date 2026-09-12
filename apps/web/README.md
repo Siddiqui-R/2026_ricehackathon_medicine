@@ -31,7 +31,7 @@ The built preview opens at `http://127.0.0.1:4173`. `PORT` and `HOST` configure 
 
 ## Deploy the browser on Vercel
 
-Use the repository root as the Vercel project's Root Directory. The root `vercel.json` installs and builds `apps/web`, then publishes `apps/web/dist`. The [Vercel deployment guide](../../docs/deployment-vercel.md) covers the 404 fix, build settings, source/OCR assets and the separate hosted-backend requirement. The local Node/Vite proxy is not a Vercel backend.
+Use the repository root as the Vercel project's Root Directory. The root `vercel.json` is the only deployment configuration: it installs and builds `apps/web`, then publishes `apps/web/dist`, with the entry-page rewrites and security headers. Do not set the project root to `apps/web` or add a nested deployment configuration; asset preparation needs the sibling native fixtures. The [Vercel deployment guide](../../docs/deployment-vercel.md) covers the 404 fix, build settings, source/OCR assets and the separate hosted-backend requirement. The local Node/Vite proxy is not a Vercel backend.
 
 ## Connect the existing Swift server
 

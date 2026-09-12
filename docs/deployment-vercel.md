@@ -17,7 +17,7 @@ The repository-root `vercel.json` specifies:
 
 Keep Root Directory at the repository root: asset preparation reads the sibling native fixture folder at `apps/ios/Reva/Resources`. The include-dev install is required for TypeScript/Vite and the bundled English OCR model. Source files, server files, environment files and node_modules are not in the published output.
 
-The app uses hash routes such as `/#/records`, so no catch-all rewrite is needed. Missing `/v1` or OCR files must not be rewritten to the app's HTML. The configuration applies the same CSP, nosniff and referrer policy as the tested local static host. It permits the local PDF/OCR workers and WebAssembly without allowing an external script CDN.
+The root configuration explicitly serves the application entry page for `/demo`, `/login`, `/signup`, and `/app`, preserving the pathname routes during landing/account integration. The browser client determines the screen and session requirements; a rewrite alone does not implement accounts. Workspace navigation uses `#/records`-style hash routes, so no catch-all rewrite is needed. Keep these rules in the root `vercel.json`; a second `apps/web/vercel.json` selects a different configuration if the project root is changed and must not be maintained. Missing `/v1` or OCR files must not be rewritten to the app's HTML. The configuration applies the same CSP, nosniff and referrer policy as the tested local static host. It permits the local PDF/OCR workers and WebAssembly without allowing an external script CDN.
 
 ## Trigger and verify
 
