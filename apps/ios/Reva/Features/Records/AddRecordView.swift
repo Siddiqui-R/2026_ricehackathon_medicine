@@ -21,6 +21,7 @@ struct AddRecordView: View {
     @State private var sample = false
     @State private var photo: PhotosPickerItem?
     @State private var imported: ImportedDocument?
+    @State private var importedFromCamera = false
     @State private var working = false
     @State private var importError: String?
     @State private var title = ""
@@ -162,7 +163,7 @@ struct AddRecordView: View {
                                 UUID().uuidString + ".pdf")
                             try bytes.write(to: url)
                             defer { try? FileManager.default.removeItem(at: url) }
-                            setImported(try await importer.ingest(url: url))
+                            setImported(try await importer.ingest(url: url), fromCamera: true)
                         } catch { importError = error.localizedDescription }
                     }
                 }, onCancel: { scanner = false },
@@ -222,7 +223,8 @@ struct AddRecordView: View {
         }
     }
     /// Reset review confirmation whenever a newly extracted source replaces the draft.
-    private func setImported(_ item: ImportedDocument) {
+    private func setImported(_ item: ImportedDocument, fromCamera: Bool = false) {
+        importedFromCamera = fromCamera
         imported = item
         title = item.filename.replacingOccurrences(
             of: "." + (item.filename as NSString).pathExtension, with: ""
@@ -254,9 +256,14 @@ struct AddRecordView: View {
                 Text("Local excerpt").font(.headline)
                 Text(
                     ReportEngine.localExcerpt(text).isEmpty
-                        ? "No readable text. Add a transcription above or save for review."
+                        ? (ReportEngine.localExcerptDetails(text).omitted
+                            ? "No complete source line fits in this excerpt. Review the text above."
+                            : "No readable text. Add a transcription above or save for review.")
                         : ReportEngine.localExcerpt(text)
                 ).font(.subheadline)
+                if ReportEngine.localExcerptDetails(text).omitted {
+                    Text(ReportEngine.omissionNotice).font(.caption).foregroundStyle(.secondary)
+                }
                 Text("Generated automatically on this device. No cloud model ran.").font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -265,7 +272,8 @@ struct AddRecordView: View {
                 let saved = store.perform {
                     _ = try store.repository.storeAttachment(item.data, filename: name)
                     let record = MedicalRecord(
-                        title: title, kind: item.mimeType.hasPrefix("image") ? "Scan" : "Notes",
+                        title: title,
+                        kind: importedFromCamera || item.mimeType.hasPrefix("image") ? "Scan" : "Notes",
                         provider: "Manually added", date: RevaDate.day(recordDate), text: text,
                         summary: ReportEngine.localExcerpt(text), sourceFilename: name,
                         mimeType: item.mimeType, pageCount: item.pageCount,

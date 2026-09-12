@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Camera, Check, FileText, LoaderCircle, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { uid, nowISO, localExcerpt } from '../../core/domain';
+import { uid, nowISO, localExcerpt, localExcerptDetails, excerptOmissionNotice } from '../../core/domain';
 import type { MedicalRecord } from '../../core/models';
 import { Badge, Button, Card, Field, Modal } from '../../components/ui';
 import {
@@ -308,8 +308,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <details>
                     <summary>Preview the local excerpt</summary>
                     <p className="prose">
-                      {localExcerpt(text) || 'A readable excerpt will appear after text is added.'}
+                      {localExcerpt(text) ||
+                        'No complete source line fits in this excerpt. Review the text above.'}
                     </p>
+                    {localExcerptDetails(text).omitted && (
+                      <p className="small muted">{excerptOmissionNotice}</p>
+                    )}
                   </details>
                 </>
               )
