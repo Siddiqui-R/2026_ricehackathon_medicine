@@ -9,7 +9,7 @@ Written September 12, 2026 for concurrent implementation. Goal: real sign-up and
 - Session token = `rs_` + 43 base64url characters (32 random bytes from `SystemRandomNumberGenerator`), 46 characters total. The server stores only its SHA-256 hex (64 chars). Lookup is by hash; expiry and revocation are checked on every request.
 - Session lifetime: `REVA_SESSION_DAYS` (default 30, range 1–365). `lastUsedAt` is updated at most once per 5 minutes.
 - At most 20 live sessions per user; creating the 21st revokes the oldest.
-- Passwords: 10–72 UTF-8 bytes (bcrypt limit), may not contain `\r`/`\n`, may not equal the email. Used verbatim (no trimming). Stored only as bcrypt hashes, cost 12 by default (`Bcrypt.hash`/`Bcrypt.verify` from Vapor). Hashing runs on `app.threadPool.runIfActive`, never on the event loop. Plaintext is never logged or persisted.
+- Passwords: at least 8 Unicode characters, 1 capital letter (A–Z), 1 number (0–9), and 1 punctuation/symbol character; at most 72 UTF-8 bytes (bcrypt limit), may not contain `\r`/`\n`, may not equal the email. Used verbatim (no trimming). Stored only as bcrypt hashes, cost 12 by default (`Bcrypt.hash`/`Bcrypt.verify` from Vapor). Hashing runs on `app.threadPool.runIfActive`, never on the event loop. Plaintext is never logged or persisted.
 - Email: trimmed, lowercased, 3–254 characters, matches `^[^\s@]+@[^\s@]+\.[^\s@]+$`, no control characters; stored normalized and unique. Name: trimmed, 1–80 characters, no control characters.
 
 ## 2. Server configuration additions (`server/Sources/RevaServer/Configuration.swift`)
@@ -94,7 +94,7 @@ Password changes compare the verified hash and presenting live session, replace 
 Pathname routes (the workspace keeps its `#/…` hash routes):
 
 - `/` landing (exists). With a stored, unexpired session the primary action becomes **Open your workspace** → `/app` and a **Log out** text action appears; otherwise Sign up / Log in / View the demo.
-- `/signup`, `/login`: real forms replacing `AccountGate`. Fields: name (sign-up only), email, password (minimum 10 characters, show/hide toggle), submit. Inline validation, disabled while submitting, the server's `reason` shown on failure, `autocomplete` set to `email`, `name`, `new-password` / `current-password`. Success stores the session and calls `location.assign('/app')`. Each page links to the other and back to `/`. Same visual language as the landing (`landing.css`).
+- `/signup`, `/login`: real forms replacing `AccountGate`. Fields: name (sign-up only), email, password (signup enforces the new-password policy; login accepts existing passwords; show/hide toggle), submit. Inline validation, disabled while submitting, the server's `reason` shown on failure, `autocomplete` set to `email`, `name`, `new-password` / `current-password`. Success stores the session and calls `location.assign('/app')`. Each page links to the other and back to `/`. Same visual language as the landing (`landing.css`).
 - `/app`: signed-in workspace = `<RevaProvider store={accountStore}><App /></RevaProvider>` with the store in account mode. No valid session → `location.replace('/login')`. A 401 from the server in account mode → clear the session, show a notice, redirect to `/login`.
 - `/demo`: unchanged (demo token, manual sync, fictional data).
 - `src/core/session.ts`: `localStorage` key `reva.session.v1` → `{ token, expiresAt, user }`; every read/write wrapped in try/catch; expired = absent; the token never appears in a URL.

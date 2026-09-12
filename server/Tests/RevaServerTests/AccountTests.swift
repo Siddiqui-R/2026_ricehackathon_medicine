@@ -11,7 +11,7 @@ import VaporTesting
 
 // MARK: - Fixtures: static identity, sample snapshot, and a temporary account-enabled server
 private let staticToken = "static-workspace-token-123456789"
-private let goodPassword = "correct-horse-battery"
+private let goodPassword = "Correct-horse-battery1"
 private let wrongReason = "Email or password is incorrect."
 private let sample: JSONValue = .object([
     "schemaVersion": .integer(1),
@@ -148,6 +148,15 @@ struct AccountTests {
             let stored = try #require(pair)
             #expect(stored.0.tokenHash.count == 64 && !stored.0.tokenHash.contains("rs_"))
             #expect(stored.1.passwordHash.hasPrefix("$2") && stored.1.passwordHash != goodPassword)
+        }
+    }
+
+    @Test func existingPasswordCanStillLogInWithoutMeetingNewSignupPolicy() async throws {
+        try await withAccountServer { app, store, _ async throws in
+            let oldPassword = "legacy-simple-password"
+            let user = try storedUser(email: "legacy@example.com", password: oldPassword)
+            try await store.createUser(user)
+            _ = try await login(app, email: user.email, password: oldPassword)
         }
     }
 
@@ -295,17 +304,19 @@ struct AccountTests {
         try await withAccountServer { app, _, _ async throws in
             let first = try await signup(app, email: "change@example.com")
             let second = try await login(app, email: "change@example.com")
-            let newPassword = "a-brand-new-secret-phrase"
+            let newPassword = "A-brand-new-secret-phrase1"
             try await send(
                 app, .PUT, "v1/auth/password",
                 ["currentPassword": "not-it-at-all", "newPassword": newPassword], headers: bearer(first.token)
             ) { response in #expect(response.status == .unauthorized) }
-            try await send(
-                app, .PUT, "v1/auth/password", ["currentPassword": goodPassword, "newPassword": "short"],
-                headers: bearer(first.token)
-            ) { response in
-                #expect(response.status == .badRequest)
-                #expect(reason(response).contains("password"))
+            for invalid in ["Abcde1!", "abcdef1!", "Abcdefg!", "Abcdefg1"] {
+                try await send(
+                    app, .PUT, "v1/auth/password", ["currentPassword": goodPassword, "newPassword": invalid],
+                    headers: bearer(first.token)
+                ) { response in
+                    #expect(response.status == .badRequest)
+                    #expect(reason(response).contains("password"))
+                }
             }
             #expect(try await stateStatus(app, token: second.token) == .notFound)
             try await send(
@@ -421,11 +432,17 @@ struct AccountTests {
             {
                 ["email": email, "password": password, "name": name]
             }
-            try await rejected(body(password: String(repeating: "p", count: 9)), field: "password")
-            try await rejected(body(password: String(repeating: "p", count: 73)), field: "password")
-            try await rejected(body(password: "line\nbreak-password"), field: "password")
-            try await rejected(body(password: "return\rpassword"), field: "password")
-            try await rejected(body(password: "Policy@Example.com"), field: "password")
+            for invalid in [
+                "Abcde1!", "abcdef1!", "Abcdefg!", "Abcdefg1", "Abcdef1 ", "Abcdef1\t", "éééA1!", "Ébcdef1!",
+                "Abcdef١!",
+            ] {
+                try await rejected(body(password: invalid), field: "password")
+            }
+            try await rejected(body(password: "A1!" + String(repeating: "p", count: 70)), field: "password")
+            try await rejected(body(password: "Line1!\nbreak-password"), field: "password")
+            try await rejected(body(password: "Return1!\rpassword"), field: "password")
+            try await rejected(
+                body(password: "Policy1@Example.com", email: "policy1@example.com"), field: "password")
             try await rejected(body(password: goodPassword, email: "not-an-email"), field: "email")
             try await rejected(body(password: goodPassword, email: "a@b"), field: "email")
             try await rejected(body(password: goodPassword, email: "two@@example.com"), field: "email")
@@ -436,12 +453,14 @@ struct AccountTests {
             try await rejected(
                 body(password: goodPassword, name: String(repeating: "n", count: 81)), field: "name")
             try await rejected(body(password: goodPassword, name: "tab\tname"), field: "name")
-            // Ten bytes and seventy-two bytes are accepted; multi-byte characters count in bytes.
-            _ = try await signup(app, email: "ten@example.com", password: String(repeating: "p", count: 10))
+            // Minimum counts Unicode scalars; the bcrypt maximum still counts UTF-8 bytes.
+            _ = try await signup(app, email: "eight@example.com", password: "Abcdef1!")
+            _ = try await signup(app, email: "unicode@example.com", password: "éééééA1!")
+            _ = try await signup(app, email: "symbol@example.com", password: "Abcdef1€")
             _ = try await signup(
-                app, email: "seventytwo@example.com", password: String(repeating: "p", count: 72))
+                app, email: "seventytwo@example.com", password: "A1!" + String(repeating: "p", count: 69))
             try await rejected(
-                body(password: String(repeating: "é", count: 37), email: "bytes@example.com"),
+                body(password: "A1!" + String(repeating: "é", count: 35), email: "bytes@example.com"),
                 field: "password")
             let oversize =
                 "{\"email\":\"policy@example.com\",\"name\":\"P\",\"password\":\""

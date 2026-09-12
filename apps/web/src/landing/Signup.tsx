@@ -49,7 +49,6 @@ export function Signup() {
   };
   return (
     <AccountShell
-      eyebrow="Create an account"
       title="Start with your own records."
       lede="A private workspace for your documents, questions and visits. Yours alone, on this server."
     >
@@ -96,7 +95,7 @@ export function Signup() {
             clear('password');
           }}
           error={errors.password}
-          help="At least 10 characters. Choose one you do not use anywhere else."
+          help="At least 8 characters, 1 capital letter, 1 number, and 1 symbol."
           autoComplete="new-password"
           disabled={submitting}
         />

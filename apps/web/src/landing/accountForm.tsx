@@ -14,7 +14,7 @@ export function AccountShell({
   lede,
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   lede: string;
   children: ReactNode;
@@ -25,13 +25,14 @@ export function AccountShell({
         <a className="landing-home" href="/" aria-label="Reva home">
           <Brand />
         </a>
-        <span className="landing-mono">v0.1 · prototype</span>
       </header>
       <main className="landing-hero" id="main">
-        <p className="landing-eyebrow">
-          <span className="landing-dot" aria-hidden="true" />
-          {eyebrow}
-        </p>
+        {eyebrow && (
+          <p className="landing-eyebrow">
+            <span className="landing-dot" aria-hidden="true" />
+            {eyebrow}
+          </p>
+        )}
         <h1>{title}</h1>
         <p className="landing-lede">{lede}</p>
         {children}

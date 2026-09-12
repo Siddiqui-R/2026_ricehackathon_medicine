@@ -56,6 +56,10 @@
   align-items: flex-start;
   gap: 26px;
 }
+.landing:not(.account) > .landing-hero {
+  padding-top: clamp(56px, 9dvh, 72px);
+  padding-bottom: 24px;
+}
 .landing-eyebrow {
   display: inline-flex;
   align-items: center;

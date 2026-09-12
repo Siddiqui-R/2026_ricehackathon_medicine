@@ -145,7 +145,7 @@ export function ChangePasswordCard({
             disabled={working || store.busy}
           />
         </Field>
-        <Field label="New password" hint="At least 10 characters, not your email.">
+        <Field label="New password" hint="At least 8 characters, 1 capital letter, 1 number, and 1 symbol.">
           <input
             type="password"
             autoComplete="new-password"

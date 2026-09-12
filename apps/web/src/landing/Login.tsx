@@ -4,7 +4,7 @@
 // Side effects: One POST /v1/auth/login; on success writes the session to localStorage and calls location.assign.
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AuthAPI, emailProblem, passwordProblem } from '../core/auth';
+import { AuthAPI, emailProblem } from '../core/auth';
 import { readSession, writeSession } from '../core/session';
 import { AccountShell, FormStatus, PasswordField, TextField } from './accountForm';
 
@@ -25,7 +25,7 @@ export function Login() {
     if (submitting) return;
     const next = {
       email: emailProblem(email) ?? undefined,
-      password: password ? (passwordProblem(password) ?? undefined) : 'Enter your password.',
+      password: password ? undefined : 'Enter your password.',
     };
     setErrors(next);
     setFailure(null);

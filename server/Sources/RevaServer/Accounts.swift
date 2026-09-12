@@ -10,7 +10,7 @@ import Vapor
 // MARK: - Field normalization and password policy
 /// Every failure names the offending field so the client can highlight it.
 enum AccountPolicy {
-    static let minimumPasswordBytes = 10
+    static let minimumPasswordCharacters = 8
     static let maximumPasswordBytes = 72
     static let maximumLiveSessions = 20
     static let sessionTouchInterval: TimeInterval = 5 * 60
@@ -35,11 +35,25 @@ enum AccountPolicy {
         return name
     }
 
-    /// Passwords are used verbatim: 10–72 UTF-8 bytes (the bcrypt limit), no line breaks, never the email itself.
+    /// Passwords are verbatim: at least eight Unicode scalars, ASCII uppercase/digit, punctuation or symbol,
+    /// at most 72 UTF-8 bytes (the bcrypt limit), no line breaks, never the email itself.
     static func validatePassword(_ password: String, email: String) throws {
         let bytes = password.utf8.count
-        guard (minimumPasswordBytes...maximumPasswordBytes).contains(bytes) else {
-            throw Abort(.badRequest, reason: "password must be 10–72 bytes.")
+        guard password.unicodeScalars.count >= minimumPasswordCharacters else {
+            throw Abort(.badRequest, reason: "password must contain at least 8 characters.")
+        }
+        guard bytes <= maximumPasswordBytes else {
+            throw Abort(.badRequest, reason: "password must be at most 72 UTF-8 bytes.")
+        }
+        guard password.unicodeScalars.contains(where: { (65...90).contains($0.value) }),
+            password.unicodeScalars.contains(where: { (48...57).contains($0.value) }),
+            password.unicodeScalars.contains(where: {
+                CharacterSet.punctuationCharacters.contains($0) || CharacterSet.symbols.contains($0)
+            })
+        else {
+            throw Abort(
+                .badRequest,
+                reason: "password must contain at least 1 capital letter, 1 number, and 1 symbol.")
         }
         guard !password.contains("\r"), !password.contains("\n") else {
             throw Abort(.badRequest, reason: "password cannot contain line breaks.")

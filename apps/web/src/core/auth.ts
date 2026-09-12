@@ -10,7 +10,7 @@ export { apiURL, resolveAPIOrigin };
 // MARK: - Wire shapes and client-side policy limits that mirror the server contract
 export const MAX_AUTH_BODY_BYTES = 16 * 1024;
 export const MAX_AUTH_RESPONSE_BYTES = 64 * 1024;
-export const PASSWORD_MIN_BYTES = 10;
+export const PASSWORD_MIN_CHARACTERS = 8;
 export const PASSWORD_MAX_BYTES = 72;
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export interface SessionDescription {
@@ -28,10 +28,13 @@ const utf8Bytes = (value: string): number => new TextEncoder().encode(value).byt
 // Returns a user-facing problem or null. The server applies the same rules and stays authoritative.
 export function passwordProblem(password: string, email = ''): string | null {
   const bytes = utf8Bytes(password);
-  if (bytes < PASSWORD_MIN_BYTES) return 'Use at least 10 characters.';
-  if (bytes > PASSWORD_MAX_BYTES) return 'Use at most 72 characters (bytes).';
+  if ([...password].length < PASSWORD_MIN_CHARACTERS) return 'Use at least 8 characters.';
+  if (bytes > PASSWORD_MAX_BYTES) return 'Use at most 72 UTF-8 bytes.';
   if (/[\r\n]/.test(password)) return 'A password cannot contain line breaks.';
   if (email && password === normalizeEmail(email)) return 'A password cannot be the same as the email.';
+  if (!/[A-Z]/.test(password)) return 'Include at least 1 capital letter (A–Z).';
+  if (!/[0-9]/.test(password)) return 'Include at least 1 number (0–9).';
+  if (!/[\p{P}\p{S}]/u.test(password)) return 'Include at least 1 symbol.';
   return null;
 }
 export function emailProblem(email: string): string | null {
@@ -148,7 +151,7 @@ export class AuthAPI {
     return checkedEnvelope(result);
   }
   async login(input: { email: string; password: string }): Promise<StoredSession> {
-    const problem = emailProblem(input.email) ?? passwordProblem(input.password);
+    const problem = emailProblem(input.email) ?? (input.password ? null : 'Enter your password.');
     if (problem) throw new Error(problem);
     const result = await this.send('/v1/auth/login', 'POST', {
       email: normalizeEmail(input.email),

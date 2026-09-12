@@ -228,7 +228,7 @@ struct PasswordAtomicityTests {
                         try request.content.encode(
                             [
                                 "currentPassword": atomicityPassword,
-                                "newPassword": "losing-replacement-password",
+                                "newPassword": "Losing-replacement-password1!",
                             ], as: .json)
                     },
                     afterResponse: { response async throws in

@@ -42,7 +42,7 @@ describe('auth request shapes', () => {
     const { fetcher, call } = spy(json(envelope(), 201));
     const session = await new AuthAPI(null, fetcher).signup({
       email: '  Synthetic.Person@Example.TEST ',
-      password: 'correct horse battery',
+      password: 'Correct horse battery1!',
       name: '  Synthetic Person ',
     });
     expect(session).toEqual(envelope());
@@ -57,7 +57,7 @@ describe('auth request shapes', () => {
     expect(headers).toEqual({ 'Content-Type': 'application/json' });
     expect(JSON.parse(body!)).toEqual({
       email: 'synthetic.person@example.test',
-      password: 'correct horse battery',
+      password: 'Correct horse battery1!',
       name: 'Synthetic Person',
     });
   });
@@ -91,7 +91,10 @@ describe('auth request shapes', () => {
   });
   it('changes the password with PUT and both passwords in the body', async () => {
     const { call, fetcher } = spy(empty());
-    await new AuthAPI('synthetic-session-token', fetcher).changePassword('old password 1', 'new password 22');
+    await new AuthAPI('synthetic-session-token', fetcher).changePassword(
+      'old password 1',
+      'New password 22!',
+    );
     const { url, options, headers, body } = call();
     expect(url).toBe('/v1/auth/password');
     expect(options.method).toBe('PUT');
@@ -99,7 +102,7 @@ describe('auth request shapes', () => {
       'Content-Type': 'application/json',
       Authorization: 'Bearer synthetic-session-token',
     });
-    expect(JSON.parse(body!)).toEqual({ currentPassword: 'old password 1', newPassword: 'new password 22' });
+    expect(JSON.parse(body!)).toEqual({ currentPassword: 'old password 1', newPassword: 'New password 22!' });
   });
   it('deletes the account with DELETE and the password in the body', async () => {
     const { call, fetcher } = spy(empty());
@@ -140,7 +143,7 @@ describe('local validation', () => {
     const fetcher = vi.fn<typeof fetch>();
     const api = new AuthAPI(null, fetcher);
     await expect(api.signup({ email: 'a@example.test', password: 'short', name: 'A' })).rejects.toThrow(
-      'at least 10',
+      'at least 8',
     );
     await expect(
       api.signup({ email: 'a@example.test', password: 'x'.repeat(73), name: 'A' }),
@@ -154,7 +157,7 @@ describe('local validation', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
   it('exposes the same helpers the forms use', () => {
-    expect(passwordProblem('correct horse battery')).toBeNull();
+    expect(passwordProblem('Correct horse battery1!')).toBeNull();
     expect(passwordProblem('line\nbreak pass')).toMatch(/line break/);
     expect(emailProblem('')).toMatch(/Enter your email/);
     expect(emailProblem('synthetic.person@example.test')).toBeNull();
@@ -162,11 +165,26 @@ describe('local validation', () => {
     expect(nameProblem('n'.repeat(81))).toMatch(/at most 80/);
     expect(nameProblem('Synthetic Person')).toBeNull();
   });
+  it.each([
+    ['Abcde1!', 'at least 8'],
+    ['abcdef1!', 'capital'],
+    ['Abcdefg!', 'number'],
+    ['Abcdefg1', 'symbol'],
+    ['Abcdef1 ', 'symbol'],
+  ])('rejects incomplete policy: %s', (password, problem) => {
+    expect(passwordProblem(password)).toContain(problem);
+  });
+  it('accepts the eight-character boundary and Unicode symbols but limits UTF-8 bytes', () => {
+    expect(passwordProblem('Abcdef1!')).toBeNull();
+    expect(passwordProblem('Abcdef1💚')).toBeNull();
+    expect(passwordProblem('A1!' + 'x'.repeat(69))).toBeNull();
+    expect(passwordProblem('A1!' + 'é'.repeat(35))).toContain('at most 72');
+  });
   it('requires a different new password for a change', async () => {
     const fetcher = vi.fn<typeof fetch>();
     const api = new AuthAPI('synthetic-session-token', fetcher);
-    await expect(api.changePassword('same password 1', 'same password 1')).rejects.toThrow('differs');
-    await expect(api.changePassword('', 'new password 22')).rejects.toThrow('current password');
+    await expect(api.changePassword('Same password 1!', 'Same password 1!')).rejects.toThrow('differs');
+    await expect(api.changePassword('', 'New password 22!')).rejects.toThrow('current password');
     await expect(api.deleteAccount('')).rejects.toThrow('Enter your password');
     expect(fetcher).not.toHaveBeenCalled();
   });
