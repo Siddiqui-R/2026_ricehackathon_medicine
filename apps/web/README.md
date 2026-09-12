@@ -15,9 +15,9 @@ npm run assets
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. `npm run assets` copies native fictional fixtures and installed English OCR assets into generated `public/demo` and `public/ocr` directories. The `dev` and `build` scripts run that step automatically; running it separately is useful after fixture changes. Generated assets, `node_modules`, and `dist` are not source files to edit or commit.
+Open `http://127.0.0.1:5173`. `npm run assets` copies native fictional fixtures and installed English OCR assets into generated `public/demo` and `public/ocr` directories. The `dev`, `build`, `typecheck`, and `test` scripts run that step automatically; running it separately is useful after fixture changes. Generated assets, `node_modules`, and `dist` are not source files to edit or commit.
 
-To check and serve a built application, from `apps/web`:
+After `npm ci`, these checks work from a clean checkout; each command that needs generated fixtures prepares them automatically. To check and serve a built application, from `apps/web`:
 
 ```sh
 npm run typecheck
