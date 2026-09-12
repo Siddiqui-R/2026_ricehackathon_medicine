@@ -69,7 +69,17 @@ struct SourceReference: Codable, Identifiable, Equatable {
     var page: Int
     var excerpt: String
     var sourceVersion: Int?
+    var excerptOmitted: Bool? = nil
     var id: String { "\(recordID)-\(page)" }
+    var omissionNotice: String? {
+        guard let excerptOmitted else {
+            return "This older excerpt may have been shortened. Regenerate the brief and review the original."
+        }
+        guard excerptOmitted else { return nil }
+        return excerpt.isEmpty
+            ? "No complete source line fits in this excerpt. Open the original for full context."
+            : ReportEngine.omissionNotice
+    }
     var locationLabel: String { page > 0 ? "p. \(page)" : "record text" }
 }
 // MARK: - Report section
@@ -225,9 +235,10 @@ enum RevaDate {
     static func display(_ text: String, time: Bool = false, zone: String? = nil) -> String {
         let f = DateFormatter()
         f.dateStyle = .medium
-        f.timeStyle = time ? .short : .none
+        let dateOnly = text.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+        f.timeStyle = time && !dateOnly ? .short : .none
         f.timeZone =
-            time ? (zone.flatMap(TimeZone.init(identifier:)) ?? .current) : TimeZone(secondsFromGMT: 0)
+            dateOnly ? TimeZone(secondsFromGMT: 0) : (zone.flatMap(TimeZone.init(identifier:)) ?? .current)
         return f.string(from: parse(text))
     }
     static func duration(_ seconds: Double) -> String {

@@ -73,6 +73,7 @@ function report(value: unknown, path: string): void {
       fields(source, ['recordID', 'excerpt'], path);
       number(source.page, `${path}.page`, true);
       optional(source, 'sourceVersion', path, (v, p) => number(v, p, true, 1));
+      optional(source, 'excerptOmitted', path, bool);
     });
   });
 }

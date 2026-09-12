@@ -234,7 +234,11 @@ export class RevaStore {
         await this.edit((draft) => {
           const latest = draft.records.find((record) => record.id === id);
           if (!latest) throw new Error('This record is no longer available.');
-          upsertRecord(draft, { ...latest, summary: localExcerpt(latest.text), summaryModel: undefined });
+          upsertRecord(draft, {
+            ...latest,
+            summary: localExcerpt(latest.text, latest.isDemo),
+            summaryModel: undefined,
+          });
         });
         this.notify('Original-text excerpt saved.');
         return;

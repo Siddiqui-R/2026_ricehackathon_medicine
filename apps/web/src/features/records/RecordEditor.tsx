@@ -49,7 +49,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
         isDemo: original.isDemo,
       };
       if (changed) {
-        revised.summary = localExcerpt(revised.text);
+        revised.summary = localExcerpt(revised.text, revised.isDemo);
         revised.summaryModel = null;
         revised.pageTexts = null;
         revised.status = reviewed && revised.text.trim() ? 'ready' : 'needsReview';
