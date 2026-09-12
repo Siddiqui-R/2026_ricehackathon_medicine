@@ -1,0 +1,36 @@
+{
+  "capturedAt": "2026-09-12T12:12:03-05:00",
+  "source": "live main checkout /Users/tempadmin/Documents/Reva (read-only copy of documentation files only)",
+  "mainHead": "475eee784a10d938c4ab86dc8874d98f0ac187b3",
+  "mainHeadSubject": "docs: checkpoint intensive Fable audit workflow and Claude dispatch",
+  "trackedModifiedCount": 38,
+  "untrackedCount": 26,
+  "untrackedApplicationFiles": [
+    "apps/web/src/core/__tests__/auth.test.ts",
+    "apps/web/src/core/__tests__/session.test.ts",
+    "apps/web/src/core/account.ts",
+    "apps/web/src/core/auth.ts",
+    "apps/web/src/core/session.ts",
+    "apps/web/src/core/syncMarker.ts",
+    "apps/web/src/features/AccountSettings.tsx",
+    "apps/web/src/landing/",
+    "apps/web/src/styles/landing.css",
+    "apps/web/vercel.json",
+    "scripts/test_tiger_provision.py",
+    "scripts/tiger_provision.py",
+    "server/.dockerignore",
+    "server/Dockerfile",
+    "server/Sources/RevaServer/AccountRoutes.swift",
+    "server/Sources/RevaServer/Accounts.swift",
+    "server/Sources/RevaServer/Migrations/002_accounts.sql",
+    "server/Tests/RevaServerTests/AccountTests.swift"
+  ],
+  "verdict": "NOT a completed implementation checkpoint: no new commit since 475eee7 (docs-only); account/Tiger/landing code remains uncommitted WIP in the live checkout and is out of the frozen snapshot.",
+  "files": {
+    "reva-stack-spec.md": "tracked, modified in working tree (refreshed current spec)",
+    "05-claude-project-handoff.md": "untracked (provenance/tested-vs-WIP ledger)",
+    "reva-stack-spec-planning.md": "untracked (historical original proposal)",
+    "accounts-and-tiger.md": "untracked (implementation contract v1, already cited by workers)"
+  },
+  "usage": "Workers and validators read THESE frozen copies, never the live files. Documentation commits are not completion checkpoints for accounts."
+}

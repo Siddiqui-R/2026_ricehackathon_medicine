@@ -1,0 +1,49 @@
+[
+  {
+    "id": "RVA-16-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "title": "Deployment instructions select two incompatible Vercel configuration roots",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "L01",
+      "A03"
+    ],
+    "file": "apps/web/README.md",
+    "line": 52,
+    "trigger": "Configure the Vercel project using the browser README during landing-route integration: line 34 specifies repository root, but line 52 specifies apps/web.",
+    "expected": "One documented project root selects one complete set of install/build/output, route rewrites, fixture inclusion, and security headers.",
+    "actual": "The guide contradicts itself. Root vercel.json:3-19 contains apps/web-prefixed install/build/output plus CSP/security headers but no explicit pathname rewrites. Nested apps/web/vercel.json:3-8 contains /demo,/login,/signup rewrites but none of those build/header settings. prepare-assets.mjs reads ../ios/Reva/Resources, and deployment-vercel.md:18 explicitly requires repository-root access. These two configurations are not a single coherent checked-in deployment definition.",
+    "impact": "A teammate following the new nested-root instruction selects different configuration, can omit the committed CSP/security headers, and must separately resolve sibling fixture access. The snapshot does not prove that all intended pathname routes refresh correctly under the actual hosted configuration. No hosted 404 is asserted without deployment evidence.",
+    "evidence": "Precise source: apps/web/README.md:34,52; vercel.json:3-19; apps/web/vercel.json:3-8; apps/web/scripts/prepare-assets.mjs:18; docs/deployment-vercel.md:11-20. Supervisor Addendum 1 explicitly identifies this captured-WIP integration conflict. Runner r1-09-web-build.log and r1-08-serve-test.log validate local build/wrapper, not Vercel root selection or hosted rewrites.",
+    "confidence": "high",
+    "smallestFix": "Choose and document one Vercel root; preserve its complete build/output/security configuration and explicitly reconcile the new pathname routes. With repository root retained, move intended route rules into the active root configuration and remove contradictory nested-root guidance. Review /app and external API CSP only against the eventual account delta.",
+    "regressionCheck": "From a clean checkout execute the active configuration build with sibling fixtures available; validate /, /demo, /login, /signup and their refreshes under a Vercel-equivalent preview, verify security headers and that missing /v1 or OCR assets are not HTML fallbacks. Validate /app once implemented. Hosted confirmation remains a separate authorized deployment check.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain shared core/styles/scripts/config"
+  },
+  {
+    "id": "RVA-16-002",
+    "status": "confirmed",
+    "severity": "P3",
+    "title": "Clean browser typecheck and tests depend on generated assets without preparing them",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "L04",
+      "N01",
+      "A04"
+    ],
+    "file": "apps/web/package.json",
+    "line": 16,
+    "trigger": "After a clean npm ci, run npm run typecheck or npm test before npm run assets/dev/build, including the browser integration checklist order in docs/team-workflow.md.",
+    "expected": "The advertised independent verification commands work from their documented clean checkout, or explicitly prepare/document their fixture prerequisite.",
+    "actual": "Only predev and prebuild run assets. Tests import ignored public/demo/seed.json and expected-evidence.json, so clean typecheck fails with missing module/type errors and Vitest fails five files. The runner then ran the normal build (which generates assets), and both checks passed.",
+    "impact": "Clean CI/contributor verification fails even though production build succeeds. Warm working directories conceal the prerequisite and can produce misleading readiness reports.",
+    "evidence": "Reproduced by runner: evidence/r1-06-typecheck.log (TS2307 and dependent errors), evidence/r1-07-vitest.log (5 failed files, 2 passed), then r1-06b-typecheck-after-assets.log and r1-07b-vitest-after-assets.log (77 passed). Source: package.json:10-17; src/core/__tests__/fixtures.ts:5; src/core/__tests__/domain.test.ts:6; .gitignore generated public/demo exclusion. No Codex rerun is claimed.",
+    "confidence": "high",
+    "smallestFix": "Have typecheck/test prepare their required fixtures, or import checked-in native fixture sources through a deliberate test fixture boundary. Update the clean integration command sequence so it cannot skip required generation.",
+    "regressionCheck": "In a clean isolated checkout with public/demo absent, npm ci followed by the documented typecheck/test sequence succeeds; production build still includes byte-identical fictional originals and local OCR assets.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain shared core/styles/scripts/config"
+  }
+]

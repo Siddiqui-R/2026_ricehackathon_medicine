@@ -1,0 +1,162 @@
+[
+  {
+    "id": "RVA-01-001",
+    "status": "candidate",
+    "severity": "P1",
+    "title": "Vercel deployment docs contradict each other and the WIP pathname routes; the applicable root vercel.json has no rewrite for /demo, /login, /signup",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A03",
+      "L02",
+      "L01"
+    ],
+    "file": "docs/deployment-vercel.md",
+    "line": 20,
+    "trigger": "Follow docs/deployment-vercel.md (Root Directory = repository root, line 11; 'no catch-all rewrite is needed', line 20) and deploy the WIP tree; on the deployed / landing click Log in, Sign up or View the demo (apps/web/src/landing/Landing.tsx:39-47 link to /login, /signup, /demo) or navigate directly to those paths.",
+    "expected": "The single page is served for /demo, /login and /signup, as the local wrapper does (apps/web/scripts/serve.mjs:107 appRoutes; evidence/r1-08-serve-test.log 7/7 passed).",
+    "actual": "With Root Directory at the repository root only the committed root vercel.json applies; it contains headers but no rewrites key, and dist/ holds only index.html and reva.svg at its root (evidence/r1-21-dist-inventory.log), so a static host returns 404 for those paths (predicted, not reproduced). The alternative instruction in apps/web/README.md:52 (Root Directory = apps/web so the nested apps/web/vercel.json rewrites apply) contradicts docs/deployment-vercel.md:18 and apps/web/README.md:34, which require the repository root because prepare-assets.mjs reads apps/ios/Reva/Resources outside apps/web. docs/build-progress.md:157 repeats the hash-route claim that main.tsx:20-35 no longer satisfies.",
+    "impact": "On the deployed browser entry every landing action would dead-end and operators receive two incompatible deployment instructions. Local behaviour is unaffected. The hosted-backend boundary (L02) itself is documented correctly.",
+    "evidence": "sed -n '11p;18p;20p' docs/deployment-vercel.md; sed -n '157p' docs/build-progress.md; sed -n '34p;52p' apps/web/README.md; cat vercel.json (no rewrites); cat apps/web/vercel.json (three exact rewrites); sed -n '20,35p' apps/web/src/main.tsx; git diff -U0 -- apps/web/README.md (line 52 added by the WIP delta, line 34 committed in cfe0997); evidence/r1-21-dist-inventory.log; evidence/r1-08-serve-test.log.",
+    "confidence": "medium",
+    "smallestFix": "Keep the repository-root model: add exact rewrites for /demo, /login, /signup (later /app) to the root vercel.json, leaving /v1, /health, /assets, /demo/* files and /ocr/* unrewritten; delete or empty apps/web/vercel.json; correct docs/deployment-vercel.md:20, docs/build-progress.md:157 and apps/web/README.md:52 to describe pathname routes and the single config location.",
+    "regressionCheck": "node --test apps/web/scripts/serve.test.mjs for local parity; owner-run Vercel preview: curl -sI https://<preview>/login expecting 200 text/html and curl -sI https://<preview>/v1/state expecting no HTML rewrite (ER-01-2).",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  },
+  {
+    "id": "RVA-01-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Historical planning docs lack superseded banners and still assert deferred browser, Identity Platform without password storage, Cloud Storage/Tasks/Document AI, SwiftData and a 50 MB limit",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A03"
+    ],
+    "file": "docs/reva-stack-spec.md",
+    "line": 4,
+    "trigger": "A new contributor or the concurrent accounts implementer reads docs/reva-stack-spec.md, docs/mvp-goal.md:15, docs/project-overview-packet.md:7,155 or docs/verification/profile-symptoms.md:11 for current scope.",
+    "expected": "Each historical file states at its head which later document supersedes it, as docs/completion-criteria.md:1, docs/task-list.md:1 and docs/verification/README.md:1 already do.",
+    "actual": "reva-stack-spec.md has no banner and still says browser is a later phase (14), Identity Platform with no password storage (71), Cloud Storage/Cloud Tasks/Document AI (72-75), SwiftData (62), 50 MB (95), Vertex routing (168); mvp-goal.md:15 lists web wrapping as deferred; project-overview-packet.md:7,155 says no production web app / browser wrapper; profile-symptoms.md:11 presents Sky/Ivory roles as current (recorded as owner's call in docs/reviews/04-heart-red-palette.md:49).",
+    "impact": "Scope confusion only; no runtime effect. The identity row directly contradicts the concurrent accounts contract (bcrypt on the Swift server).",
+    "evidence": "sed -n '1,4p;14p;62p;71,75p;95p;168p' docs/reva-stack-spec.md; sed -n '15p' docs/mvp-goal.md; sed -n '3p;7p;155p' docs/project-overview-packet.md; sed -n '11p' docs/verification/profile-symptoms.md; sed -n '1p' docs/completion-criteria.md docs/task-list.md docs/verification/README.md; sed -n '49p' docs/reviews/04-heart-red-palette.md.",
+    "confidence": "high",
+    "smallestFix": "Add one blockquote banner line at the top of each file pointing to docs/reva-style-plan.md:1, docs/architecture.md, docs/task-specs/web-client.md and docs/task-specs/accounts-and-tiger.md.",
+    "regressionCheck": "grep -n -m1 '^> ' docs/reva-stack-spec.md docs/mvp-goal.md docs/project-overview-packet.md docs/verification/profile-symptoms.md returns a banner for each file.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  },
+  {
+    "id": "RVA-01-003",
+    "status": "WIP",
+    "severity": "P3",
+    "title": "Checked-in packet PDF still says gemini-2.5-flash after the WIP delta renamed the model in its Markdown source and generator",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A03",
+      "N04"
+    ],
+    "file": "docs/project-overview-packet.md",
+    "line": 168,
+    "trigger": "The WIP model rename (README.md:54, docs/architecture.md:86, docs/project-overview-packet.md:168, scripts/build_overview_packet.py) is committed without regenerating output/pdf/reva-project-overview-packet.pdf.",
+    "expected": "README.md:76 says both packet forms are rebuilt together; PDF and Markdown agree on the model and the packet describes the baseline it claims.",
+    "actual": "Read-only pypdf extraction of the unmodified PDF finds 'gemini-2.5-flash.' on page 6 and 'baseline d0af1df' on every page, while the Markdown source now says gemini-3.8-flash and still declares 'Code baseline d0af1df' at line 3.",
+    "impact": "Stale deliverable; no runtime effect.",
+    "evidence": "git diff -U0 -- docs/project-overview-packet.md (line 168 changed); git status --porcelain (PDF unmodified); python3 -c \"import pypdf,re;r=pypdf.PdfReader('output/pdf/reva-project-overview-packet.pdf');print([(i,m) for i,p in enumerate(r.pages,1) for m in re.findall(r'gemini[-\\w.]*',p.extract_text() or '',re.I)])\" -> (6, 'gemini-2.5-flash.'); sed -n '76p' README.md.",
+    "confidence": "high",
+    "smallestFix": "Before committing the rename, regenerate the PDF with scripts/build_overview_packet.py (owner-run, not the audit runner) or revert the packet edit and add a dated note.",
+    "regressionCheck": "Repeat the pypdf extraction and expect gemini-3.8-flash on page 6 (ER-01-4).",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  },
+  {
+    "id": "RVA-01-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Root README and docs/architecture.md do not describe the new /, /demo, /login, /signup structure",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A03",
+      "A02"
+    ],
+    "file": "README.md",
+    "line": 34,
+    "trigger": "A reader uses the root README 'Run in a browser' section or docs/architecture.md to learn the browser entry points.",
+    "expected": "The four paths are named as in apps/web/README.md:18 (WIP).",
+    "actual": "README.md:34 says only 'Open http://127.0.0.1:5173'; README.md:103 mentions the browser extension without the landing; grep -n -E 'landing|/login|/signup|/demo' README.md docs/architecture.md returns no matches. The concurrent contract (line 116) plans an architecture section later.",
+    "impact": "Documentation drift only.",
+    "evidence": "sed -n '24,34p;103p' README.md; grep -n -E 'landing|/login|/signup|/demo' README.md docs/architecture.md (no output); sed -n '18p' apps/web/README.md.",
+    "confidence": "high",
+    "smallestFix": "One sentence in README.md:34 naming the four paths and one row in the docs/architecture.md client section.",
+    "regressionCheck": "The grep above returns matches in both files.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  },
+  {
+    "id": "RVA-01-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Ownership table has no owner for apps/web/src/landing/**, and the concurrent contract's A/B/C split overlaps Captain-owned browser files without reconciliation",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "B03"
+    ],
+    "file": "docs/team-workflow.md",
+    "line": 19,
+    "trigger": "The accounts implementer (contract role B, owning all apps/web/**) edits SettingsPage.tsx, main.tsx or core/store.ts (contract lines 92-101) while a teammate follows docs/team-workflow.md, or someone edits the new landing files.",
+    "expected": "Exactly one owner per file; new directories appear in the table.",
+    "actual": "docs/team-workflow.md:19 assigns src/core/**, src/components/**, src/styles/**, App.tsx, main.tsx, Dashboard and Settings to the Captain and lists no landing/** pattern; the contract's role B claims apps/web/** wholesale and role C edits docs/architecture.md, root README.md and root .env.example, which line 19 assigns to the Captain. No document maps the two schemes onto each other.",
+    "impact": "Coordination risk only; the contract forbids commits so the user's review remains the merge gate.",
+    "evidence": "sed -n '13,22p;106p' docs/team-workflow.md; /Users/tempadmin/Documents/Reva/docs/task-specs/accounts-and-tiger.md lines 112-117 (sed -n '112,117p'); find apps/web/src/landing -type f (Landing.tsx, AccountGate.tsx); sed -n '1,6p' apps/web/src/styles/landing.css.",
+    "confidence": "high",
+    "smallestFix": "Add one line to docs/team-workflow.md mapping contract roles A/B/C onto Person 3 / Captain plus Person 1-2 by feature directory / Captain, and declare apps/web/src/landing/** and src/styles/landing.css Captain-owned.",
+    "regressionCheck": "None (documentation); grep -n 'landing' docs/team-workflow.md returns the new row.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  },
+  {
+    "id": "RVA-01-006",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "title": "No native heart-red visual capture exists; every native screenshot predates the palette change",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A02",
+      "A03"
+    ],
+    "file": "docs/reva-style-plan.md",
+    "line": 1,
+    "trigger": "Asserting that the native app renders the heart-red palette (docs/architecture.md:143 'Both clients now use exact blush ivory').",
+    "expected": "At least one native capture or measured token check recorded after commit 678e742.",
+    "actual": "docs/reva-style-plan.md:1 states 'the heart-red palette awaits its own visual check in the running MVP'; docs/verification/README.md:28-34 and docs/verification/screenshots/ contain only teal-era native captures (summary-exact-palette.png, medical-profile.png, visit-navigation.png, sample-transcript.png, implant-page-2.png, pdf-share.png, provider-fixture-brief.png, summary-dark.png); docs/verification/web-client.md:17 records a passing simulator build with no visual check; only browser tokens are verified (web-client.md:42, web-*.png).",
+    "impact": "Unverified claim, not a defect.",
+    "evidence": "sed -n '1p' docs/reva-style-plan.md; sed -n '28,34p' docs/verification/README.md; ls docs/verification/screenshots; grep -n -i heart docs/build-progress.md; sed -n '17p;42p' docs/verification/web-client.md; sed -n '143p' docs/architecture.md.",
+    "confidence": "high",
+    "smallestFix": "Owner captures one simulator screenshot per tab after 678e742 and records it in docs/verification/ (owner-run; the audit runner must not drive a simulator).",
+    "regressionCheck": "The capture exists and its sampled canvas pixel equals #FBF7F5 with #B84250 actions (ER-01-6).",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 1"
+  },
+  {
+    "id": "RVA-01-007",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Four relative links in docs/reviews/acceptance-audit.md point at moved native files under apps/ios/Reva/UI/",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "A03",
+      "N04"
+    ],
+    "file": "docs/reviews/acceptance-audit.md",
+    "line": 33,
+    "trigger": "Click the source links at lines 33, 35 and 41.",
+    "expected": "Links resolve to the current apps/ios/Reva/Features/Visits/... and Features/Records/RecordsView.swift files, or the file states its paths are historical.",
+    "actual": "Targets ../../apps/ios/Reva/UI/RecordingViews.swift#L74, #L92, ../../apps/ios/Reva/UI/RecordsView.swift#L46 and #L16 do not exist; find apps/ios -name '*.swift' lists Features/** only. A scratchpad link checker over README.md, design/README.md and docs/**/*.md checked 144 relative links; these 4 are the only broken ones. Line 3 dates the review to checkpoint 7d0f585 without a paths-historical note.",
+    "impact": "Navigation only.",
+    "evidence": "sed -n '3p;33p;35p;41p' docs/reviews/acceptance-audit.md; find apps/ios -name '*.swift' | grep -c '/UI/' (0); python3 <scratchpad>/linkcheck.py -> 'relative links checked: 144', 'broken count: 4'.",
+    "confidence": "high",
+    "smallestFix": "Append 'paths as of 7d0f585' to line 3 or update the four link targets.",
+    "regressionCheck": "Rerun the link checker (ER-01-7) and expect broken count 0 or an explicit historical note.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain"
+  }
+]

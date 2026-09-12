@@ -1,0 +1,79 @@
+[
+  {
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "confidence": "high",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (native shared state) with Person 2 (call/recording state)",
+    "id": "RVA-10-001",
+    "status": "candidate",
+    "severity": "P2",
+    "title": "Native provider results can publish after the server identity or active workspace has changed",
+    "requirementIDs": [
+      "F04",
+      "H02",
+      "H04",
+      "I04"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+AI.swift",
+    "line": 17,
+    "trigger": "Start native summarizeWithAI, then edit the server token/URL in Settings before the response arrives. The source ID/text/version can remain unchanged, so the result from the previous identity is saved. More seriously, a pending live-call status result can arrive after a pull replaces the workspace with a snapshot containing the same booking ID.",
+    "expected": "Capture the connection identity and relevant workspace boundary before awaiting and discard results from an invalidated operation, including failures/notices. Call status from one owner must never update another owner snapshot.",
+    "actual": "connectionDidChange advances connectionGeneration (AppStore.swift:43), but summarizeWithAI only compares text/version (17), prepare only a source signature (51), and refreshLiveCall writes by ID with no captured identity at all (AppStore+LiveCalls.swift:53-59). Settings URL/token controls remain enabled (SettingsView.swift:22-26); pull is disabled only by isSyncing (75), so isProviderBusy does not prevent a connection switch/pull. startCall success/error also updates current bookings by ID (27-43).",
+    "impact": "An old result can overwrite current summary/report or call outcome after switching connections. If a replacement workspace retains a booking ID (e.g. snapshots derived from a shared copy), a prior owner call transcript can be attached to that workspace. No duplicate dial is caused; the server receipt isolation remains intact.",
+    "evidence": "Source proof: AppStore+AI.swift:12-29,37-81; AppStore.swift:25-49; Features/Shared/SettingsView.swift:22-28,68-75,107-110; AppStore+LiveCalls.swift:20-43,53-59. Refutation: isProviderBusy prevents another provider command, not connection edits or sync/reset. Existing generation checks in AppStore+Providers/+Sync do not wrap these independent methods. Runtime reproduction requested from coordinator; no live request was made.",
+    "smallestFix": "Reuse the connection-generation guard and a workspace replacement generation in all provider mutation methods; preserve allowed unrelated edits via existing field/signature guards. Treat stale success and stale error paths consistently. Preserve the already-submitted call receipt and require polling under the original owner.",
+    "regressionCheck": "Controlled ProviderClient double suspends summary/status, changes connectionToken or replaces snapshot while suspended, then returns old response; assert no old summary/transcript/status/notices are written. Repeat switch-away-and-back. Separate unchanged-identity control must still save.",
+    "reviewerProvenance": "Codex continuation after user reported Claude usage exhaustion; source review only, not Fable output."
+  },
+  {
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "confidence": "high",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 3 (server/providers)",
+    "id": "RVA-10-002",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "title": "Prompt separation is implemented, but semantic medical fidelity and hostile-document behavior have no model execution evidence",
+    "requirementIDs": [
+      "D05",
+      "E03",
+      "H05"
+    ],
+    "file": "server/Sources/RevaServer/Providers/GeminiService.swift",
+    "line": 100,
+    "trigger": "Assess a synthetic medical document containing embedded instructions or a response that preserves the JSON shape but changes a dose, negation, date, or clinical statement.",
+    "expected": "Keep structural validation distinct from evidence that the selected model preserves medical facts under hostile/ambiguous source text.",
+    "actual": "The system instruction labels JSON as untrusted and no tools are supplied. Output validation checks shape/length/keys/candidate IDs, not clinical entailment. GeminiProviderTests validates request construction and mocked output rejection; no actual adversarial model execution was authorized/performed.",
+    "impact": "The audit can validate structural source-ID constraints and safe failure behavior, but cannot claim perfect extraction, clinical accuracy, or resistance to all prompt injection. This is an evidence gap, not a demonstrated model failure.",
+    "evidence": "GeminiService.swift:25-33,62-76,99-114,146-158; server/Tests/RevaServerTests/GeminiProviderTests.swift (mocked transports throughout); reports/17-evidence-runner.md r1-12 and r1-15. Official structured-output documentation describes schema conformance, which is not evidence that generated medical prose is accurate.",
+    "smallestFix": "After explicit live-provider validation is in scope, evaluate a small synthetic corpus with expected dose/unit/date/negation facts and embedded instructions; retain review labels and source excerpts. Do not turn this audit into a real-patient or paid provider test.",
+    "regressionCheck": "Each corpus case records input, exact model ID, structured result, expected facts and human adjudication; malformed/unknown-ID mock cases continue to fail closed.",
+    "reviewerProvenance": "Codex continuation after user reported Claude usage exhaustion; source review only, not Fable output."
+  },
+  {
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "confidence": "high",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 3 (server/providers)",
+    "id": "RVA-10-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Provider response limits are post-collection on Linux and in the shared voice transport",
+    "requirementIDs": [
+      "G02",
+      "H02",
+      "H03",
+      "M01"
+    ],
+    "file": "server/Sources/RevaServer/Providers/GeminiTransport.swift",
+    "line": 39,
+    "trigger": "The fixed provider returns a response larger than the supported 1 MiB Gemini or 4 MiB voice JSON limit.",
+    "expected": "If those values are intended as memory budgets, collection should stop as soon as the budget is exceeded.",
+    "actual": "FoundationNetworking Gemini calls session.data before checking data.count; VoiceHTTPTransport does the same on every platform and VoiceProviderLimits checks later. Thus retained response memory is O(provider response bytes), not O(the configured byte cap). Apple Gemini uses bounded streaming correctly.",
+    "impact": "A provider/proxy fault can consume more memory than the declared decoding limit before rejection. Fixed destinations and finite transport timeouts reduce exposure; no oversized live reply or process memory failure was observed. This is targeted hardening rather than a reproduced outage.",
+    "evidence": "GeminiTransport.swift:38-48; VoiceTransport.swift:25-36,81-92. The file headers already disclose post-collection bounds. Current runner executes mocked service responses, not a streaming transport memory test.",
+    "smallestFix": "Use a URLSessionDataDelegate or equivalent incremental collector with cancellation once the byte budget is crossed for FoundationNetworking and voice; retain redirect refusal and timeouts.",
+    "regressionCheck": "Synthetic transport test streams cap+1 bytes then more; assert cancellation occurs at the bound and the failure is sanitized, without connecting to a live provider.",
+    "reviewerProvenance": "Codex continuation after user reported Claude usage exhaustion; source review only, not Fable output."
+  }
+]

@@ -1,0 +1,203 @@
+[
+  {
+    "id": "RVA-06-001",
+    "status": "candidate",
+    "severity": "P2",
+    "title": "Server originals are never pruned and every referenced original is re-uploaded on each push; owner quota can be exhausted with no browser remedy",
+    "requirementIDs": [
+      "F05"
+    ],
+    "file": "apps/web/src/core/store.ts",
+    "line": 520,
+    "trigger": "Over the life of one owner token, import and later delete records (or record a few audio memories and delete them), pushing after each change; or let several conflicting (409) pushes upload originals. Each push re-sends every original still referenced by the snapshot; originals of deleted records, and originals uploaded by a push whose CAS later failed, stay on the server forever.",
+    "expected": "A push transfers only originals the server lacks, and the client (or server) has a path to remove originals no snapshot references, so the documented owner cap (128 files / 64 MiB, server Models.swift:126-128) is not consumed by orphans.",
+    "actual": "store.ts:520-524 iterates originals(snapshot) and calls api.uploadAttachment for every one on every push (no existence check, no hash comparison). api.ts:249-252 implements deleteAttachment and api.ts:224-226 deleteState, but store.ts never calls either and APITransport (store.ts:23-36) does not expose them; native AppStore has no deleteAttachment/deleteState callers either (grep over apps/ios/Reva). Server putAttachment counts all owner attachments toward the cap including orphans (LocalFileStore.swift:110-121; PostgresStore.swift:120). With the checked-in seed, every push re-sends 9 originals / 618,312 bytes (fixture-manifest.json + seed.json) even when unchanged.",
+    "impact": "Bandwidth: O(total referenced original bytes) per push, up to the 64 MiB owner cap per push. Robustness: once 128 distinct filenames have ever been uploaded for an owner (deleted-record originals and failed-CAS uploads included), every further push fails with HTTP 413 'Owner attachment limit is 64 MiB and 128 files' and the browser offers no pruning or reset path; only a native or manual DELETE /v1/state (which also destroys the snapshot) recovers.",
+    "evidence": "Source proof: store.ts:520-524 (upload loop), store.ts:23-36 (APITransport lacks delete operations), api.ts:224-226 and 249-252 (unused delete methods), server/Sources/RevaServer/LocalFileStore.swift:110-121 (quota counts orphans), server/Sources/RevaServer/Models.swift:126-128 (caps). Bounded measurement from the snapshot: seed references 9 distinct originals totalling 618,312 bytes (python over apps/ios/Reva/Resources/{seed,fixture-manifest}.json). Refutation attempt: checked whether uploads are idempotent no-ops server-side (they overwrite the same id, so bytes are not duplicated) and whether the seed alone could hit the cap (it cannot: 9 files); the finding therefore concerns long-lived owners and failed pushes, hence P2 candidate rather than confirmed main-path defect.",
+    "confidence": "medium",
+    "smallestFix": "Before each upload, skip originals whose id the server already holds (a HEAD/GET-by-id probe or a server-returned attachment index), and after a successful push delete server attachments that the pushed snapshot no longer references (api.deleteAttachment is already implemented). Alternatively document the cap and provide an explicit 'remove unreferenced server originals' action.",
+    "regressionCheck": "Store test: push twice with an unchanged snapshot and assert uploadAttachment is called once per original on the first push and zero times on the second; delete a record, push, and assert deleteAttachment is called for its filename. Server-side: after those pushes the owner document's attachment count equals the number of referenced originals.",
+    "ownerTrack": "Captain (shared core) with Person 3 for any server-side index/prune endpoint",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-002",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "title": "Claim that the three golden report signatures were emitted by the Swift ReportEngine is not evidenced anywhere in the snapshot",
+    "requirementIDs": [
+      "F03"
+    ],
+    "file": "apps/web/src/core/__tests__/domain.test.ts",
+    "line": 24,
+    "trigger": "Read COMPATIBILITY.md:10 ('Tests compare all three demo visit hashes with values emitted by the actual Swift ReportEngine') and domain.test.ts:19-31; search the whole snapshot for the three hash constants.",
+    "expected": "A checked-in Swift-side golden (constant, fixture field, or recorded log) that the native engine produces the same three hashes for the seed, so the browser test proves cross-client signature compatibility rather than self-consistency.",
+    "actual": "The three constants exist only in domain.test.ts:24-26. No Swift source, test, fixture, or docs/verification log contains them (grep -rn over *.swift, *.json, *.ts, *.md excluding node_modules). Tests/RevaCoreTests/DomainTests.swift:120-126 only asserts that ReportEngine.signature equals the report's own sourceSignature (self-consistency). docs/verification/web-client.md:11 reports a historical Vitest pass count, which is not evidence of Swift provenance.",
+    "impact": "If the browser signature ever diverged from Swift (separator, epoch formatting, sort order), the browser test would still pass against its own constants; cross-client staleness (E04/F03) would be silently wrong. The code comparison in this review (domain.ts:78-90 vs apps/ios/Reva/Core/ReportEngine.swift:33-44) shows the algorithms match, so the risk is provenance, not a known mismatch.",
+    "evidence": "grep results recorded in this report; sed -n '19,31p' apps/web/src/core/__tests__/domain.test.ts; sed -n '112,130p' Tests/RevaCoreTests/DomainTests.swift; sed -n '10p' apps/web/src/core/COMPATIBILITY.md. Refutation attempt: looked for the hashes in expected-evidence.json, docs/verification/*, Tests/*; none found.",
+    "confidence": "high",
+    "smallestFix": "Add the three signatures to a checked-in fixture (for example expected-evidence.json) that both FixtureEvidenceTests.swift and domain.test.ts assert against, or have the runner compute them with the Swift engine (see evidence request ER-06-2) and record the log.",
+    "regressionCheck": "Runner ER-06-2 output equals the three constants; afterwards both test suites read the same fixture value.",
+    "ownerTrack": "Captain (shared contract/fixtures)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Persistence module depends on the transport module, and features bypass the injected store persistence through module-level attachment helpers",
+    "requirementIDs": [
+      "B02"
+    ],
+    "file": "apps/web/src/core/repository.ts",
+    "line": 7,
+    "trigger": "Inspect imports: repository.ts:7 imports boundedBytes, MAX_ATTACHMENT_BYTES and MAX_SNAPSHOT_BYTES from api.ts; repository.ts:287-290 exports a module singleton plus saveAttachment/getAttachment wrappers that ImportDialog.tsx:126, RecordingCapture.tsx:114, SourcePreview.tsx:34 and RecordingDetail.tsx:31 import directly.",
+    "expected": "Dependency direction UI -> store -> (domain, persistence, transport) with shared limits in a leaf module; one owner for attachment IO so an injected SnapshotRepository (RevaProvider store prop, RevaContext.tsx:10-12) receives every attachment write and read.",
+    "actual": "IndexedDB persistence imports HTTP helpers (inverted edge); attachment IO has a second owner (the module singleton) that the store's injectable persistence cannot intercept, so an integration test that injects a MemoryRepository still writes originals to the real IndexedDB singleton, and the store's serialised write queue does not cover attachment writes (by design, but undeclared at the interface).",
+    "impact": "Maintainability/testability only: no runtime defect found. The store contract ('Injectable persistence contract keeps React independent of browser storage internals', repository.ts:9) is not fully honoured.",
+    "evidence": "sed -n '5,8p;286,290p' apps/web/src/core/repository.ts; grep -rn saveAttachment|getAttachment apps/web/src/features. Refutation attempt: confirmed no feature mutates snapshots outside store.mutate; the only bypass is attachment IO.",
+    "confidence": "high",
+    "smallestFix": "Move boundedBytes and the two MAX_* constants into a leaf module (for example core/limits.ts) imported by both api.ts and repository.ts; expose saveAttachment/getAttachment on RevaStore (delegating to this.persistence) and on useReva(), and delete the module-level wrappers.",
+    "regressionCheck": "npx tsc -b passes; grep for '../../core/repository' in features returns nothing; store test injecting MemoryRepository observes saveAttachment calls.",
+    "ownerTrack": "Captain (shared core)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Transfer rules (MIME allowlists and blob size bounds) are duplicated in four places with different subsets",
+    "requirementIDs": [
+      "B02"
+    ],
+    "file": "apps/web/src/core/store.ts",
+    "line": 341,
+    "trigger": "Compare api.ts:32-48 (15 upload MIME types), store.ts:54-61 (6 audio extensions), store.ts:341-350 (8 transcribable audio types), repository.ts:34-38 and api.ts:230/295 (three copies of 'nonempty and <= 16 MiB').",
+    "expected": "One declared contract per rule so that adding a container type (for example audio/x-m4a to audioType) or changing the size cap is a single edit that all callers share.",
+    "actual": "Four hand-maintained lists; audioType lacks entries that uploadContentType and the transcription list accept (audio/x-m4a, audio/x-wav), so an imported '.m4a' is labelled audio/mp4 while a blob typed audio/x-m4a from MediaRecorder relies on the fallback path at store.ts:339.",
+    "impact": "Drift risk only; no current mismatch causes a failure because every list is a subset of the server's Validation.contentTypes (server Models.swift:129-133).",
+    "evidence": "sed -n '30,51p' apps/web/src/core/api.ts; sed -n '52,63p;339,354p' apps/web/src/core/store.ts; sed -n '34,38p' apps/web/src/core/repository.ts.",
+    "confidence": "high",
+    "smallestFix": "Export a single MEDIA_TYPES table (extension -> canonical MIME, transcribable flag) from one core module and derive the three lists from it; reuse checkedBlob-style validation from one helper.",
+    "regressionCheck": "Unit test asserting every transcribable type is uploadable and every audioType value appears in the upload allowlist.",
+    "ownerTrack": "Captain (shared core)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Test MemoryRepository fabricates an original for unknown filenames, so store tests cannot detect a push or transcription that proceeds without a real original",
+    "requirementIDs": [
+      "N01"
+    ],
+    "file": "apps/web/src/core/__tests__/fixtures.ts",
+    "line": 62,
+    "trigger": "fixtures.ts:62-64 returns new Blob(['synthetic original']) when the filename is absent; production IndexedDBRepository.getAttachment (repository.ts:204-208) throws 'missing'.",
+    "expected": "Test doubles mirror the production failure contract, or the divergence is labelled at the fixture and the missing-original path is covered by a dedicated test.",
+    "actual": "Every store push test uploads nine seed originals that do not exist in the MemoryRepository without noticing; a regression that pushed a snapshot referencing a missing original (or uploaded fabricated bytes) would pass. The fixture header (fixtures.ts:1-4, 31) labels the class as a test boundary but not this behavioural divergence.",
+    "impact": "Coverage gap only. Other mocks are labelled and fail closed (transport() throws 'Unexpected provider operation in test.', fixtures.ts:69-71).",
+    "evidence": "sed -n '59,65p' apps/web/src/core/__tests__/fixtures.ts; sed -n '204,208p' apps/web/src/core/repository.ts; store.test.ts push tests at lines 208-225 and 226-247 never seed attachments. Refutation attempt: checked whether any store test asserts a missing-original failure on push; none does.",
+    "confidence": "high",
+    "smallestFix": "Make MemoryRepository.getAttachment throw the production 'missing' error for unknown filenames and pre-populate attachments in the push tests; add one test asserting push fails before any upload when an original is missing.",
+    "regressionCheck": "New test passes; existing push tests still pass after seeding the nine fixtures.",
+    "ownerTrack": "Captain (shared core tests)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Attachment PUT/GET share the generic 25 s total deadline while a same-size transcription upload gets 110 s; large originals on slow links cannot be pushed or pulled",
+    "requirementIDs": [
+      "H04",
+      "F04"
+    ],
+    "file": "apps/web/src/core/api.ts",
+    "line": 232,
+    "trigger": "Push or pull a 16 MiB original (the documented cap) over a link slower than about 5.4 Mbit/s sustained (16 MiB / 25 s); the AbortController at api.ts:146-147 fires, send() throws the timeout error, and pushToServer/pullFromServer abort.",
+    "expected": "Attachment transfers use a deadline proportional to size or an idle timeout, consistent with the 110 s allowed for the identical 16 MiB body in transcribe() (api.ts:302-303).",
+    "actual": "uploadAttachment (api.ts:232-235) and attachment (api.ts:239-245) call send() with the default timeout = 25_000; because pushToServer re-uploads every original each attempt (store.ts:520-524), the same large file times out on every retry, so the workspace can never be pushed from that connection.",
+    "impact": "Robustness on a secondary path; data is preserved (message says so) and the fixed deadline is a deliberate bound, hence a suggestion, not a defect. The 25 s cap also bounds each of up to 128 sequential downloads in a pull.",
+    "evidence": "sed -n '138,172p;229,252p;294,304p' apps/web/src/core/api.ts. Arithmetic: 16 MiB = 134.2 Mbit; 134.2 / 25 s = 5.37 Mbit/s minimum. Native ServerClient uses URLSession timeoutInterval = 20 (apps/ios/Reva/Core/ServerClient.swift:100), which is an idle timeout, not a total deadline.",
+    "confidence": "high",
+    "smallestFix": "Pass a size-derived timeout for attachment transfers (for example max(25 s, bytes / 256 KiB per s)) or the same 110 s used for transcription.",
+    "regressionCheck": "api.test: uploadAttachment with a 16 MiB Blob and a fetch mock that resolves after 30 s (fake timers) succeeds; a stalled fetch beyond the scaled deadline still rejects with the timeout message.",
+    "ownerTrack": "Captain (shared core)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-007",
+    "status": "suggestion",
+    "severity": "P2",
+    "title": "Forward-looking (accounts WIP): after an identity change the first connection check adopts the remote revision unconditionally, so the next push replaces that identity's server snapshot with the local (possibly demo) workspace",
+    "requirementIDs": [
+      "F04",
+      "G06"
+    ],
+    "file": "apps/web/src/core/store.ts",
+    "line": 500,
+    "trigger": "setToken('other-token') (store.ts:182-193 sets serverRevision null, mustPull false); checkServer (store.ts:486-509) reads the remote revision, and because known === null it publishes serverRevision = remote and reports 'Provider availability checked.' with no indication that the server holds a different snapshot; pushToServer (store.ts:510-540) then PUTs the local workspace with that base revision and succeeds.",
+    "expected": "With static tokens the current UI copy ('Replace the server's snapshot with this browser's records and profile', SettingsPage.tsx:95-98) makes this explicit, so this is not a defect today. Under the accounts contract (per-user login into the same browser) a fresh login must not be able to overwrite an existing account snapshot with the demo or another user's workspace after a single check.",
+    "actual": "The store has no notion of 'this browser has never pulled this identity's snapshot'; mustPull is only set by a 409 or by a revision change between checks (store.ts:502-508). The local IndexedDB name is fixed ('reva-workspace-v1', repository.ts:59) regardless of token.",
+    "impact": "Integration risk for the concurrent accounts work (contract docs/task-specs/accounts-and-tiger.md: per-user IndexedDB DB name and 1.5 s debounced auto-push). If auto-push reuses pushToServer after login without a required pull, a demo workspace could be pushed into a real account (G06). Not a completed-path defect in this snapshot.",
+    "evidence": "sed -n '182,193p;486,540p' apps/web/src/core/store.ts; sed -n '95,98p' apps/web/src/features/SettingsPage.tsx; store.test.ts:287-299 covers the reset of revision/capabilities on setToken but no test covers 'first check then push overwrites a populated remote'.",
+    "confidence": "medium",
+    "smallestFix": "Track per-identity 'pulled or pushed at least once' in memory; when the first check after an identity change finds a non-tombstone remote snapshot, set mustPull (or require an explicit 'replace server copy' confirmation) before allowing push. Under accounts, bind the local DB name to the user id as the contract already specifies.",
+    "regressionCheck": "Store test: setToken to a new identity whose pull returns revision 5 with a snapshot; checkServer; expect pushToServer to reject with the pull-first message until pullFromServer succeeds.",
+    "ownerTrack": "Captain (shared core), coordinate with tracks 12/13 (accounts)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-008",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Cold-start seeding race: the second tab to open an empty workspace ends with no snapshot until the user reloads",
+    "requirementIDs": [
+      "F02"
+    ],
+    "file": "apps/web/src/core/store.ts",
+    "line": 146,
+    "trigger": "Open /demo in two tabs on a browser that has no reva-workspace-v1 database yet. Both stores see load() === null and call commit(seed, 0); the IndexedDB CAS (repository.ts:140-141) lets one win and rejects the other with LocalConflictError.",
+    "expected": "The losing tab re-reads the winner's snapshot (revision 1) and proceeds; no user action needed.",
+    "actual": "initialize() (store.ts:141-167) catches the error and reports 'This browser workspace changed in another tab... Reload this tab before saving again.' with snapshot null and loading false; the workspace UI is unusable until a manual reload. Correct (no silent overwrite, no data loss) but avoidable.",
+    "impact": "Minor first-visit glitch; explicit and recoverable, so a suggestion.",
+    "evidence": "sed -n '141,167p' apps/web/src/core/store.ts; sed -n '140,141p' apps/web/src/core/repository.ts. repository.test.ts:39-55 proves the CAS behaviour; store.test.ts never exercises the fresh-database seed path (MemoryRepository starts pre-seeded at revision 1, fixtures.ts:33).",
+    "confidence": "high",
+    "smallestFix": "In initialize(), if commit(seed, 0) rejects with LocalConflictError, call load() again and adopt the result.",
+    "regressionCheck": "Store test with two RevaStore instances over one IndexedDBRepository (fake-indexeddb): both initialize() calls resolve with a non-null snapshot and identical revision 1.",
+    "ownerTrack": "Captain (shared core)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  },
+  {
+    "id": "RVA-06-009",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Browser pull overwrites a same-name local original without comparing bytes, unlike the native staging guard",
+    "requirementIDs": [
+      "F05",
+      "D02"
+    ],
+    "file": "apps/web/src/core/repository.ts",
+    "line": 147,
+    "trigger": "A pulled snapshot references filename X while the local attachments store already holds X with different bytes (only reachable through the shared public demo token with differing fixture builds, or a server whose attachment X was replaced by another client's failed-CAS upload of the same UUID-prefixed name, which normal imports cannot produce).",
+    "expected": "Parity with native LocalRepository.stagePullAttachment (apps/ios/Reva/Core/LocalRepository.swift:67-79), which stops the pull when downloaded bytes conflict with an existing original of the same name, honouring the 'originals are never replaced silently' principle (COMPATIBILITY.md:18).",
+    "actual": "write() puts every downloaded Blob under its filename unconditionally (repository.ts:147) inside the same transaction that replaces the snapshot; the prior local bytes are gone after commit.",
+    "impact": "Low: the replaced snapshot and its originals stay mutually consistent (both come from the server) and the user confirmed 'Pull and replace' (SettingsPage.tsx:210-213). UUID-prefixed filenames (ImportDialog.tsx:121, RecordingCapture.tsx:114) and manifest-verified fixtures make a byte conflict contrived. Recorded because architecture.md:202 documents the native guard and states only that 'the two clients retain their respective storage boundaries'.",
+    "evidence": "sed -n '111,162p' apps/web/src/core/repository.ts; sed -n '67,79p' apps/ios/Reva/Core/LocalRepository.swift. Refutation attempt: traced filename generation on both clients and the manifest hash check (repository.ts:222-223); no realistic non-demo path produces a conflict, hence suggestion rather than candidate.",
+    "confidence": "medium",
+    "smallestFix": "In write(), when an attachment key already exists with different size or SHA-256, abort with an explicit conflict message (or store under a versioned key and update the record's sourceFilename) instead of overwriting.",
+    "regressionCheck": "repository.test: commit with attachments {X: bytesA}; commit again at the new revision with {X: bytesB}; expect rejection and getAttachment(X) still returns bytesA.",
+    "ownerTrack": "Captain (shared core), Person 1 for records evidence policy",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "validatorDisposition": "pending"
+  }
+]

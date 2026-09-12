@@ -1,0 +1,823 @@
+{
+  "stage": "runner1",
+  "track": 17,
+  "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+  "worktree": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+  "head": "cfe09971443989396b8ef6a14cdf935adba86ddd",
+  "runner": {
+    "model": "claude-fable-5-1",
+    "helper": "scratchpad/runner/run_cmd.py (fresh allowlisted env, start_new_session, deadline killpg)"
+  },
+  "window": {
+    "startUTC": "2026-09-12T17:04:38.664Z",
+    "endUTC": "2026-09-12T17:14:51.203Z"
+  },
+  "toolchain": {
+    "os": "macOS 26.6.2 (25G83), Darwin 25.6.0 arm64",
+    "hardware": "Apple M4 Pro, 14 cores, 51539607552 bytes RAM",
+    "xcode": "26.4 (17E192)",
+    "swift": "Apple Swift version 6.3 (swiftlang-6.3.0.123.5 clang-2100.0.123.102), swift-driver 1.148.6",
+    "swiftFormat": "6.3.0 (/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-format)",
+    "node": "v24.14.1",
+    "npm": "11.11.0",
+    "python3": "3.9.6 (Xcode python3 on sanitized PATH)",
+    "git": "2.50.1 (Apple Git-155)",
+    "sdks": [
+      "iphoneos26.4",
+      "iphonesimulator26.4",
+      "macosx26.4"
+    ]
+  },
+  "otherSessionResources": {
+    "listeners": [
+      {
+        "pid": 50539,
+        "process": "RevaAPI",
+        "address": "127.0.0.1:8080"
+      },
+      {
+        "pid": 74003,
+        "process": "node",
+        "address": "127.0.0.1:5173"
+      },
+      {
+        "pid": 86045,
+        "process": "node scripts/serve.mjs",
+        "address": "127.0.0.1:4173"
+      }
+    ],
+    "bootedSimulator": "iPhone 17 Pro 45A0D099-630E-42BC-9982-329F78A07F1A (iOS 26.4)",
+    "touched": false
+  },
+  "commands": [
+    {
+      "id": "r1-00-helper-selftest",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "true",
+      "start": "2026-09-12T17:04:38.664Z",
+      "end": "2026-09-12T17:04:38.671Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.008,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-selftest.log",
+      "note": "helper self-test: true, then env allowlist dump (keys only), then timeout path",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "helper self-test"
+    },
+    {
+      "id": "r1-00-helper-envkeys",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "env | cut -d= -f1 | sort",
+      "start": "2026-09-12T17:04:38.716Z",
+      "end": "2026-09-12T17:04:38.737Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.021,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-envkeys.log",
+      "note": "helper self-test: child environment variable NAMES only (proves allowlist; no values printed)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "child env names only: CI DEVELOPER_DIR HOME LANG LC_ALL NO_COLOR PATH PWD SHELL SHLVL TMPDIR USER _"
+    },
+    {
+      "id": "r1-00-helper-timeout",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "sleep 30 & sleep 30; wait",
+      "start": "2026-09-12T17:04:38.781Z",
+      "end": "2026-09-12T17:04:40.786Z",
+      "exitStatus": 124,
+      "durationSeconds": 2.005,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-timeout.log",
+      "note": "helper self-test: deadline kill of a process group (sh -c 'sleep 30 & sleep 30')",
+      "timedOut": true,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "deadline kill verified (exit 124 expected); no stray sleep"
+    },
+    {
+      "id": "r1-01-toolchain",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "/bin/sh /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/toolchain.sh",
+      "start": "2026-09-12T17:05:18.761Z",
+      "end": "2026-09-12T17:05:20.352Z",
+      "exitStatus": 0,
+      "durationSeconds": 1.587,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-01-toolchain.log",
+      "note": "toolchain/host inventory; lsof lists other session's listeners without connecting; simctl list is read-only",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "Xcode 26.4 (17E192); Swift 6.3; swift-format 6.3.0; node v24.14.1; npm 11.11.0; python 3.9.6; git 2.50.1; macOS 26.6.2 M4 Pro 14c/48GiB"
+    },
+    {
+      "id": "r1-02-structure-check",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 scripts/check_code_structure.py",
+      "start": "2026-09-12T17:05:25.917Z",
+      "end": "2026-09-12T17:05:26.046Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.129,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-02-structure-check.log",
+      "note": "read-only contract/MARK structure check over apps/ios/Reva, server/Sources, apps/web/src, apps/web/scripts",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "71 Swift and 53 browser source files have contracts and named sections"
+    },
+    {
+      "id": "r1-03-swift-format-lint",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-format lint --strict --recursive --configuration .swift-format apps/ios/Reva server/Sources Tests server/Tests Package.swift server/Package.swift",
+      "start": "2026-09-12T17:05:26.089Z",
+      "end": "2026-09-12T17:05:26.125Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.036,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03-swift-format-lint.log",
+      "note": "read-only swift-format lint --strict with repository .swift-format; toolchain binary from Xcode; no formatting applied",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "void",
+      "keyNumbers": "--recursive skipped every directory under the hidden-path worktree; only 2 explicit Package.swift files visited; superseded by r1-03b"
+    },
+    {
+      "id": "r1-04-npm-ci",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm ci --include=dev --prefix apps/web",
+      "start": "2026-09-12T17:05:28.718Z",
+      "end": "2026-09-12T17:05:31.498Z",
+      "exitStatus": 0,
+      "durationSeconds": 2.778,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-04-npm-ci.log",
+      "note": "clean pinned dependency install from package-lock.json into apps/web/node_modules (ignored build output); registry network access expected",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "added 69 packages, audited 70, 0 vulnerabilities"
+    },
+    {
+      "id": "r1-10-swift-test-root",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "swift test -j 4",
+      "start": "2026-09-12T17:05:34.905Z",
+      "end": "2026-09-12T17:06:04.970Z",
+      "exitStatus": 0,
+      "durationSeconds": 30.056,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-10-swift-test-root.log",
+      "note": "root RevaCore package tests (XCTest); LiveServerTests are env-gated (REVA_RUN_LIVE_CLIENT_TESTS unset -> XCTSkip); runs concurrently with r1-04 and r1-11",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "XCTest Executed 44 tests, 1 skipped (LiveServerTests env gate), 0 failures; 43 passed; 0 warnings"
+    },
+    {
+      "id": "r1-03-swift-format-probe",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-format lint --strict --configuration .swift-format /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/lint-probe/Probe.swift",
+      "start": "2026-09-12T17:06:06.979Z",
+      "end": "2026-09-12T17:06:07.021Z",
+      "exitStatus": 1,
+      "durationSeconds": 0.041,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03-swift-format-probe.log",
+      "note": "tool sanity probe: lint a scratch file with deliberate semicolon/import-order violations using the repo config, to prove swift-format lint emits diagnostics (r1-03 produced none in 0.036s)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "tool sanity: 6 diagnostics on a deliberately bad scratch file (exit 1 expected)"
+    },
+    {
+      "id": "r1-05-format-check",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web run format:check",
+      "start": "2026-09-12T17:06:12.559Z",
+      "end": "2026-09-12T17:06:16.014Z",
+      "exitStatus": 0,
+      "durationSeconds": 3.454,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-05-format-check.log",
+      "note": "prettier --check over apps/web src, scripts, vite.config.ts (read-only)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "prettier: all matched files formatted"
+    },
+    {
+      "id": "r1-06-typecheck",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web run typecheck",
+      "start": "2026-09-12T17:06:16.071Z",
+      "end": "2026-09-12T17:06:17.781Z",
+      "exitStatus": 1,
+      "durationSeconds": 1.71,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-06-typecheck.log",
+      "note": "tsc -b project typecheck (noEmit)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "fail",
+      "keyNumbers": "clean tree: 7 TS errors (TS2307 x3 missing public/demo/*.json; TS2345 x1; TS7006 x3) — ordering trap, passes after assets (r1-06b)"
+    },
+    {
+      "id": "r1-07-vitest",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web test",
+      "start": "2026-09-12T17:06:17.848Z",
+      "end": "2026-09-12T17:06:20.100Z",
+      "exitStatus": 1,
+      "durationSeconds": 2.251,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-07-vitest.log",
+      "note": "vitest run src (browser unit tests; excludes scripts/serve.test.mjs wrapper suite)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "fail",
+      "keyNumbers": "clean tree: Test Files 5 failed | 2 passed (7); Tests 25 passed (25); Cannot find module public/demo/seed.json (x4) / expected-evidence.json (x1)"
+    },
+    {
+      "id": "r1-08-serve-test",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "node --test apps/web/scripts/serve.test.mjs",
+      "start": "2026-09-12T17:06:20.169Z",
+      "end": "2026-09-12T17:06:20.567Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.397,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-08-serve-test.log",
+      "note": "node --test for the production wrapper; spawns serve.mjs copy in a temp dir on ephemeral 127.0.0.1 ports with a mock upstream (never 4173/8080)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "node --test: tests 7 pass 7 fail 0"
+    },
+    {
+      "id": "r1-19-npm-audit",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm audit --prefix apps/web --json",
+      "start": "2026-09-12T17:06:21.951Z",
+      "end": "2026-09-12T17:06:22.623Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.672,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-19-npm-audit.log",
+      "note": "npm audit --json: sends dependency metadata (names/versions from lockfile) to the npm registry advisory endpoint only; no source is uploaded",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "0 vulnerabilities; deps prod 19 dev 92 optional 59 total 122"
+    },
+    {
+      "id": "r1-19-npm-ls",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm ls --prefix apps/web --depth=0",
+      "start": "2026-09-12T17:06:22.712Z",
+      "end": "2026-09-12T17:06:23.168Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.455,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-19-npm-ls.log",
+      "note": "top-level installed dependency inventory",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "15 top-level packages match package.json pins"
+    },
+    {
+      "id": "r1-09-web-build",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web run build",
+      "start": "2026-09-12T17:07:13.866Z",
+      "end": "2026-09-12T17:07:19.644Z",
+      "exitStatus": 0,
+      "durationSeconds": 5.777,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-09-web-build.log",
+      "note": "npm run build = prebuild assets (copies apps/ios/Reva/Resources -> public/demo, tesseract worker/core/eng -> public/ocr; both git-ignored) then tsc -b && vite build -> apps/web/dist",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "prebuild assets + tsc -b + vite build: 1927 modules; dist built in 2.03s"
+    },
+    {
+      "id": "r1-06b-typecheck-after-assets",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web run typecheck",
+      "start": "2026-09-12T17:07:51.975Z",
+      "end": "2026-09-12T17:07:53.197Z",
+      "exitStatus": 0,
+      "durationSeconds": 1.222,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-06b-typecheck-after-assets.log",
+      "note": "re-run of r1-06 after r1-09 generated public/demo (tests import public/demo/*.json); isolates the clean-tree ordering failure from real type errors",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "tsc -b clean after public/demo generated"
+    },
+    {
+      "id": "r1-07b-vitest-after-assets",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "npm --prefix apps/web test",
+      "start": "2026-09-12T17:07:53.345Z",
+      "end": "2026-09-12T17:07:55.601Z",
+      "exitStatus": 0,
+      "durationSeconds": 2.256,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-07b-vitest-after-assets.log",
+      "note": "re-run of r1-07 after r1-09 generated public/demo; records the real unit-test counts",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "Test Files 7 passed (7); Tests 77 passed (77); 1.10s"
+    },
+    {
+      "id": "r1-03b-swift-format-lint-explicit",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "(find apps/ios/Reva server/Sources Tests server/Tests -name '*.swift' | sort; echo Package.swift; echo server/Package.swift) | xargs /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-format lint --strict --configuration .swift-format",
+      "start": "2026-09-12T17:08:25.697Z",
+      "end": "2026-09-12T17:08:27.899Z",
+      "exitStatus": 0,
+      "durationSeconds": 2.201,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03b-swift-format-lint-explicit.log",
+      "note": "REPLACES r1-03: swift-format --recursive silently skipped every directory under this worktree (its absolute path contains the hidden component .worktrees; probe with lineLength=40 config visited only the 2 explicit Package.swift files vs 11,483 diagnostics via explicit list). This run passes all 86 .swift files explicitly (find | xargs), read-only lint with the repository .swift-format.",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "86 files explicit list, 0 diagnostics (0 in WIP-diff files, 0 historical)"
+    },
+    {
+      "id": "r1-21-dist-inventory",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/dist_inventory.py",
+      "start": "2026-09-12T17:08:29.559Z",
+      "end": "2026-09-12T17:08:42.501Z",
+      "exitStatus": 0,
+      "durationSeconds": 12.942,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-21-dist-inventory.log",
+      "note": "read-only inventory of apps/web/dist and generated public/ocr, public/demo: byte size, in-memory gzip(level 6) size, sha256 prefix per file; totals; index.html contents",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "dist 36 files 50,729,813 B raw / 21,108,783 B gzip; assets 2,138,212 raw / 633,329 gzip; ocr 47,773,887 raw; demo 816,719 raw; dist/ocr+demo identical to public copies"
+    },
+    {
+      "id": "r1-17-optimization-checks",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 scripts/check_optimization_fixes.py",
+      "start": "2026-09-12T17:08:44.439Z",
+      "end": "2026-09-12T17:09:13.618Z",
+      "exitStatus": 0,
+      "durationSeconds": 29.178,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-17-optimization-checks.log",
+      "note": "compiles production Core/State sources + Tests/OptimizationChecks harness with swiftc into build/optimization-checks (only write location) and runs StateChecks/ProviderChecks against demo/seed.json; concurrent with r1-11 server build",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "6 PASS groups: R1 R2 R3 R5 R6 R9; wrote only build/optimization-checks"
+    },
+    {
+      "id": "r1-20-package-resolved-pins",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/pins_summary.py",
+      "start": "2026-09-12T17:09:19.164Z",
+      "end": "2026-09-12T17:09:19.366Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.201,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-20-package-resolved-pins.log",
+      "note": "read-only summary of server/Package.resolved pins (identity, version, revision prefix, location)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "30 pins; vapor 4.122.1, postgres-nio 1.33.1, swift-nio 2.102.0, swift-nio-ssl 2.37.4, swift-crypto 4.5.2"
+    },
+    {
+      "id": "r1-11-swift-build-server",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "swift build --package-path server -j 4",
+      "start": "2026-09-12T17:05:31.889Z",
+      "end": "2026-09-12T17:10:58.311Z",
+      "exitStatus": 0,
+      "durationSeconds": 326.406,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-11-swift-build-server.log",
+      "note": "first debug build of the Vapor server package (fetches pinned deps from Package.resolved; writes server/.build only); runs concurrently with r1-04 and r1-10",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "Build complete! (325.44s); 0 warning lines"
+    },
+    {
+      "id": "r1-20-show-dependencies",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "swift package show-dependencies --package-path server",
+      "start": "2026-09-12T17:11:20.316Z",
+      "end": "2026-09-12T17:11:20.995Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.679,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-20-show-dependencies.log",
+      "note": "swift package show-dependencies for the server package (uses already-resolved server/.build checkouts; no network expected)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "dependency tree printed from resolved checkouts (247 lines)"
+    },
+    {
+      "id": "r1-13-smoke",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 server/scripts/smoke.py",
+      "start": "2026-09-12T17:11:21.038Z",
+      "end": "2026-09-12T17:11:22.235Z",
+      "exitStatus": 0,
+      "durationSeconds": 1.196,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-13-smoke.log",
+      "note": "server/scripts/smoke.py: starts server/.build/debug/RevaAPI on an ephemeral 127.0.0.1 port with REVA_STORAGE=local, temp data dir and synthetic tokens; restarts it; stops it in finally",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "PASS: real HTTP auth, owner isolation, conflict, bytes, process restart, deletion and tombstone checks"
+    },
+    {
+      "id": "r1-14-postgres-failure",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 server/scripts/check_postgres_failure.py",
+      "start": "2026-09-12T17:11:22.278Z",
+      "end": "2026-09-12T17:11:42.815Z",
+      "exitStatus": 0,
+      "durationSeconds": 20.536,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-14-postgres-failure.log",
+      "note": "server/scripts/check_postgres_failure.py: REVA_STORAGE=postgres with a synthetic DATABASE_URL to unreachable 127.0.0.1:1; asserts bounded fail-closed exit, redaction, and no local fallback files",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "PASS: PostgreSQL unreachable exits 1 in 20.4s; credentials redacted; no local files"
+    },
+    {
+      "id": "r1-15-provider-api",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 scripts/check_provider_api.py",
+      "start": "2026-09-12T17:11:42.870Z",
+      "end": "2026-09-12T17:11:43.603Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.733,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-15-provider-api.log",
+      "note": "scripts/check_provider_api.py (imports test_client_server from the script dir via sys.path[0]): ephemeral port, all providers unconfigured; asserts discovery, 401s and 503s; no outbound provider calls",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "PASS: provider status, six route auth checks, four unconfigured 503s; no outbound calls"
+    },
+    {
+      "id": "r1-16-client-server",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 scripts/test_client_server.py",
+      "start": "2026-09-12T17:11:52.482Z",
+      "end": "2026-09-12T17:11:54.596Z",
+      "exitStatus": 0,
+      "durationSeconds": 2.113,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-16-client-server.log",
+      "note": "scripts/test_client_server.py: starts server/.build/debug/RevaAPI on an ephemeral 127.0.0.1 port (local storage, temp dir, secrets.token_urlsafe tokens) then runs root 'swift test --filter LiveServerTests' with REVA_RUN_LIVE_CLIENT_TESTS=1; stops both process groups; concurrent with r1-18",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "LiveServerTests 1 test passed (0.270s) against temporary local Vapor; PASS"
+    },
+    {
+      "id": "r1-18-xcodebuild",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "xcodebuild -project Reva.xcodeproj -scheme Reva -destination generic/platform=iOS Simulator -derivedDataPath build/FableAuditDerivedData CODE_SIGNING_ALLOWED=NO build",
+      "start": "2026-09-12T17:11:57.178Z",
+      "end": "2026-09-12T17:12:18.974Z",
+      "exitStatus": 0,
+      "durationSeconds": 21.796,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-18-xcodebuild.log",
+      "note": "xcodebuild Reva scheme for generic iOS Simulator destination (no simulator boot/install), CODE_SIGNING_ALLOWED=NO, derived data under build/FableAuditDerivedData; concurrent with r1-16",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "BUILD SUCCEEDED; arm64+x86_64 (69 SwiftCompile each); 1 informational warning (appintentsmetadataprocessor); 0 errors"
+    },
+    {
+      "id": "r1-12-swift-test-server",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "swift test --package-path server -j 4",
+      "start": "2026-09-12T17:12:05.059Z",
+      "end": "2026-09-12T17:12:32.495Z",
+      "exitStatus": 0,
+      "durationSeconds": 27.435,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-12-swift-test-server.log",
+      "note": "server package tests (Swift Testing + XCTest via VaporTesting); PostgresIntegrationTests is .enabled(if: REVA_TEST_DATABASE_URL != nil) and the variable is unset, so it must skip; concurrent with r1-18 xcodebuild",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "Swift Testing: 31 tests in 4 suites passed; 1 skipped realDatabaseRoundtripAndMigrations (REVA_TEST_DATABASE_URL unset); XCTest 0 tests"
+    },
+    {
+      "id": "r1-22-post-run-hash-check",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "python3 /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/hash_check.py; echo \"hash_check exit=$?\"; echo \"--- git status --short (tracked + untracked, ignored excluded):\"; git status --short; echo \"--- git status --short --ignored (ignored top-level entries):\"; git status --short --ignored | grep \"^!!\"; echo \"--- untracked files not in the captured-untracked set:\"; git status --short --untracked-files=all | grep \"^??\" | grep -vE \"^\\?\\? (\\.audit-source-delta\\.patch|apps/web/src/landing/AccountGate\\.tsx|apps/web/src/landing/Landing\\.tsx|apps/web/src/styles/landing\\.css|apps/web/vercel\\.json)$\" || echo \"(none)\"; echo \"--- git diff --stat vs HEAD (must equal the captured 13-file WIP diff):\"; git diff --stat | tail -15; echo \"--- diff of working tree vs captured patch (empty = identical):\"; git diff --no-color > /tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/current-diff.patch; wc -c /tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/current-diff.patch .audit-source-delta.patch",
+      "start": "2026-09-12T17:12:56.810Z",
+      "end": "2026-09-12T17:12:57.420Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.609,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-22-post-run-hash-check.log",
+      "note": "post-run integrity: re-hash all 267 manifest files + patch SHA, then git status --short and untracked inventory (ignored build outputs are expected: apps/web/node_modules, dist, public/demo, public/ocr, .build, server/.build, build/)",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "267/267 manifest hashes ok; patch sha256 match; git status identical; no unexpected untracked files"
+    },
+    {
+      "id": "r1-23-final-process-check",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "echo \"--- all TCP LISTEN sockets:\"; lsof -nP -iTCP -sTCP:LISTEN | awk \"NR==1 || /RevaAPI|node|StateChecks|ProviderChecks|python|swift|xctest/\"; echo \"--- processes matching RevaAPI|StateChecks|ProviderChecks|serve.mjs|swift-build|xcodebuild|xctest|vitest:\"; pgrep -fl \"RevaAPI|StateChecks|ProviderChecks|serve\\.mjs|swift-build|xcodebuild|xctest|vitest\" || echo \"(none)\"; echo \"--- leftover temp dirs from smoke/test scripts in TMPDIR:\"; ls -d \"$TMPDIR\"/reva-* 2>/dev/null || echo \"(none)\"; ls -d /tmp/reva-* 2>/dev/null || echo \"(none in /tmp)\"; echo \"--- byte compare working-tree diff vs captured patch:\"; cmp /tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/current-diff.patch .audit-source-delta.patch && echo \"identical\"",
+      "start": "2026-09-12T17:13:17.687Z",
+      "end": "2026-09-12T17:13:18.053Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.366,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-23-final-process-check.log",
+      "note": "post-run verification that the runner left no listeners or child processes; the other session's PIDs 50539 (RevaAPI:8080), 74003 (node:5173), 86045 (node:4173) are expected and untouched",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "no runner listeners; working-tree diff byte-identical to captured patch; transient swift-build PID 37138 observed"
+    },
+    {
+      "id": "r1-03c-swift-format-recursive-probe",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "SF=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-format; CFG=/private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/probe-linelength40.json; echo '(a) --recursive on directories:'; $SF lint --strict --recursive --configuration $CFG apps/ios/Reva server/Sources Tests server/Tests Package.swift server/Package.swift 2>&1 | tee /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/probe-a.txt | grep -c 'error:'; echo 'distinct files (a):'; sed -E 's/:[0-9]+:[0-9]+: .*//' /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/probe-a.txt | sort -u; echo '(b) explicit file list:'; (find apps/ios/Reva server/Sources Tests server/Tests -name '*.swift' | sort; echo Package.swift; echo server/Package.swift) | xargs $SF lint --strict --configuration $CFG 2>&1 | tee /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/probe-b.txt | grep -c 'error:'; echo 'distinct files (b):'; sed -E 's/:[0-9]+:[0-9]+: .*//' /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/probe-b.txt | sort -u | wc -l; echo '(c) --recursive on a scratch copy of apps/ios/Reva outside any hidden path:'; rm -rf /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/reva-copy && cp -R apps/ios/Reva /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/reva-copy && $SF lint --strict --recursive --configuration $CFG /private/tmp/claude-502/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/scratchpad/runner/reva-copy 2>&1 | grep -c 'error:'",
+      "start": "2026-09-12T17:14:49.111Z",
+      "end": "2026-09-12T17:14:50.486Z",
+      "exitStatus": 0,
+      "durationSeconds": 1.375,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03c-swift-format-recursive-probe.log",
+      "note": "tool-behaviour evidence: with a scratch copy of .swift-format whose lineLength is 40, count diagnostics and distinct files when (a) passing directories with --recursive vs (b) passing the explicit 86-file list; proves --recursive skipped the directories under this hidden-path worktree, so r1-03 is void and r1-03b is the valid lint",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "lineLength=40 probe: recursive dirs 17 diags/2 files; explicit list 11483 diags/86 files; recursive on non-hidden copy 5785"
+    },
+    {
+      "id": "r1-24-final-process-recheck",
+      "stage": "runner1",
+      "cwd": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+      "command": "echo \"--- pgrep RevaAPI|StateChecks|ProviderChecks|serve.mjs|swift-build|xcodebuild|xctest|vitest|run_cmd.py:\"; pgrep -fl \"RevaAPI|StateChecks|ProviderChecks|serve\\.mjs|swift-build|xcodebuild|xctest|vitest|run_cmd\\.py\" || echo \"(none)\"; echo \"--- ps -p 37138:\"; ps -o pid,ppid,lstart,command -p 37138 || echo \"(exited)\"; echo \"--- processes with cwd inside the frozen worktree:\"; lsof -d cwd -Fpn 2>/dev/null | grep -B1 \"fable-audit-20260912-114322\" | grep \"^p\" || echo \"(none)\"; echo \"--- LISTEN sockets:\"; lsof -nP -iTCP -sTCP:LISTEN | awk \"NR>1{print \\$1, \\$2, \\$9}\"",
+      "start": "2026-09-12T17:14:50.529Z",
+      "end": "2026-09-12T17:14:51.203Z",
+      "exitStatus": 0,
+      "durationSeconds": 0.674,
+      "logPath": "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-24-final-process-recheck.log",
+      "note": "re-check after r1-23 matched a transient swift-build PID 37138: list processes matching the same pattern, any process whose cwd is inside the frozen worktree, and helper processes",
+      "timedOut": false,
+      "extraEnvKeys": [],
+      "verdict": "pass",
+      "keyNumbers": "PID 37138 exited; no process cwd inside worktree; no helper processes; only pre-existing listeners"
+    }
+  ],
+  "testCounts": {
+    "webVitest": {
+      "files": 7,
+      "tests": 77,
+      "passed": 77,
+      "failed": 0,
+      "durationSeconds": 1.1,
+      "evidence": "r1-07b-vitest-after-assets"
+    },
+    "webWrapperNodeTest": {
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "evidence": "r1-08-serve-test"
+    },
+    "rootSwiftXCTest": {
+      "executed": 44,
+      "passed": 43,
+      "skipped": 1,
+      "failed": 0,
+      "skippedNames": [
+        "LiveServerTests.testNativeURLSessionClientAgainstLocalVapor"
+      ],
+      "evidence": "r1-10-swift-test-root"
+    },
+    "liveServerTests": {
+      "executed": 1,
+      "passed": 1,
+      "evidence": "r1-16-client-server"
+    },
+    "serverSwiftTesting": {
+      "tests": 31,
+      "suites": 4,
+      "passed": 31,
+      "skipped": 1,
+      "failed": 0,
+      "skippedNames": [
+        "PostgresIntegrationTests.realDatabaseRoundtripAndMigrations"
+      ],
+      "evidence": "r1-12-swift-test-server"
+    },
+    "optimizationHarness": {
+      "passGroups": [
+        "R1",
+        "R2",
+        "R3",
+        "R5",
+        "R6",
+        "R9"
+      ],
+      "evidence": "r1-17-optimization-checks"
+    },
+    "smokeScripts": {
+      "passed": [
+        "r1-13-smoke",
+        "r1-14-postgres-failure",
+        "r1-15-provider-api",
+        "r1-16-client-server"
+      ]
+    }
+  },
+  "failures": [
+    {
+      "id": "clean-tree-test-ordering",
+      "commands": [
+        "r1-06-typecheck",
+        "r1-07-vitest"
+      ],
+      "classification": "reproduced failure; candidate P3 for reviewers (A04/L04/N01); passes after generated assets (r1-06b, r1-07b)",
+      "files": [
+        "apps/web/package.json:9-19",
+        "apps/web/src/core/__tests__/fixtures.ts:5-6",
+        "apps/web/src/core/__tests__/domain.test.ts:6",
+        "apps/web/scripts/prepare-assets.mjs"
+      ],
+      "exactText": [
+        "src/core/__tests__/fixtures.ts(5,22): error TS2307: Cannot find module '../../../public/demo/seed.json' or its corresponding type declarations.",
+        "Error: Cannot find module '../../../public/demo/seed.json' imported from /Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322/apps/web/src/core/__tests__/fixtures.ts",
+        "Test Files  5 failed | 2 passed (7)"
+      ]
+    }
+  ],
+  "voided": [
+    {
+      "id": "r1-03-swift-format-lint",
+      "reason": "swift-format 6.3.0 --recursive skipped every directory under the hidden-path worktree (.worktrees); replaced by r1-03b (explicit 86-file list, 0 diagnostics); probe r1-03c documents the behaviour"
+    }
+  ],
+  "unverified": [
+    {
+      "id": "PostgresIntegrationTests.realDatabaseRoundtripAndMigrations",
+      "reason": "REVA_TEST_DATABASE_URL left unset per packet; no local ephemeral PostgreSQL provisioned; live Tiger not permitted (G04 real-DB path)"
+    },
+    {
+      "id": "native-run-and-ui",
+      "reason": "no xcodebuild test (scheme has no test targets), no simulator run (only booted simulator belongs to the other session); Stage 2 scope for browser UI"
+    },
+    {
+      "id": "stage2-ui-journeys-and-measurements",
+      "reason": "not started in Stage 1"
+    },
+    {
+      "id": "vercel-hosted-routing",
+      "reason": "no deployment permitted; only local dist (r1-09/r1-21) and wrapper routes (r1-08) verified"
+    },
+    {
+      "id": "ephemeral-port-numbers",
+      "reason": "smoke/integration scripts bind port 0 and do not print it; all children exited (r1-23/r1-24)"
+    },
+    {
+      "id": "registry-reachability",
+      "reason": "npm ci served from local cache in 2.8s; npm audit did reach the advisory endpoint"
+    }
+  ],
+  "artifacts": {
+    "buildOutputs": [
+      "apps/web/node_modules",
+      "apps/web/dist",
+      "apps/web/public/demo",
+      "apps/web/public/ocr",
+      "apps/web/tsconfig.tsbuildinfo",
+      ".build",
+      "server/.build",
+      "build/optimization-checks",
+      "build/FableAuditDerivedData"
+    ],
+    "dist": {
+      "files": 36,
+      "rawBytes": 50729813,
+      "gzipBytes": 21108783,
+      "assets": {
+        "index-DmnkhT8m.js": [
+          390616,
+          116014
+        ],
+        "index-C3ywBgcB.css": [
+          34014,
+          7846
+        ],
+        "pdf-Bhi43J5Z.js": [
+          430931,
+          127567
+        ],
+        "pdf.worker.min-Dswkl-cV.mjs": [
+          1265413,
+          374803
+        ],
+        "src-DbcVaO1z.js": [
+          17238,
+          7196
+        ]
+      },
+      "ocrRawBytes": 47773887,
+      "demoRawBytes": 816719
+    },
+    "evidenceLogs": [
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-selftest.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-envkeys.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-00-helper-timeout.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-01-toolchain.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-02-structure-check.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03-swift-format-lint.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-04-npm-ci.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-10-swift-test-root.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03-swift-format-probe.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-05-format-check.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-06-typecheck.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-07-vitest.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-08-serve-test.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-19-npm-audit.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-19-npm-ls.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-09-web-build.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-06b-typecheck-after-assets.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-07b-vitest-after-assets.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03b-swift-format-lint-explicit.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-21-dist-inventory.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-17-optimization-checks.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-20-package-resolved-pins.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-11-swift-build-server.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-20-show-dependencies.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-13-smoke.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-14-postgres-failure.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-15-provider-api.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-16-client-server.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-18-xcodebuild.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-12-swift-test-server.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-22-post-run-hash-check.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-23-final-process-check.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-03c-swift-format-recursive-probe.log",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/r1-24-final-process-recheck.log"
+    ],
+    "reports": [
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/reports/17-evidence-runner.md",
+      "/Users/tempadmin/Documents/Reva/docs/audits/fable-20260912-114322/evidence/runner1-summary.json"
+    ]
+  },
+  "sourceIntegrity": {
+    "manifestEntries": 267,
+    "ok": 267,
+    "mismatch": 0,
+    "missing": 0,
+    "patchSHA256Match": true,
+    "workingTreeDiffIdenticalToCapturedPatch": true,
+    "gitStatusIdenticalToPreRun": true,
+    "unexpectedUntracked": [],
+    "ignoredOutputsPresent": [
+      ".build/",
+      "apps/web/dist/",
+      "apps/web/node_modules/",
+      "apps/web/public/demo/",
+      "apps/web/public/ocr/",
+      "apps/web/tsconfig.tsbuildinfo",
+      "build/",
+      "server/.build/"
+    ],
+    "evidence": [
+      "r1-22-post-run-hash-check",
+      "r1-23-final-process-check"
+    ]
+  },
+  "processes": {
+    "runnerListenersLeft": false,
+    "runnerProcessesLeft": false,
+    "notes": "transient swift-build PID 37138 seen at r1-23, exited before r1-24; not signalled; other session's 8080/5173/4173 and simulator untouched"
+  }
+}

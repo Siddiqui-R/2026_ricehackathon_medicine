@@ -1,0 +1,183 @@
+[
+  {
+    "id": "RVA-03-001",
+    "status": "candidate",
+    "severity": "P2",
+    "title": "Startup repair save failure hides a valid loaded snapshot and offers only an unconfirmed demo reset",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "F01"
+    ],
+    "file": "apps/ios/Reva/State/AppStore.swift",
+    "line": 86,
+    "trigger": "LocalRepository.load() succeeds and the loaded snapshot contains the legacy demo title on demo-record-symptom-diary or a non-live booking in queued/calling status; the repair write in AppStore.init (save(sample) at line 70 or mutate at line 75) then fails, e.g. device storage full so state.backup.json/state.json cannot be written.",
+    "expected": "A successfully loaded valid snapshot stays usable; a repair write failure is reported as a non-blocking error or deferred, and the destructive reset remains an explicit confirmed action.",
+    "actual": "snapshot is already set at line 60, the repair throw lands in the shared catch at line 86, startupError becomes the raw filesystem error text, and RootView.swift:21-29 replaces the whole UI with an error screen whose only control runs store.resetDemo() with no confirmation (SettingsView.swift:99-102 has one). resetDemo() replaces the active state with the seed (AppStore.swift:136-137); the previous state survives only as the single backup until the next save overwrites it, and no UI restores from backup. Only resetDemo clears startupError (line 138).",
+    "impact": "Under a plausible device condition (storage exhausted at launch) the user is blocked from valid data and steered to a one-tap action that discards it. Loss requires the user tap and one backup generation remains, hence P2; validators may escalate given the missing confirmation.",
+    "evidence": "Source proof: AppStore.swift:58-86 (repair mutations 65-82 inside the load do/catch), AppStore.swift:111-116 (mutate throws from repository.save before publishing), RootView.swift:21-29, AppStore.swift:138. Refutation attempts: line 60 runs before either repair so snapshot is non-nil; grep over apps/ios shows startupError is cleared only by resetDemo; RootView gates on nothing else; demo/seed.json already has the new title so the rename repair affects only older installs, but the booking repair applies to any interrupted simulation. Not reproduced at runtime; see evidence request ER-03-5 in reports/track-03.md.",
+    "confidence": "high",
+    "smallestFix": "Move the two repair mutations out of the load do/catch into their own do/catch that sets errorMessage or notice, reserving startupError for load failures; wrap the RootView reset button in the same confirmation dialog Settings uses.",
+    "regressionCheck": "OptimizationChecks-style check: save a fixture with a queued non-live booking to a temp LocalRepository, make state.backup.json a directory, construct AppStore(repository:), assert startupError == nil, snapshot != nil, errorMessage/notice set, and the booking still reads queued.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (shared core state)"
+  },
+  {
+    "id": "RVA-03-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "409 handling discards the server's X-State-Revision and fetches the whole snapshot to learn the conflict revision",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "F04"
+    ],
+    "file": "apps/ios/Reva/Core/ServerClient.swift",
+    "line": 108,
+    "trigger": "Any push that returns HTTP 409.",
+    "expected": "The conflict revision is read from the X-State-Revision header the server already sends on 409 (server/Sources/RevaServer/HTTP.swift:50-53); one round trip.",
+    "actual": "ServerClient.send maps 409 to ServerFailure.conflict with no payload (line 108). AppStore+Sync.swift:111-125 then issues a second GET /v1/state (up to the 4 MiB snapshot cap, server Models.swift:125) and discards its body to read revision; if that GET fails transiently, serverConflictRevision = nil and the explicit Replace-server control disappears until the push is retried.",
+    "impact": "Bounded: at most one extra GET of up to 4 MiB per conflict on a developer/demo transfer path plus one extra user retry after a transient failure. No data risk.",
+    "evidence": "Source proof above. TransportTests.swift:193-210 already sends X-State-Revision: 11 on a 409 and asserts only .conflict.",
+    "confidence": "high",
+    "smallestFix": "Give ServerFailure.conflict an Int? parsed from X-State-Revision (mirroring .empty) and use it in the handler; keep the secondary pull only as a fallback when the header is absent.",
+    "regressionCheck": "Extend the existing transport test to assert the parsed revision; add a StateChecks case where onPush throws .conflict(11) and assert serverConflictRevision == 11 with no pull performed.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (shared client transport); header contract already provided by Person 3"
+  },
+  {
+    "id": "RVA-03-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "load() ignores a valid backup when state.json is absent, so the first-run seed replaces a recoverable checkpoint",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "F01"
+    ],
+    "file": "apps/ios/Reva/Core/LocalRepository.swift",
+    "line": 21,
+    "trigger": "state.json missing while state.backup.json is valid.",
+    "expected": "Recover from the backup with recovered = true, as the corrupt-state path at line 23 does.",
+    "actual": "The guard at line 21 returns nil before any backup check; AppStore.swift:83-84 treats nil as first run and calls resetDemo(); the next save (LocalRepository.swift:42-47) copies the seed over the backup, ending recoverability.",
+    "impact": "Silent replacement of recoverable data, but no first-party trigger was found: no in-app code removes state.json (grep for removeItem/stateURL over Core and State shows removal only of staged attachments) and .atomic writes replace by rename, so the condition requires external deletion.",
+    "evidence": "Source proof: LocalRepository.swift:20-23, 42-47; AppStore.swift:83-84. Refutation: searched for any in-app path that deletes state.json; none exists.",
+    "confidence": "high",
+    "smallestFix": "In load(), when the active file is absent but a validated backup decodes, return (backup, true).",
+    "regressionCheck": "DomainTests: save twice, delete state.json, assert load() returns the backup with recovered == true instead of nil.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (shared core persistence)"
+  },
+  {
+    "id": "RVA-03-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Push replaces server attachment bytes before the CAS snapshot write while pull refuses the same situation; documented tradeoff, server-side hardening proposed",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "F05",
+      "D02"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+Sync.swift",
+    "line": 58,
+    "trigger": "Two clients of one owner hold different bytes under the same filename; one pushes and receives 409 from PUT /v1/state after its attachment uploads already replaced the server copies keyed by sha256(filename).",
+    "expected": "F05 asks whether this is a documented tradeoff or a concrete defect. Assessment: documented tradeoff (README.md:70, docs/architecture.md:202, apps/web/src/core/COMPATIBILITY.md:22) with no first-party producer of same-name/different-bytes: native import names are UUID-prefixed (AddRecordView.swift:264), recordings are recording-<UUID>.m4a (AudioServices.swift:133-134), browser names are uid()-prefixed (ImportDialog.tsx:125) and reva-audio-<id> (RecordingCapture.tsx:113); bundled fixture names are shared but bytes are identical (demo/sources vs iOS Resources: 11/11 SHA-256 equal) and changed in only one commit (eb2ec3a).",
+    "actual": "Server putAttachment unconditionally replaces bytes independent of the snapshot revision in both stores (LocalFileStore.swift:119-121; PostgresStore.swift:132-133) and the native push uploads before client.push (AppStore+Sync.swift:53-65). The native pull side refuses different bytes under an existing name (LocalRepository.swift:71-77) with a message that tells the user to re-import under a new filename, which is impossible for a bundled fixture name.",
+    "impact": "Bounded residual risk: if fixture bytes ever diverge between builds or clients, the second pusher silently replaces the server copy referenced by the live snapshot despite its CAS failing, and the other client can no longer pull that owner. Local evidence is never replaced (pull fails closed). The accounts contract (multi-device per user) makes concurrent pushes more likely; forward-looking, not a completed-path defect.",
+    "evidence": "Source proof above; documentation lines cited; fixture byte comparison performed read-only with shasum.",
+    "confidence": "high",
+    "smallestFix": "Server: let PUT /v1/attachments/:id refuse to replace existing different bytes unless the client supplies an explicit override (If-Match/expected revision), returning 409 with the current revision. Client: word the pull-conflict message differently for bundled fixture names. Keep fixture bytes pinned via the existing fixture-manifest.json hashes on both clients.",
+    "regressionCheck": "Server test: upload bytes A, upload bytes B under the same id without override -> 409 and A retained; with override -> replaced. Native: existing StateChecks R2 case stays green.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 3 (server contract) with Captain for the shared client contract"
+  },
+  {
+    "id": "RVA-03-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "AppStore 409/empty orchestration and staged-file rollback on a snapshot-generation change have no executable coverage",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "F04",
+      "M02"
+    ],
+    "file": "Tests/OptimizationChecks/StateChecks.swift",
+    "line": 51,
+    "trigger": "A regression in AppStore+Sync.swift:111-129 (conflict handler or tombstone path) or in the rollback of staged files when the snapshot generation changes with files already staged.",
+    "expected": "The paths that protect against accidental overwrite are exercised by at least one suite against production AppStore code.",
+    "actual": "The StateChecks mock pull/push (lines 47-56) throw only what the onPull/onPush hooks throw, and no check ever sets them to ServerFailure.conflict or .empty; the generation-change pull case (lines 123-128) uses a remote with no attachments so rollback with staged files is untested; the root package tests Core only (Package.swift) so AppStore is in no XCTest target; LiveServerTests exercises ServerClient, not AppStore. TransportTests prove only the transport mapping of 409/404.",
+    "impact": "Coverage gap on exact F04 paths; no defect was found in them by reading.",
+    "evidence": "Source proof above; git show 77c03da confirms the harness was written for R1/R2/R3/R5/R6/R9 only.",
+    "confidence": "high",
+    "smallestFix": "Add to checkSync: onPush throws .conflict with remote revision 2 -> assert snapshot and serverRevision unchanged and serverConflictRevision == 2; emulate the Settings overwrite (serverRevision = 2, push) -> assert serverRevision == 3; onPull throws .empty(5) -> assert serverRevision == 5 and snapshot unchanged. Add a checkPullFiles case that mutates the store from onAttachment after a new file was staged and asserts the staged file is removed.",
+    "regressionCheck": "The added checks themselves, run via scripts/check_optimization_fixes.py.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (shared core tests)"
+  },
+  {
+    "id": "RVA-03-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "OptimizationChecks harness relies on assert/assertionFailure, which compile to no-ops under -O",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "M02"
+    ],
+    "file": "scripts/check_optimization_fixes.py",
+    "line": 97,
+    "trigger": "Anyone adds -O or a release configuration to the swiftc invocation at lines 97-98, or compiles the harness another way.",
+    "expected": "A failed check exits nonzero regardless of optimisation level.",
+    "actual": "All checks in StateChecks.swift (e.g. 102-108, 128-159, 172-185, 217-228, 244-291) and ProviderChecks.swift (55-57, 101) use assert/assertionFailure, which Swift removes under -O; every regression group would print PASS vacuously. Today the invocation has no -O, so the checks are active.",
+    "impact": "Latent; no current effect.",
+    "evidence": "Swift assert semantics (debug-only) and the compile line at scripts/check_optimization_fixes.py:97-98.",
+    "confidence": "high",
+    "smallestFix": "Replace assert/assertionFailure with precondition/preconditionFailure, or a small check(_:_:) helper that prints and exits 1.",
+    "regressionCheck": "Compile the harness with -O and a deliberately failing expectation; it must exit nonzero.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (scripts/tests)"
+  },
+  {
+    "id": "RVA-03-007",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "title": "Optimisation harness and gated live client/server test not executed in this audit",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "M02",
+      "F03",
+      "F04",
+      "F05"
+    ],
+    "file": "scripts/check_optimization_fixes.py",
+    "line": 99,
+    "trigger": "evidence/commands.jsonl did not exist at review time; docs/optimization-review-checklist.md:345-349 states the harness was never executed on macOS; docs/build-progress.md:150 is a historical pass statement, not new evidence (A04).",
+    "expected": "Runner logs for scripts/check_optimization_fixes.py (ER-03-1), the filtered root swift test (ER-03-2) and the opt-in scripts/test_client_server.py run (ER-03-3).",
+    "actual": "M02's reproduce-before-reopening requirement is satisfied by source reading only; no execution evidence for R1/R2/R3/R5/R6/R9 or for the end-to-end LiveServerTests round trip.",
+    "impact": "Dispositions for M02 remain Unverified; F01/F03/F04/F05 rely on source proof plus existing test code until logs exist.",
+    "evidence": "Absence of evidence/commands.jsonl at 2026-09-12 review time; see reports/track-03.md section 4 for exact commands, cwd, isolation and expected output.",
+    "confidence": "high",
+    "smallestFix": "Runner executes ER-03-1, ER-03-2 and ER-03-3 and records log paths; this finding closes by citation.",
+    "regressionCheck": "Presence of the three logs with exit status 0 and the expected PASS lines.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain (audit runner follow-up)"
+  },
+  {
+    "id": "RVA-03-008",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "No native content SHA-256 is computed or stored for preserved originals",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "D02"
+    ],
+    "file": "apps/ios/Reva/Core/Models.swift",
+    "line": 35,
+    "trigger": "The brief's carried-forward product requirement lists preserved originals as bytes, filename, MIME, SHA-256 and pages.",
+    "expected": "Each preserved original carries a content hash that survives save/reload/sync and can be verified.",
+    "actual": "MedicalRecord (Models.swift:25-46) and VisitRecording (146-158) have no hash field; ServerClient.attachmentID (ServerClient.swift:44-46) hashes the filename, not the bytes; fixture-manifest.json sha256 values are consumed only by the browser (apps/web/src/core/repository.ts:57, 222, 229) and tests; AddRecordView.swift:6 imports CryptoKit without using it.",
+    "impact": "No tamper/bit-rot detection for stored originals and no content-based duplicate detection natively. Refutation attempt: no first-party path exists where a hash would have prevented silent replacement (pull compares exact bytes; names are unique), so this is a requirement gap rather than a defect.",
+    "evidence": "Source proof above; grep -i sha256 over apps/ios, apps/web/src and server/Sources.",
+    "confidence": "high",
+    "smallestFix": "Add optional sha256: String? (lowercase hex) to MedicalRecord and VisitRecording, computed at AddRecordView save and RecordingSessionView.finish(); verify opportunistically before push/transcribe. Optional fields keep older snapshots decodable and the browser mirror trivially extendable.",
+    "regressionCheck": "DomainTests: save a record with bytes, reload, assert stored hash equals SHA256(bytes); TransportTests round trip preserves the field.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 1 (records) with Captain for the shared model and browser mirror"
+  }
+]

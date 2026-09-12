@@ -1,0 +1,15 @@
+{
+  "apps/ios/Reva/Core/Models.swift": "43e9b599d88b364867af833868513f37f58dae5e785238482960650ef33797eb",
+  "apps/ios/Reva/Core/SymptomEntry.swift": "aa034359a07dc5b58f34c1fd219cf8a6d7400ed78d3a2e92b9f17186cea0ec56",
+  "apps/ios/Reva/Core/LocalRepository.swift": "cf798bae2ca4ddb88dbcda9f1aaa1730914a8d8bd250a41604fde82e795b11e8",
+  "apps/ios/Reva/Core/ProviderContracts.swift": "1338a49033946724fda8964f1c2583bdd1ac36ebab04a02a6d1edd697a19ee1f",
+  "apps/ios/Reva/Core/ReportEngine.swift": "01d4e85c07a6a2ee20605addf3119435a271842dce512f07c91eb63336350e0e",
+  "apps/ios/Reva/Core/BookingEngine.swift": "d9a200c69fb8ae4aa4152cb885f28f6882dc97d2a2c92c9a83bf29012f0dad58",
+  "apps/ios/Reva/State/AppStore.swift": "1337cc1b8b891f35d656b195b325bde1625538f0b834d5424dbd4bc1445a6791",
+  "apps/ios/Reva/State/AppStore+Records.swift": "b88979505aa36125ce366a33191b8848e2541297712bea28c3eeab59a5e042ce",
+  "apps/ios/Reva/State/AppStore+Visits.swift": "f73839cd5fabbf605426cb449d3553dde15dc2bacccd83cea4b548f26032e750",
+  "apps/ios/Reva/State/AppStore+Providers.swift": "7c1cba42486147a32e369ed9e988453d9feb1625555c93e1a1e23e082819393c",
+  "apps/ios/Reva/State/AppStore+AI.swift": "13e3cb996fe4e1ae125f4a2b046fbf191a00416694bec348ef869df9c8f3e359",
+  "apps/ios/Reva/State/AppStore+Bookings.swift": "8dc74c57facb2c05775c94cfbf09bbdd829d8e4baa2966b5705872e90a2fdaf1",
+  "apps/ios/Reva/State/AppStore+LiveCalls.swift": "167b8bf7fdab8be05580e15caa44bdf0bb78e8dc50be42e326d14cafed50f44b"
+}

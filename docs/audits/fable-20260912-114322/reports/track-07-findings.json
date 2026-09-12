@@ -1,0 +1,51 @@
+[
+  {
+    "id": "RVA-07-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "title": "Mixed PDF pages with a text header skip OCR of their scanned medical content without an incomplete warning",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "D03",
+      "D05"
+    ],
+    "file": "apps/web/src/features/records/extractDocument.ts",
+    "line": 289,
+    "trigger": "Import a one-page PDF containing at least 35 nonwhitespace embedded header characters and a raster image containing the substantive medical findings. The page is within all size/time bounds and PDF.js reads the header successfully.",
+    "expected": "Scanned content on a mixed page is read or the page is explicitly identified as incompletely extracted; a successful header extraction must not imply that the body was read.",
+    "actual": "The only PDF OCR path is guarded by text.replace(/\\s/g, \"\").length < 35. A longer header bypasses rendering and readImage entirely. appendPage stores only that header; nonempty text avoids the empty-page warning, and incomplete remains false. No generic mixed-page uncertainty warning is emitted when usedOCR remains false.",
+    "impact": "The saved per-document excerpt and later visit retrieval can omit every medical fact in the raster body. The user can mark the header-only extraction reviewed and ready because ImportDialog only blocks review for extraction.incomplete. The original remains intact and is manually reviewable, which limits the severity.",
+    "evidence": "Source proof: extractDocument.ts:279-289 reads embedded text and selects OCR solely by character count; 297-302 is the sole PDF raster/OCR branch; 308-311 only marks an empty page incomplete; 362-372 only warn on empty overall text or usedOCR. ImportDialog.tsx:141-143 and 298-307 permit ready status when incomplete=false and reviewed=true. Parallel native threshold issue exists as RVA-05-004. Synthetic mixed-PDF execution requested from coordinator; no runtime reproduction claimed in this report.",
+    "confidence": "high",
+    "smallestFix": "Detect image-bearing or incompletely covered pages and offer/perform bounded page OCR while preserving page identity; until robust coverage detection exists, expose an explicit re-read-as-scan action and mark unverified mixed pages for review rather than calling their text complete.",
+    "regressionCheck": "Synthetic one-page PDF with a >35-character text header plus a raster line containing a unique medical token: require the token to be extracted or incomplete=true with a clear warning; verify an ordinary text PDF still preserves exact page mapping and the original bytes.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 1 records/OCR",
+    "author": "Codex continuation, /root/audit_browser_finish; user explicitly requested takeover after Claude exhausted its limits. Fable-only task instructions are superseded for this continuation."
+  },
+  {
+    "id": "RVA-07-002",
+    "status": "candidate",
+    "severity": "P2",
+    "title": "Retrying a failed record save leaves a new unreferenced original for each attempt",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "D02",
+      "D04",
+      "M01"
+    ],
+    "file": "apps/web/src/features/records/ImportDialog.tsx",
+    "line": 125,
+    "trigger": "In an open import dialog, make the snapshot save fail after the original transaction succeeds, for example by allowing another tab to advance IndexedDB CAS. Click Save to Records again without reloading.",
+    "expected": "A failed record save retains its chosen file for retry without creating another stored original per retry; preferably original and snapshot are one atomic commit or use a stable staged filename with rollback.",
+    "actual": "Each save call generates a fresh UUID filename, awaits a separate saveAttachment transaction, and only afterwards calls saveRecord. The catch keeps the dialog open but neither removes the saved original nor reuses its filename. Every failed retry can add another attachment key with no record reference.",
+    "impact": "Repeated snapshot/CAS failures retain logically duplicated source files in local storage, adding avoidable storage pressure and possible quota exhaustion. The existing record snapshot is protected and the user still has the selected file. Physical disk deduplication and the precise quota cost are not measured.",
+    "evidence": "ImportDialog.tsx:124-147 creates filename and persists original before saveRecord; 152-157 has error handling but no cleanup. repository.ts:177-185 commits attachments in a standalone transaction. core/store.ts:203-204 delegates record saving to a separate snapshot edit. No runtime storage/quota measurement claimed.",
+    "confidence": "high",
+    "smallestFix": "Publish the original and record in the existing aggregate IndexedDB transaction, or retain one staged original identity across retries and remove that staging write on abandoned/failed publication. Keep the original selected in the dialog after an error.",
+    "regressionCheck": "Use two repositories/tabs to induce stale CAS after import opens; fail and retry three times, assert no extra unreferenced attachment keys appear and the preexisting snapshot remains unchanged. Then refresh/retry successfully and assert exactly one new record references one unchanged original.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 1 intake + Captain repository/store boundary",
+    "author": "Codex continuation, /root/audit_browser_finish; user explicitly requested takeover after Claude exhausted its limits. Fable-only task instructions are superseded for this continuation."
+  }
+]

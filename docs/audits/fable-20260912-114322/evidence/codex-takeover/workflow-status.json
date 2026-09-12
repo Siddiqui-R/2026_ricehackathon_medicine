@@ -1,0 +1,303 @@
+{
+  "audit": "fable-20260912-114322",
+  "supervisor": {
+    "role": "coordinator (role 20 of 20)",
+    "chat": "Claude Desktop Code tab, separate from the 'Reva architecture review' implementation session",
+    "sessionId": "a4829c72-eed5-4457-959e-34f8c5715bdc",
+    "model": "claude-fable-5-1 (Fable 5.1)",
+    "effort": "Ultracode session mode (multi-agent orchestration enabled by user keyword)"
+  },
+  "sourceSnapshot": {
+    "worktree": "/Users/tempadmin/Documents/Reva/.worktrees/fable-audit-20260912-114322",
+    "baseCommit": "cfe09971443989396b8ef6a14cdf935adba86ddd",
+    "kind": "committed base + captured tracked diff + 4 first-party untracked files (WIP included)",
+    "manifestVerification": "267/267 SHA-256 match; patch SHA-256 match; log evidence/00-snapshot-verification.log",
+    "citeAs": "fable-audit-20260912-114322 @ cfe0997+wip"
+  },
+  "concurrentImplementation": {
+    "session": "Reva architecture review (other Claude session)",
+    "contract": "/Users/tempadmin/Documents/Reva/docs/task-specs/accounts-and-tiger.md (untracked in main; not in snapshot)",
+    "observedLiveResources": [
+      "RevaAPI 127.0.0.1:8080",
+      "vite 127.0.0.1:5173",
+      "serve.mjs 127.0.0.1:4173",
+      "iPhone 17 Pro simulator booted (45A0D099-630E-42BC-9982-329F78A07F1A)"
+    ],
+    "policy": "never reused; delta review only after a completed checkpoint appears in main git log"
+  },
+  "platform": {
+    "orchestration": "Claude Code Workflow tool (deterministic script, agent()/parallel())",
+    "workerModel": "inherits session model claude-fable-5-1; no substitution",
+    "workerEffort": {
+      "sourceReviewers": "xhigh",
+      "evidenceRunner": "xhigh",
+      "validators": "max",
+      "synthesis": "max"
+    },
+    "concurrencyCap": "platform cap min(16, cpus-2)=12 on this 14-CPU Mac; audit policy caps source reviewers at 6 concurrent (+1 runner)",
+    "limitsHit": []
+  },
+  "phase": "1-workflow-running",
+  "phases": [
+    {
+      "id": 0,
+      "title": "Supervisor: verify snapshot and scope",
+      "status": "done",
+      "at": "2026-09-12T12:05:00-05:00"
+    },
+    {
+      "id": 1,
+      "title": "Workflow 1: runner + waves A/B/C + validators + runner follow-up",
+      "status": "running",
+      "startedAt": "2026-09-12T12:10:00-05:00"
+    },
+    {
+      "id": 2,
+      "title": "Supervisor: delta check of main checkout (read-only git)",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "title": "Synthesis: dedup findings, coverage, backlog, final report",
+      "status": "pending"
+    }
+  ],
+  "roles": [
+    {
+      "role": 1,
+      "track": "01",
+      "taskFile": "tasks/01.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a97c726685bde8af2",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 2,
+      "track": "02",
+      "taskFile": "tasks/02.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a03674f455213428e",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 3,
+      "track": "03",
+      "taskFile": "tasks/03.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a9309149bc8348f47",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 4,
+      "track": "04",
+      "taskFile": "tasks/04.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a332e8e9674ed1afb",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 5,
+      "track": "05",
+      "taskFile": "tasks/05.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a343c08870aedb4cd",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 6,
+      "track": "06",
+      "taskFile": "tasks/06.md",
+      "wave": "A",
+      "status": "running",
+      "agentId": "a035e6548b94eac67",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00"
+    },
+    {
+      "role": 7,
+      "track": "07",
+      "taskFile": "tasks/07.md",
+      "wave": "B",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 8,
+      "track": "08",
+      "taskFile": "tasks/08.md",
+      "wave": "B",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 9,
+      "track": "09",
+      "taskFile": "tasks/09.md",
+      "wave": "B",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 10,
+      "track": "10",
+      "taskFile": "tasks/10.md",
+      "wave": "B",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 11,
+      "track": "11",
+      "taskFile": "tasks/11.md",
+      "wave": "B",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 12,
+      "track": "12",
+      "taskFile": "tasks/12.md",
+      "wave": "C",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 13,
+      "track": "13",
+      "taskFile": "tasks/13.md",
+      "wave": "C",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 14,
+      "track": "14",
+      "taskFile": "tasks/14.md",
+      "wave": "C",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 15,
+      "track": "15",
+      "taskFile": "tasks/15.md",
+      "wave": "C",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 16,
+      "track": "16",
+      "taskFile": "tasks/16.md",
+      "wave": "C",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 17,
+      "track": "17",
+      "taskFile": "tasks/17-evidence-runner.md",
+      "wave": "R (parallel to A/B; C waits on it)",
+      "status": "running",
+      "agentId": "a6fdca29b0034cf91",
+      "agentType": "workflow-subagent",
+      "startedAt": "2026-09-12T12:02:00-05:00",
+      "note": "track 17 runs as three sequential agents: stage1 (builds/tests), stage2 (UI/measurements), follow-up (validator evidence requests)"
+    },
+    {
+      "role": 18,
+      "track": "18",
+      "taskFile": "tasks/18-validator.md",
+      "wave": "V",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 19,
+      "track": "19",
+      "taskFile": "tasks/19-validator.md",
+      "wave": "V",
+      "status": "assigned",
+      "agentId": null
+    },
+    {
+      "role": 20,
+      "track": "supervisor",
+      "taskFile": "START-HERE.md",
+      "wave": "all",
+      "status": "active",
+      "agentId": "a4829c72-eed5-4457-959e-34f8c5715bdc"
+    }
+  ],
+  "workflowRuns": [
+    {
+      "runId": "wf_74d707c0-9d8",
+      "taskId": "wy1764u6b",
+      "name": "reva-fable-audit-w1",
+      "transcriptDir": "/Users/tempadmin/.claude/projects/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/subagents/workflows/wf_74d707c0-9d8",
+      "scriptFile": "/Users/tempadmin/.claude/projects/-Users-tempadmin-Documents-Reva--worktrees-fable-audit-20260912-114322/a4829c72-eed5-4457-959e-34f8c5715bdc/workflows/scripts/reva-fable-audit-w1-wf_74d707c0-9d8.js",
+      "structure": "runner stage1 -> stage2 (parallel to waves); Wave A parallel(01..06); Wave B parallel(07..11); Wave C parallel(12,13,15,16) after runner stage1; track 14 after runner stage2; validators 18+19 parallel; runner follow-up",
+      "agentEffort": {
+        "reviewers": "xhigh",
+        "runner": "xhigh",
+        "validators": "max"
+      },
+      "agentModel": "inherited session model claude-fable-5-1",
+      "status": "running",
+      "journal": "/Users/tempadmin/.claude/projects/-Users-tempadmin-Documents-Reva/a4829c72-eed5-4457-959e-34f8c5715bdc/subagents/workflows/wf_74d707c0-9d8/journal.jsonl",
+      "observedConcurrency": "7 agents at launch (runner stage1 + tracks 01-06), per journal"
+    }
+  ],
+  "updatedAt": "2026-09-12T12:12:31-05:00",
+  "supplementalContext": [
+    {
+      "receivedAt": "2026-09-12T12:12:31-05:00",
+      "from": "user (via audit supervisor chat)",
+      "summary": "Collaborator refreshed docs/reva-stack-spec.md (current spec), added docs/reviews/05-claude-project-handoff.md (provenance/tested-vs-WIP ledger) and preserved docs/reva-stack-spec-planning.md (historical proposal). Not completion checkpoints for accounts. Root-vs-nested Vercel config, pathname rewrites and CSP/external API origin to be reconciled in review/delta; no fixes authorized.",
+      "frozenCopies": "evidence/context/ (SHA256SUMS.txt, CONTEXT-MANIFEST.json)",
+      "propagation": "Appended as Addendum 1 to reports/00-supervisor-brief.md, which every later-wave worker and both validators read at start. Running Wave A workers were not modified."
+    }
+  ],
+  "mainCheckoutObservations": [
+    {
+      "observedAt": "2026-09-12T12:12:31-05:00",
+      "method": "git -C /Users/tempadmin/Documents/Reva log/status (read-only)",
+      "head": "475eee784a10d938c4ab86dc8874d98f0ac187b3",
+      "headSubject": "docs: checkpoint intensive Fable audit workflow and Claude dispatch",
+      "trackedModified": 38,
+      "untracked": 24,
+      "wipApplicationFiles": [
+        "apps/web/src/core/account.ts",
+        "apps/web/src/core/auth.ts",
+        "apps/web/src/core/session.ts",
+        "apps/web/src/core/syncMarker.ts",
+        "apps/web/src/core/__tests__/session.test.ts",
+        "apps/web/src/features/AccountSettings.tsx",
+        "apps/web/src/landing/",
+        "apps/web/src/styles/landing.css",
+        "apps/web/vercel.json",
+        "scripts/tiger_provision.py",
+        "scripts/test_tiger_provision.py",
+        "server/.dockerignore",
+        "server/Dockerfile",
+        "server/Sources/RevaServer/AccountRoutes.swift",
+        "server/Sources/RevaServer/Accounts.swift",
+        "server/Sources/RevaServer/Migrations/002_accounts.sql",
+        "server/Tests/RevaServerTests/AccountTests.swift",
+        "docs/tiger-setup.md"
+      ],
+      "verdict": "not-a-completed-checkpoint",
+      "note": "Delta review deferred until a completed checkpoint or explicit completion marker appears."
+    }
+  ]
+}

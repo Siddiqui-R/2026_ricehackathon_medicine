@@ -1,0 +1,454 @@
+[
+  {
+    "id": "RVA-01-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Confirm the conflicting roots/configuration guidance, but remove the predicted hosted 404 and P1 certainty: no hosted deployment was tested. Canonical report is the narrower source-backed configuration conflict RVA-16-001. Captured landing changes are WIP.",
+    "evidence": "apps/web/README.md:34,52; root vercel.json and apps/web/vercel.json; docs/deployment-vercel.md:11-20. Local build/HTTP-wrapper evidence does not prove Vercel behavior.",
+    "duplicateOf": "RVA-16-001"
+  },
+  {
+    "id": "RVA-01-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Historical docs do carry outdated proposals, but reva-stack-spec.md explicitly says Proposed architecture and the supervisor addendum supplies a superseding frozen current spec. Keep navigation/provenance cleanup only; do not claim that old cloud architecture or authentication exclusions remain current requirements.",
+    "evidence": "Frozen docs/reva-stack-spec.md:4; reports/00-supervisor-brief.md Addendum1 and evidence/context/reva-stack-spec.md."
+  },
+  {
+    "id": "RVA-01-003",
+    "status": "WIP",
+    "severity": "P3",
+    "rationale": "Model-name/PDF drift accompanies captured uncommitted model work. Rebuild derived artifact at its eventual implementation checkpoint; neither a deployed model regression nor evidence that the proposed replacement model exists.",
+    "evidence": "docs/project-overview-packet.md:168; source manifest captured generator/Markdown diff; original track01 PDF extraction evidence. PDF visual rendering was not repeated by validator."
+  },
+  {
+    "id": "RVA-01-004",
+    "status": "WIP",
+    "severity": "P3",
+    "rationale": "The root-document route inventory had not caught up with captured WIP landing files. Updated frozen context already records the required routes; preserve this as implementation/delivery delta follow-up, not a stable-path bug.",
+    "evidence": "README.md:24-34; apps/web/README.md:18,34,52; supervisor Addendum1."
+  },
+  {
+    "id": "RVA-01-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Confirm integration ownership needs a mapping, but task-local A/B/C roles can legitimately be a temporary delegation. Avoid asserting that every file must have a permanent exclusive owner or that a code conflict occurred.",
+    "evidence": "docs/team-workflow.md:17-20; frozen evidence/context/accounts-and-tiger.md role contract; captured landing directory."
+  },
+  {
+    "id": "RVA-01-006",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "Native source tokens are exact; simulator build is not a visual rendering check. No later native capture is among this audit's saved evidence. Keep native visual/accessibility verification explicitly open.",
+    "evidence": "Theme.swift:13-25; docs/reva-style-plan.md:1; evidence/runner1-summary.json native-run-and-ui exclusion."
+  },
+  {
+    "id": "RVA-01-007",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "The four UI/ links target paths absent from the frozen tree. This dated review is archival, so annotate historical paths or repair navigation without treating its old acceptance failures as current defects.",
+    "evidence": "docs/reviews/acceptance-audit.md:3,33,35,41; source tree has Features/** rather than UI/**."
+  },
+  {
+    "id": "RVA-02-001",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Downgrade: the explicit Z accurately identifies UTC and the parenthesized IANA zone is separately correct. The stored instant and record day are preserved; no contradictory time arithmetic is shown. A friendlier local timestamp plus explicit offset would improve readability.",
+    "evidence": "Core/SymptomEntry.swift:63-67,101-107; browser core/symptoms.ts:57,69-81; SymptomDialog.tsx:64-68 preserves occurrence and zone."
+  },
+  {
+    "id": "RVA-02-002",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Source unambiguously cuts inside an arbitrary token at character1800, without an omission marker, and reuses that cut as a quoted medical excerpt. A synthetic boundary can cut a numeric value/unit; source retention does not make the displayed truncated fact clear. Confirm source defect, not observed clinical harm.",
+    "evidence": "Core/ReportEngine.swift:14-15,161-165; browser core/domain.ts:60-61,145-161; existing short negation test does not exercise the boundary."
+  },
+  {
+    "id": "RVA-02-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Later-page tie selection is real and deterministic, but no contract establishes that page1 is always more relevant for equal scores. Grounding remains intact. Keep a documented/tested tie policy and a targeted clinical-quality example as an improvement, not a confirmed wrong-source defect.",
+    "evidence": "Core/ReportEngine.swift:112-118; browser core/domain.ts:170-198; selected page text and cited page are the same."
+  },
+  {
+    "id": "RVA-02-004",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "The filter includes generic goal words and indexes full fixture wrappers; this can select the unrelated ear note on the supplied completed nausea/palpitations visit. The issue is narrow relevance quality, not fabricated evidence or clinical diagnosis. Retain P3.",
+    "evidence": "Core/ReportEngine.swift:68-85; browser core/domain.ts:113-134; seed completed visit goal and ear-record text. Original source review records term intersection; no fresh clinical relevance benchmark claimed."
+  },
+  {
+    "id": "RVA-02-005",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "The helper receives only text, so the synthetic-wrapper stripping rule applies to all user documents. A real header/body before Source date or a literal demo-trailer marker can be omitted from summaries/quoted excerpts. Confirm narrow omission defect; raw original text remains saved.",
+    "evidence": "Core/ReportEngine.swift:17-29; browser core/domain.ts:45-61; no isDemo input at either boundary."
+  },
+  {
+    "id": "RVA-02-006",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Date-only inputs require stable calendar dates, but the audited native report/recording callers pass instants to the UTC-date path. Evening local activity can receive next-day Prepared labels. Narrow to those callers; do not change date-only medical dates globally.",
+    "evidence": "Core/Models.swift:225-231; Features/Preparation/ReportView.swift:27; browser core/domain.ts:21-29 has the same rule but browser report header passes withTime=true."
+  },
+  {
+    "id": "RVA-02-007",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Exact duplicate of the native string-sort defect, with concrete Summary consequence better documented by track04.",
+    "evidence": "State/AppStore.swift:98; SummaryView.swift:20; seed offset dates versus RevaDate.iso UTC values.",
+    "duplicateOf": "RVA-04-001"
+  },
+  {
+    "id": "RVA-02-008",
+    "status": "candidate",
+    "severity": "P2",
+    "rationale": "Whole-Visit replacement can overwrite unrelated updates, but adding a version field is not the only fix and the claimed SwiftUI editor instance timing is not reproduced. Keep as residual visit-concurrency candidate associated with04-005; do not assert nil-report loss after a live prop refresh.",
+    "evidence": "State/AppStore+Visits.swift:11-20; VisitEditorView.swift:15,83-117; VisitDetailView.swift:152 passes a non-State existing prop.",
+    "duplicateOf": "RVA-04-005"
+  },
+  {
+    "id": "RVA-02-009",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Domain validation uses a forgiving parser and thus accepts two malformed windows. Normal native editor emits valid ISO values; main snapshot validation is weak, so defensive validation is useful, but no ordinary UI trigger is shown. Keep bounded malformed-input hardening.",
+    "evidence": "Core/BookingEngine.swift:11-18,22-34; Core/Models.swift:206-215; normal editor serializes Date."
+  },
+  {
+    "id": "RVA-02-010",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Allocation/sorting/hash cost is plausible but original report overstates per-record parsing: AppStore.records only parses on equal record dates. No baseline latency/peak-memory measurement establishes a defect. Use actor-safe caching only after measurement, not a blanket static formatter prescription.",
+    "evidence": "Core/Models.swift:206-216; State/AppStore.swift:90-98; VisitsView.swift:45; track15 has no confirmed efficiency finding."
+  },
+  {
+    "id": "RVA-02-011",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Default isDemo=true on local reports is inaccurate provenance for non-demo inputs, but no current consumer uses it to delete data or mislabel the UI. Keep contract cleanup at P3, not a data-loss claim.",
+    "evidence": "Core/Models.swift:87-97; ReportEngine local construction; AppStore+AI.swift:66-68 explicitly sets false for connected output."
+  },
+  {
+    "id": "RVA-02-012",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Targeted test inventory is useful, but a full historic-snapshot fixture is not mandatory if optional-field compatibility is already tested. Existing behavior failures should carry their own regression cases. Golden-runtime evidence, if supplied later, closes provenance only, not the absence of a durable shared regression fixture.",
+    "evidence": "Tests/RevaCoreTests/DomainTests.swift:114-117; symptom/profile optional decode tests; browser domain.test.ts:19-31; runner1-summary.json."
+  },
+  {
+    "id": "RVA-03-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "A readable active snapshot is set before the repair save; any repair write failure sets startupError and RootView hides that usable state. Its only control restores fictional data without the usual confirmation. Confirm misleading/error-recovery flow by source; filesystem fault/UI not reproduced here.",
+    "evidence": "AppStore.swift:59-86,111-115,130-138; Features/Shared/RootView.swift:21-29."
+  },
+  {
+    "id": "RVA-03-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "409 revision is discarded and a second GET occurs. Current flow preserves local data and makes overwrite explicit. Avoidable response transfer and weaker conflict recovery are a bounded improvement, not demonstrated corruption.",
+    "evidence": "Core/ServerClient.swift:108; State/AppStore+Sync.swift:111-125; Fable r1-16-client-server covers normal conflict transport."
+  },
+  {
+    "id": "RVA-03-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Missing active state does bypass valid-backup recovery, but no in-app path deletes active state. Correct the original impact: the FIRST seed save leaves backup intact because state.json is missing; a LATER save can replace it. Keep external-damage recovery improvement only.",
+    "evidence": "Core/LocalRepository.swift:20-23,42-47; State/AppStore.swift:83-84."
+  },
+  {
+    "id": "RVA-03-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Independent attachment-before-snapshot writes are a documented tradeoff; same-name differing-byte normal UUID imports are uncommon. Keep server immutable/content-addressed attachment hardening as an improvement and avoid claiming all 409s corrupt originals.",
+    "evidence": "State/AppStore+Sync.swift:53-65; LocalRepository.swift:67-80; server LocalFileStore.swift:108-121; browser README.md:56 explicitly describes separate operations."
+  },
+  {
+    "id": "RVA-03-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Specific orchestration/rollback scenarios are not covered by the original harness; its existing successful run does not close unimplemented test cases. Retain targeted regression coverage, not a production failure.",
+    "evidence": "Tests/OptimizationChecks/StateChecks.swift:47-56,123-128; evidence/r1-17-optimization-checks.log; gated live test exercises ServerClient rather than AppStore."
+  },
+  {
+    "id": "RVA-03-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "The checked-in harness compiles without -O, so assertions are active and the observed pass is valid. Future release-mode assert removal is a maintenance note only, not a current false-green test result.",
+    "evidence": "scripts/check_optimization_fixes.py:97-99; evidence/r1-17-optimization-checks.log."
+  },
+  {
+    "id": "RVA-03-007",
+    "status": "rejected",
+    "severity": "P3",
+    "rationale": "Closed by evidence saved after the initial reviewer ran: optimization groups R1/R2/R3/R5/R6/R9 all pass and the real isolated native-client/local-server test passes. Do not retain this as outstanding work.",
+    "evidence": "evidence/r1-17-optimization-checks.log exit0, six PASS groups; evidence/r1-16-client-server.log exit0, LiveServerTests1/1."
+  },
+  {
+    "id": "RVA-03-008",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Correct that normal source bytes have no stored content hash and filename hash is not content identity. This is an assurance/contract gap; preserved bytes and native same-name byte equality guard still exist. Do not describe unseen corruption or conflate it with deferred custom encryption.",
+    "evidence": "Core/Models.swift:25-46,146-158; Core/ServerClient.swift:44-46; LocalRepository.swift:67-80; browser repository.ts:219-223 hashes bundled fallback only."
+  },
+  {
+    "id": "RVA-04-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "The lexicographic comparison demonstrably orders a14:00Z offset-formatted seed visit ahead of a13:00Z user visit. Summary chooses the first upcoming element, so the wrong next appointment is a direct consequence. Confirm source/arithmetic; no simulator interaction claimed.",
+    "evidence": "State/AppStore.swift:98; Features/Shared/SummaryView.swift:20; VisitsView.swift:17-34; RevaDate.iso; seed dates."
+  },
+  {
+    "id": "RVA-04-002",
+    "status": "candidate",
+    "severity": "P2",
+    "rationale": "Root alert placement and missing sheet-local error presenters are confirmed source facts. Actual SwiftUI presentation behavior varies with view hierarchy/runtime; without the prohibited simulator experiment do not promote failed alert display to confirmed.",
+    "evidence": "Features/Shared/RootView.swift:50-58; MedicalProfileView Settings sheet; SettingsView actions; existing reviewer ER-04-02 remains unexecuted."
+  },
+  {
+    "id": "RVA-04-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Time-zone changes preserve the Date instant and visibly alter wall time; that can be intentional date-picker semantics. The browser differs, defaults are not device-derived, and options are limited. Clarify policy/include local zone rather than asserting every zone change schedules the wrong time.",
+    "evidence": "VisitEditorView.swift:20-21,43-51,109-110; browser VisitEditor.tsx:20,46-55."
+  },
+  {
+    "id": "RVA-04-004",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "The first-brief button ignores providerBusy, while the called operation returns false immediately on that state without notice/error. A source-supported reachable no-op after automatic summary start. Existing regeneration view correctly disables on busy.",
+    "evidence": "VisitDetailView.swift:68-80,165-170; State/AppStore+AI.swift:34-36; AddRecordView.swift:277-279; ReportView.swift:76-79."
+  },
+  {
+    "id": "RVA-04-005",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Narrow confirmed scope to RECORD editor: @State keeps initial whole record and save unconditionally replaces it, allowing a newly arrived AI summary to be erased by a note-only save. The VISIT editor existing input is a non-State prop that may refresh after store publication, so the specific nil-report-loss UI timing remains candidate. A production store harness alone cannot prove SwiftUI stale-prop behavior.",
+    "evidence": "RecordEditorView.swift:15-22,61-75; State/AppStore+Records.swift:11-25; AppStore+AI.swift:17-28; VisitEditorView.swift:15,100-117; VisitDetailView.swift:152."
+  },
+  {
+    "id": "RVA-04-006",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Scanner callback generates application/pdf and AddRecordView assigns every non-image import Notes. The exact-kind Scan filter therefore cannot find a camera-scanned PDF. Source proof does not require asserting hardware scan quality.",
+    "evidence": "Device/DocumentScanner.swift:60; AddRecordView.swift:139-165,268; DocumentImportService.swift:287-289; RecordsView.swift:18-28."
+  },
+  {
+    "id": "RVA-04-007",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Exact source pair uses heart-red on petal for small text despite the theme reserving deep red for this pair. Static luminance is below4.5; narrow low-priority contrast defect, no claim of a full accessibility audit.",
+    "evidence": "ReportView.swift:53-56; Theme.swift:13-25; exact sRGB ratio independently recalculated in validator report."
+  },
+  {
+    "id": "RVA-04-008",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "The renderer hardcodes superseded teal for generated headings. This is a source-confirmed palette inconsistency, not a broken PDF layout or reason to hold the entire MVP. Canonical export-palette finding.",
+    "evidence": "Device/ReportPDFRenderer.swift:126,133,141,181,208-210; Theme.swift:13-25; current design contract."
+  },
+  {
+    "id": "RVA-04-009",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "The inventory mixes source-fixed sizes and missing explicit annotations with untested DynamicType/VoiceOver outcomes. System labels may be inferred and fixedframes need actual measurement before claiming clipping. Keep focused native accessibility checks, not a bundle of confirmed defects.",
+    "evidence": "SummaryView.swift:34-38,137-139; ReportView.swift:55-56; supervisor no-simulator rule and runner nativeUI exclusion."
+  },
+  {
+    "id": "RVA-04-010",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Unsaved native drafts are discarded on explicit Cancel/swipe, without modifying saved data. Consistent dirty confirmation would improve UX but is not proven persistent data corruption.",
+    "evidence": "VisitEditorView.swift:80; RecordEditorView.swift:52; AddRecordView.swift:119; positive symptom confirmation pattern."
+  },
+  {
+    "id": "RVA-04-011",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Status-only categorization and chronological Past order differ from the browser. Both are deliberate understandable policies; resolve product semantics explicitly, separate from the actual timestamp-comparison defect04-001.",
+    "evidence": "VisitsView.swift:17-19; State/AppStore.swift:98; browser VisitsPage.tsx:20-35."
+  },
+  {
+    "id": "RVA-04-012",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "No deleteVisit action and native pre-report notes editing are feature/lifecycle gaps. Browser DOES allow Add questions & notes before report exists, so that part is native only. A mistaken visit can be marked completed natively; cascade rules need deliberate scope, not an audit-authored feature build.",
+    "evidence": "AppStore+Visits.swift:11-32; VisitDetailView.swift:146-150; browser VisitBrief.tsx:196-201."
+  },
+  {
+    "id": "RVA-04-013",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Source retains fictional profile provenance on edit in this demo workspace. Changing all demo facts can make the badge confusing, but partial edits should not automatically relabel remaining fictional facts as real. Real-account isolation belongs to the later WIP contract, not this captured code.",
+    "evidence": "MedicalProfileEditor.swift:109-117; MedicalProfileView.swift:32-34; browser MedicalProfilePage.tsx:74,180-189."
+  },
+  {
+    "id": "RVA-04-014",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Missing importError reset for successful photo/scan is a small source-supported stale-message issue. Unstructured task lifetime may continue bounded extraction after dismissal; no ghost record is published without Save. Keep cancellation/resource cleanup as a bounded improvement without claiming a measured hang.",
+    "evidence": "AddRecordView.swift:111-173,216-231; DocumentImportService bounded limits."
+  },
+  {
+    "id": "RVA-05-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "@State recording captures transcript fields at sheet creation; the note-only Save replaces the entire stored recording after transcription can publish. This contradicts the editor statement that notes do not change transcripts. Confirm source race, independent of live provider use.",
+    "evidence": "RecordingNotesEditor.swift:15,19-26; State/AppStore+Recordings.swift:11-18; RecordingDetailView transcribe and note-edit controls; AppStore+Transcription latest publication."
+  },
+  {
+    "id": "RVA-05-002",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "After verification throws, reachedEnd/isPaused remain true and isRecording remains true. Resume refuses reachedEnd with a one-hour message; repeated Finish repeats verification. This is a concrete error-state dead end until explicit discard. Triggered invalid-file/too-short case not run on hardware by validator.",
+    "evidence": "Device/AudioServices.swift:176-182,202-227,232-252; RecordingSessionView.swift:42-46,77-89."
+  },
+  {
+    "id": "RVA-05-003",
+    "status": "candidate",
+    "severity": "P2",
+    "rationale": "Eager scan image materialization and main-actor PDF construction before byte rejection are source-confirmed resource risks. Actual camera image dimensions, compression and representative memory/latency were not measured; do not claim that a specific page count necessarily exceeds16MiB.",
+    "evidence": "DocumentScanner.swift:56-60; AddRecordView.swift:143-165; DocumentImportService16MiB guard; runner no-camera boundary."
+  },
+  {
+    "id": "RVA-05-004",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "The >=20 embedded-character early return skips all raster content on a mixed page. No density/coverage check or warning runs on this branch. Confirm source omission defect; group cross-platform with07-001 at synthesis while retaining distinct fixes/thresholds.",
+    "evidence": "Device/DocumentImportService.swift:256-278; browser counterpart is RVA-07-001 (validated independently by19, not this reviewer's own finding)."
+  },
+  {
+    "id": "RVA-05-005",
+    "status": "rejected",
+    "severity": "P3",
+    "rationale": "The main factual assertion is incorrect: AVAudioPlayer(contentsOf:) exceptions at400 are not mapped to DeviceAudioError.invalidAudio; catch417\u2013420 sets the ORIGINAL error.localizedDescription and rethrows. InvalidAudio is used by separate existence/prepare/play guards. Unsupported-codec behavior remains a real unverified compatibility test, but the claimed universal missing/damaged message is not established.",
+    "evidence": "Device/AudioServices.swift:393-420 independently read; no catch remapping; hardware codec support not tested."
+  },
+  {
+    "id": "RVA-05-006",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Exact duplicate of native PDF palette inconsistency; canonical04-008.",
+    "evidence": "Device/ReportPDFRenderer.swift:208-210; Theme.swift:13-25.",
+    "duplicateOf": "RVA-04-008"
+  },
+  {
+    "id": "RVA-05-007",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Unused visitID parameter is misleading API surface, but binding the sample to its original fictional visit is the CORRECT required behavior. Remove/rename unused parameter or clarify navigation; never fix by attaching sample transcript to arbitrary real visits.",
+    "evidence": "State/AppStore+Recordings.swift:22-39; fixture source identity; VisitDetail sample navigation."
+  },
+  {
+    "id": "RVA-05-008",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Successful finish transfers file ownership and clears recorder active state before metadata persistence; failed store.save leaves savedID nil and no retry control for the finalized original. Confirm interrupted-save recovery defect by source, separate from failed finish05-002. Existing audio bytes remain on disk.",
+    "evidence": "RecordingSessionView.swift:47-63,97-105; Device/AudioServices.swift:217-223; AppStore.perform catches without retaining a pending recording model."
+  },
+  {
+    "id": "RVA-05-009",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "Export work is synchronous on MainActor and bounded; a maximum does not prove acceptable responsiveness or a stall. No actual PDF rendering/time benchmark is in reused runner logs. Keep measurement gap only.",
+    "evidence": "ReportPDFRenderer.swift:34-39,63-81,96-112; runner1-summary.json lacks PDF runtime measurement."
+  },
+  {
+    "id": "RVA-05-010",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Rebuilding memory deliberately rederives the local summary and changes provenance/version. An unchanged-source optimization could preserve a reviewed AI summary and avoid restaleness; no underlying transcript or notes are lost. Keep idempotence/efficiency UX improvement.",
+    "evidence": "State/AppStore+Recordings.swift:94-119; browser core/mutations.ts:42-79; signature includes summary/version."
+  },
+  {
+    "id": "RVA-06-001",
+    "status": "suggestion",
+    "severity": "P2",
+    "rationale": "Source confirms repeated transfer and owner quota accumulation, but original retention and separate attachment publication are documented. Deletion needs active/backup reference policy; pruning immediately after a single push can harm another client's recovery. Keep important capacity/bandwidth improvement rather than unqualified corruption or automatic-delete prescription.",
+    "evidence": "core/store.ts:520-524; server LocalFileStore.swift:108-121; browser README.md:56; RecordDetail.tsx:284-286 documents retained originals."
+  },
+  {
+    "id": "RVA-06-002",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "rationale": "The literal browser goldens exist but the supplied original checked-in tests only assert native self-consistency. Source algorithms look aligned; no known mismatch. Await root production Swift harness evidence to close provenance; do not report signature failure.",
+    "evidence": "browser core/__tests__/domain.test.ts:19-31; Core/ReportEngine.swift:33-46; browser core/domain.ts:78-90; runner1 passes alone do not supply these values."
+  },
+  {
+    "id": "RVA-06-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Dependency inversion/test injection leak is real but no runtime source mutation bypass was found. Preserve as focused maintainability cleanup; avoid an arbitrary abstraction rewrite.",
+    "evidence": "core/repository.ts:7,287-290; ImportDialog.tsx:126; RecordingCapture.tsx:114; store injected repository interface."
+  },
+  {
+    "id": "RVA-06-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Overlapping MIME/limit lists exist, but differing upload/transcribable subsets can be intentional. No current unsupported request path was shown. Centralize shared facts while retaining context-specific policies.",
+    "evidence": "core/api.ts:30-50; store.ts:54-61,339-354; repository.ts:34-38; server supported list."
+  },
+  {
+    "id": "RVA-06-005",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "MemoryRepository fallback invents a synthetic original where production throws, so these tests do not cover missing attachments. This is a targeted test-double fidelity gap, not proof production invents patient bytes.",
+    "evidence": "core/__tests__/fixtures.ts:62-64; production repository.ts:204-208; saved test suite source and runner counts."
+  },
+  {
+    "id": "RVA-06-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "25-second total transfer cap can reject large files on slow links; finite deadlines are deliberate and errors preserve data. Arithmetic is sufficient for a configuration tradeoff, not a measured user failure. Size-aware deadlines remain bounded and optional.",
+    "evidence": "core/api.ts send default and uploadAttachment:232; store upload loop; original finding arithmetic16MiB/25s."
+  },
+  {
+    "id": "RVA-06-007",
+    "status": "WIP",
+    "severity": "P2",
+    "rationale": "Static-token manual Replace-server workflow explicitly permits replacement; the concern is future automatic account login/upload, absent here. Per-user storage/initial-pull validation must be checked against the account delta, not classified as a captured completed-path security bug.",
+    "evidence": "core/store.ts:182-193,486-540; features/SettingsPage explicit replace copy; frozen context/accounts-and-tiger.md."
+  },
+  {
+    "id": "RVA-06-008",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Cold-start CAS loser remains in an explicit recoverable no-snapshot/error state. No overwritten data. Automatic reload/adopt would smooth this edge case; do not call CAS rejection itself wrong.",
+    "evidence": "core/store.ts:141-167; repository.ts:140-141; no two-tab runtime reproduction claimed."
+  },
+  {
+    "id": "RVA-06-009",
+    "status": "suggestion",
+    "severity": "P3",
+    "rationale": "Same-name differing bytes can replace local original during a user-confirmed pull; UUID filenames/fixture checks make normal collisions uncommon. Backup integrity deserves an immutable-attachment policy, but the contrived collision is not a routine import defect. Keep consistent with documented separate snapshot/original retention decisions.",
+    "evidence": "repository.ts:111-162; RecordDetail retained-original copy; Native LocalRepository.swift:67-80 comparison guard."
+  },
+  {
+    "id": "RVA-14-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Tablet CSS display:none removes the only text names from still-focusable navigation anchors. No aria-label/title or SVG title replaces them. Confirm source-based accessible-name defect; the UI matrix textContent inventory did not compute accessible names and cannot refute it.",
+    "evidence": "styles/layout.css:317-337; App.tsx:108-135; saved768 DOM contains unnamed anchors plus hidden spans; no accessibility-tree execution by validator."
+  },
+  {
+    "id": "RVA-14-002",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Exact global selection pair is dark ink on deep red; independent sRGB arithmetic confirms1.6917:1. Source-level legibility defect limited to selection styling; no screenshot or OS high-contrast test claimed.",
+    "evidence": "styles/tokens.css:12,17,117-119; arithmetic in18-validator.md."
+  },
+  {
+    "id": "RVA-16-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "rationale": "Confirm one README specifies two incompatible roots and active root/nested config contents differ. Scope as documentation/configuration integration defect on captured WIP, not proven hosted404 or a mandate to deploy during audit. Correct sibling fixture citation to prepare-assets.mjs:18.",
+    "evidence": "apps/web/README.md:34,52; root vercel.json and apps/web/vercel.json; prepare-assets.mjs:18; docs/deployment-vercel.md:11-20."
+  },
+  {
+    "id": "RVA-16-002",
+    "status": "confirmed",
+    "severity": "P3",
+    "rationale": "Independent reading of saved failing/passing logs confirms a reproducible clean checkout prerequisite defect. Production build correctly runs prebuild; only standalone typecheck/test command readiness is affected.",
+    "evidence": "evidence/r1-06-typecheck.log exit1; r1-07-vitest.log5failedfiles; r1-06b-typecheck-after-assets.log exit0; r1-07b-vitest-after-assets.log77passed; package.json:10-17."
+  }
+]

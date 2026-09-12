@@ -1,0 +1,81 @@
+{
+  "capturedAt": "2026-09-12T17:42:35.751686+00:00",
+  "userAuthorization": "Claude limits ran out, pick up where it left off.",
+  "files": [
+    {
+      "path": "workflow-status.json",
+      "sha256": "0aa7f0b91ed07497eb8dca1562a3c9fee6351b4b4ec85198e57e716fdd3cdd45",
+      "bytes": 10069
+    },
+    {
+      "path": "reports/17-evidence-runner.md",
+      "sha256": "4031fcddf91c87554afdb769eaa6bb1ec5eab24133ae41c4a51810c1aa54f1b4",
+      "bytes": 29861
+    },
+    {
+      "path": "reports/track-01-findings.json",
+      "sha256": "94a771cdbd783f00d10d70452dba15c8d6304ac832cb238327b154227fc7442b",
+      "bytes": 14172
+    },
+    {
+      "path": "reports/track-01.md",
+      "sha256": "632400d37d84edbca29bdaed94b83da4bcc9aca5ca51a8669e80b68682a7ed6c",
+      "bytes": 46905
+    },
+    {
+      "path": "reports/track-02-findings.json",
+      "sha256": "a750da2c8f1e1c035d9d476b461bed3baf7f5ae99f863994e6db0ee0810dc552",
+      "bytes": 21013
+    },
+    {
+      "path": "reports/track-02.md",
+      "sha256": "3e7311cb3e38fd8165354d5e8b87200384ed1dbba54ca6e6348645286da26e9b",
+      "bytes": 32049
+    },
+    {
+      "path": "reports/track-03-findings.json",
+      "sha256": "c4bb15eb97f3432952839e45bbb43fdd7e5dde37ba79f876648638f1fc90c1ed",
+      "bytes": 17030
+    },
+    {
+      "path": "reports/track-03.md",
+      "sha256": "fc63b07612ed96c17d9e30f9b19ba2e99c057a431112aa6d314a08aa0ed9d864",
+      "bytes": 38094
+    },
+    {
+      "path": "reports/track-04-findings.json",
+      "sha256": "ea6dca23027ed88f315df541f39d97cd57d80fa895a8548d885a25b10c0da2b8",
+      "bytes": 34628
+    },
+    {
+      "path": "reports/track-04.md",
+      "sha256": "b9ef94c8bf399335ab0ee9225b8520075c8f56da879ff4b3c7c295569c6932a2",
+      "bytes": 25493
+    },
+    {
+      "path": "reports/track-05-findings.json",
+      "sha256": "45eb108174859cb41a8a85d46097591dc2e6197dbc86257453690e71823c56c4",
+      "bytes": 24567
+    },
+    {
+      "path": "reports/track-05.md",
+      "sha256": "f09823f3e8dcf411bd37e5654eacd0c8b2d1313d0518a5e0e522f0bce57701cd",
+      "bytes": 43281
+    },
+    {
+      "path": "reports/track-06-findings.json",
+      "sha256": "e9ed0aabc0a1c40e1f2b0416668a676beaa3dd5d712a7ce09fa84008f90e12bd",
+      "bytes": 22828
+    },
+    {
+      "path": "reports/track-06.md",
+      "sha256": "a4791264435a1477d8cc1f132fbb5296964d581b1246539a055e3e1ce2d39b56",
+      "bytes": 29216
+    },
+    {
+      "path": "reports/track-11-findings.json",
+      "sha256": "81d7554d9466345381448a9b728d682795b223cf3cfb137dd78d5c7bfa945924",
+      "bytes": 14111
+    }
+  ]
+}

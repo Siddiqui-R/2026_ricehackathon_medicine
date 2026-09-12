@@ -1,0 +1,10 @@
+Compiler exit: 0
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-KV3NOhJT' (errno=Operation not permitted)
+2026-09-12 12:49:17.647 xcodebuild[66956:11407756]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-09-12 12:49:18.456 xcodebuild[66967:11407803]  DVTFilePathFSEvents: Failed to start fs event stream.
+xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n00001yr0000gp/T/xcrun_db-66txYaZA' (errno=Operation not permitted)
+2026-09-12 12:49:19.316 xcodebuild[66982:11407867]  DVTFilePathFSEvents: Failed to start fs event stream.
+Run exit: 0
+REPRODUCED: summary request begun on owner A publishes after token switches to owner B
+REPRODUCED: delayed owner A call transcript is persisted in owner B snapshot with matching request ID
+LIMIT: real provider, HTTP transport, login UI and UI timing were not exercised; production state mutation was

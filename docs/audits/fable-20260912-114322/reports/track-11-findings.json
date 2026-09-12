@@ -1,0 +1,139 @@
+[
+  {
+    "id": "RVA-11-001",
+    "status": "suggestion",
+    "severity": "P2",
+    "title": "Durable call receipts live only under a local directory (default relative .local-data) even in PostgreSQL mode; an ephemeral or relocated data directory silently drops duplicate-call protection and uncertain-call visibility (forward-looking: Docker/Tiger WIP)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "I03"
+    ],
+    "file": "server/Sources/RevaServer/Providers/VoiceCalls.swift",
+    "line": 111,
+    "trigger": "Run RevaAPI with REVA_ENABLE_LIVE_CALLS=true on a host whose filesystem does not survive a redeploy (container image without a mounted volume), or start the process from a different working directory without REVA_DATA_DIRECTORY (Configuration.swift:41 defaults to the relative path .local-data); then a client re-sends a requestID that was dialed before the redeploy, or polls it.",
+    "expected": "The documented guarantee (VoiceCalls.swift:4-5, 92-94; evidence/context/reva-stack-spec.md:134) that intent/receipts survive restarts and redeploys, or a startup refusal to enable live calls without a verified persistent directory.",
+    "actual": "ensureDirectory (VoiceCalls.swift:284-298) lazily creates a fresh empty voice-call-receipts tree wherever the directory resolves; read (305-308) returns nil for the earlier requestID, so start writes a new intent and dials again; details returns 404 for the earlier call. No receipt table exists in PostgresStore.swift (grep 'receipt' finds nothing) and nothing validates REVA_DATA_DIRECTORY at startup when live calls are enabled.",
+    "impact": "The never-redial property holds only within one filesystem lifetime. Exposure today is bounded: the native UI has no same-requestID resubmission path (LiveBookingEditorView.swift:80-84 creates a new BookingRequest each time) and the browser store refuses to re-submit an existing local request (apps/web/src/core/store.ts:415). The risk materializes with the concurrent Dockerfile/Tiger deployment work if the data directory is not a persistent volume.",
+    "evidence": "Source: VoiceCalls.swift:109-113 (directory derived from configuration.directory), 284-298, 305-308, 330-369; Configuration.swift:41; spec evidence/context/reva-stack-spec.md:134; delta patch line 237 documents 'preserve them across redeploys'. Refutation attempts: searched PostgresStore.swift/LocalFileStore.swift/HTTP.swift for receipt persistence (none); searched both clients for same-requestID resubmission (none). Documented tradeoff, hence suggestion rather than defect.",
+    "confidence": "high",
+    "smallestFix": "When liveCallsEnabled is true, require REVA_DATA_DIRECTORY to be an absolute, writable path at configuration time (fail closed with a ConfigurationError) and document the persistent-volume requirement in the Docker/Tiger guide; longer term, persist receipts in a reva_call_receipts table when REVA_STORAGE=postgres.",
+    "regressionCheck": "Server configuration test: REVA_ENABLE_LIVE_CALLS=true with a relative or missing REVA_DATA_DIRECTORY -> ConfigurationError; existing VoiceProviderTests restart tests (uncertainCallSurvivesRestartAndNeverRedials, submittedReceiptSurvivesRestartAndDirectoryLockExcludesSecondInstance) still pass.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 3 (server/providers); Captain for configuration/deployment docs"
+  },
+  {
+    "id": "RVA-11-002",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "refreshLiveCall stores the server's empty conversation ID for uncertain receipts, so the native status screen renders a blank 'Conversation:' line",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "I04"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+LiveCalls.swift",
+    "line": 56,
+    "trigger": "A live call whose outbound request failed or timed out leaves a receipt without a conversation ID (VoiceCalls.swift:176-185); GET /v1/booking/call/:requestID then returns conversationID \"\" with status \"uncertain\" (VoiceCalls.swift:197-200). The user taps 'Check call status'.",
+    "expected": "Status 'uncertain' is shown and no conversation identifier line appears until a provider conversation exists.",
+    "actual": "AppStore+LiveCalls.swift:56 assigns providerConversationID = \"\" (non-nil); LiveBookingStatusView.swift:24-26 uses `if let conversation` and renders 'Conversation: ' followed by nothing.",
+    "impact": "Cosmetic honesty issue on a secondary (failure) path; no data loss and no redial. Status text remains correct.",
+    "evidence": "Source: AppStore+LiveCalls.swift:53-59; LiveBookingStatusView.swift:24-26; VoiceCalls.swift:197-200. Refutation: ProviderClient.swift:163-166 decodes LiveCallResult directly with no empty-to-nil mapping; the view's `if let` cannot filter an empty string.",
+    "confidence": "high",
+    "smallestFix": "In refreshLiveCall map an empty conversationID to nil (or guard `!conversation.isEmpty` in LiveBookingStatusView).",
+    "regressionCheck": "A State-level test (see RVA-11-005) or UI check: an uncertain receipt renders status 'uncertain' without a conversation line.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 2 (visits/booking/memory)"
+  },
+  {
+    "id": "RVA-11-003",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "placeLiveCall silently returns when the store is busy after the editor has already persisted the live request and navigated to its status screen (latent; not reachable through the current UI)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "I02",
+      "I03"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+LiveCalls.swift",
+    "line": 12,
+    "trigger": "LiveBookingEditorView.swift:80-84 saves the request with isLive = true, sets submitted, navigates to LiveBookingStatusView and only then calls placeLiveCall; if isProviderBusy were true at that instant the guard at line 12 returns without any message.",
+    "expected": "An explicit error/notice that the call was not placed, or the editor refusing to save while another connected operation is running.",
+    "actual": "The request stays persisted with status 'draft' and isLive = true; the status screen shows 'Provider status: draft'; 'Check call status' yields the server's 404 'No call request exists for this owner.'; no UI path re-sends that request.",
+    "impact": "Robustness/clarity only. The editor button is disabled while busy (LiveBookingEditorView.swift:56-57) and every isProviderBusy setter is user-initiated (AppStore+Transcription.swift:15, AppStore+LiveCalls.swift:13/50, AppStore+AI.swift:13/37), so the reviewer could not construct a reachable interleaving through the current UI.",
+    "evidence": "Source lines above. Refutation attempt: searched for automatic isProviderBusy setters (none outside user-initiated actions; the confirmation dialog blocks other taps).",
+    "confidence": "medium",
+    "smallestFix": "Replace the silent `return` with `errorMessage = \"Another connected operation is running; the call was not placed.\"` (leaving the request in an explicit not-sent status), or perform the busy check inside the editor before saving.",
+    "regressionCheck": "State-level test: placeLiveCall while isProviderBusy == true sets errorMessage and never calls the provider client.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 2 (visits/booking/memory)"
+  },
+  {
+    "id": "RVA-11-004",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "Wire consent is a constant and the shared patient name is late-bound at the store layer instead of being carried from the reviewed, saved request",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "I02"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+LiveCalls.swift",
+    "line": 25,
+    "trigger": "Any caller of placeLiveCall sends consent: true unconditionally and patientName from snapshot?.profile.name at send time; BookingRequest (apps/ios/Reva/Core/Models.swift:117-134) persists neither.",
+    "expected": "The consent field mirrors the user's toggle (LiveBookingEditorView.swift:55) and the patient name shared with the clinic is frozen in the saved request so a replay compares the same reviewed fields (I02: frozen patient/context/window).",
+    "actual": "The server's consent gate (VoiceCalls.swift:33-35) is satisfied by a literal; a profile-name edit between attempts changes the payload of the nominally same request (the server answers 409 on such a replay, so it never redials).",
+    "impact": "No exploitable path today: the only caller is the reviewed editor flow and replay is fail-safe. This is a boundary-clarity item for future callers (e.g., account-mode automation) and audit-trail completeness. The browser mirrors the same pattern (apps/web/src/core/store.ts:440) - cross-reference for tracks 06/08, not reviewed here.",
+    "evidence": "Source: AppStore+LiveCalls.swift:20-26; LiveBookingEditorView.swift:27-32, 55-57, 70-86; Models.swift:117-134; VoiceCalls.swift:32-35, 129-135.",
+    "confidence": "high",
+    "smallestFix": "Pass `consent` (and the reviewed patientName) from the editor into placeLiveCall, or persist patientName in BookingRequest when the user confirms and send that stored value.",
+    "regressionCheck": "Compile-time: the editor supplies consent; State-level test that placeLiveCall with consent false never calls startCall.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 2 (visits/booking/memory)"
+  },
+  {
+    "id": "RVA-11-005",
+    "status": "evidence-gap",
+    "severity": "P3",
+    "title": "Native booking-simulation and live-call store logic has no automated tests and no captured UI evidence; native I01/I03/I04 rest on source review plus compile evidence",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "I01",
+      "I03",
+      "I04"
+    ],
+    "file": "apps/ios/Reva/State/AppStore+Bookings.swift",
+    "line": 23,
+    "trigger": "Evidence inventory: the root package compiles only apps/ios/Reva/Core (Package.swift:16); the optimization harness compiles AppStore+Records/+Providers/+Sync only (build/optimization-checks listing); root tests cover BookingEngine.confirm only (Tests/RevaCoreTests/DomainTests.swift:96-97, evidence/r1-10-swift-test-root.log lines 41-42); evidence/ui is empty at review time and the isolation rules forbid simulator UI runs.",
+    "expected": "Automated coverage or a captured UI journey for runBooking transitions, relaunch repair (AppStore.swift:72-82), placeLiveCall error -> 'unknown', and refreshLiveCall never dialing.",
+    "actual": "Only xcodebuild compile evidence exists (evidence/r1-18-xcodebuild.log line 1251 BUILD SUCCEEDED).",
+    "impact": "Native dispositions for I01/I03/I04 are source-reviewed but not executed; regressions in AppStore+Bookings/+LiveCalls would not be caught by any current check.",
+    "evidence": "As listed in trigger; grep for placeLiveCall/runBooking/isLive under Tests/ returns only BookingEngine.confirm usage.",
+    "confidence": "high",
+    "smallestFix": "Add a State-level XCTest target (AppStore with a temporary LocalRepository) covering runBooking scenario outcomes and relaunch repair, placeLiveCall failure -> status 'unknown' with no second client call, and refreshLiveCall leaving status untouched on error.",
+    "regressionCheck": "The new tests run with `swift test` / the Xcode test plan alongside RevaCoreTests.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 2 (visits/booking/memory)"
+  },
+  {
+    "id": "RVA-11-006",
+    "status": "suggestion",
+    "severity": "P3",
+    "title": "VoiceProviderTests leave several fail-closed guard branches untested (success:false with an ID, provider-status/ID/timestamp rejections in details, raw 'intent' receipts, transcript ordering and size bounds, post-dial receipt-write failure)",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "H03",
+      "I03",
+      "I04"
+    ],
+    "file": "server/Tests/RevaServerTests/VoiceProviderTests.swift",
+    "line": 387,
+    "trigger": "Reviewer comparison of the 12 mocked-transport tests (all passing, evidence/r1-12-swift-test-server.log lines 84-127) against the guards in VoiceCalls.swift and VoiceTranscription.swift.",
+    "expected": "Each fail-closed branch that protects against duplicate calls or invented transcript content has a mocked-transport case.",
+    "actual": "Untested: (a) outbound {\"success\":false,\"conversation_id\":\"conv_x\"} -> receipt keeps the ID with status 'uncertain' and a replay returns 200/uncertain (VoiceCalls.swift:170-171, 176-179, 136-138); (b) details rejections for an unknown provider status, mismatched conversation_id, or non-finite/negative time_in_call_secs (225-229, 235-239); (c) a receipt file persisted with status 'intent' and no ID (crash between the intent write and the uncertain write) -> details 'uncertain', start 409 (136, 197-200); (d) transcription: out-of-order segment starts, whitespace-only segment text, more than 10,000 segments, more than 200,000 characters (98-99, 112-115); (e) receipt write failure after a successful dial (173-179).",
+    "impact": "Regression risk in the branches that keep the no-redial and no-invented-content guarantees; no current failure.",
+    "evidence": "Test inventory read in full (VoiceProviderTests.swift:1-542); guard lines cited from VoiceCalls.swift and VoiceTranscription.swift.",
+    "confidence": "high",
+    "smallestFix": "Extend providerFailureAndMalformedSuccessRemainUncertain and transcriptionRejectsMalformedOffsetsAndUnavailableProviders with the listed payloads; add a test that writes a synthetic 'intent' receipt JSON and asserts start -> 409 and details -> 'uncertain' with zero transport calls.",
+    "regressionCheck": "swift test --package-path server --filter VoiceProviderTests",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 3 (server/providers)"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "RVA-08-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "title": "Questions-and-notes editor compares against live props and can erase questions generated after it opened",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "E01",
+      "E04"
+    ],
+    "file": "apps/web/src/features/visits/VisitBrief.tsx",
+    "line": 221,
+    "trigger": "On a visit with no report and empty questions, start preparation and open Add questions & notes before the asynchronous preparation completes. Leave its questions field untouched, edit notes, let preparation publish suggested questions and rerender the still-open editor, then save.",
+    "expected": "Untouched question fields preserve newly generated questions, or the save rejects because the questions changed relative to the editor-opening baseline.",
+    "actual": "questions and notes local state initialize only once at lines 209-210. The conflict test at 221-224 compares the latest draft to the current visit prop, which has already advanced after preparation, rather than to an immutable opening baseline. The comparison passes and 228-235 replaces both current questions and report.questions with the editor's initial empty questions.",
+    "impact": "A user saving only notes can silently clear newly generated questions. The same logic can overwrite any newer same-store questions/notes published while this modal is open. Cross-tab stale CAS is separately protected and is not the trigger claimed here.",
+    "evidence": "Source proof: VisitBrief.tsx:99 permits asynchronous preparation, 196-201 leaves Add questions & notes available while it is running and passes live visit props; BriefNotesEditor 207-210 captures local form values but no original baseline; 218-235 uses current props to compare and writes both fields. store.ts:304-316 can publish questions on first preparation. VisitEditor/applyVisitEditorValues uses a stable baseline and changed-field merge instead (visitEdits.ts:64-87), proving a narrowly reusable fix exists. DOM-level reproduction requested from coordinator; no reproduction claimed here.",
+    "confidence": "high",
+    "smallestFix": "Capture an immutable notes/questions baseline on mount and merge only user-edited fields at the serialized mutation boundary, following applyVisitEditorValues. Reject genuinely competing edits; preserve generated questions when their local form field was untouched.",
+    "regressionCheck": "Render the real notes editor with empty questions, edit only notes, rerender it after same-store preparation publishes questions, submit, and assert the generated questions and new notes both survive. A competing user edit to an edited field must reject without partial writes.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Person 2 visits/brief UI",
+    "author": "Codex continuation, /root/audit_browser_finish; user explicitly requested takeover after Claude exhausted its limits. Fable-only task instructions are superseded for this continuation."
+  }
+]

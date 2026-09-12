@@ -1,0 +1,4 @@
+d292ec1af50a5d103055e878717a103f8936684c4bb3b62615b0a08197095c49  05-claude-project-handoff.md
+ba25237f5ca130a16ec18a7e6337eae9918c7cb5a1d69e664eba6c763ae0a916  accounts-and-tiger.md
+7dbb51a38526ad43d04c303aff918ee4ab9cd32dec0f331919f6a7f14a2e6984  reva-stack-spec-planning.md
+1fcfca12ae29eac5f4d2d52a471afe8e83b99310a44d030ef339396be67db023  reva-stack-spec.md

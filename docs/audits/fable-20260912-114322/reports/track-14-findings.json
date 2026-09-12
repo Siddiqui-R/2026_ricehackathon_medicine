@@ -1,0 +1,46 @@
+[
+  {
+    "id": "RVA-14-001",
+    "status": "confirmed",
+    "severity": "P2",
+    "title": "Tablet navigation hides its only accessible link names",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "K04"
+    ],
+    "file": "apps/web/src/styles/layout.css",
+    "line": 329,
+    "trigger": "Open the demo at a viewport between 761 and 979 CSS pixels wide, then navigate the desktop icon rail using a screen reader or inspect its accessibility tree.",
+    "expected": "Overview, Health records, Appointments, Medical profile, Log a symptom, and Settings retain descriptive accessible names when their visible text is collapsed.",
+    "actual": "The tablet media query sets .nav-item span and .sidebar-log span to display:none. App.tsx supplies names only inside those spans and no aria-label/title on the six links; the remaining Lucide SVGs have no title text. The rail remains visible and keyboard-focusable but its destination names are removed from the accessibility name computation.",
+    "impact": "Screen-reader users at the tablet breakpoint encounter unnamed primary navigation and symptom/settings actions. The visible icon rail also provides no tooltip labels.",
+    "evidence": "Source proof: apps/web/src/styles/layout.css:317-337 and App.tsx:108-135. Saved screenshot evidence/ui/demo-profile-768.png visibly shows the icon-only rail; matching DOM confirms the anchors have no explicit names. r2-ui-matrix.jsonl uses DOM text content for its label inventory and does not establish computed accessible names. Codex requested a bounded accessibility-tree confirmation from the coordinator; no new UI run is claimed here.",
+    "confidence": "high",
+    "smallestFix": "Add stable aria-label values to the navigation and symptom/settings anchors, or keep their text visually hidden with a screen-reader-visible technique rather than display:none. Optional tooltips can help sighted users without replacing accessible names.",
+    "regressionCheck": "At 768 CSS pixels assert the accessibility-tree link names for all six rail actions and keyboard activation destinations; recheck 375 and 1440 to avoid duplicate or missing names.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain shared core/styles/scripts/config"
+  },
+  {
+    "id": "RVA-14-002",
+    "status": "confirmed",
+    "severity": "P3",
+    "title": "Selected source text becomes dark text on a dark selection background",
+    "snapshot": "fable-audit-20260912-114322 @ cfe0997+wip",
+    "requirementIDs": [
+      "K04"
+    ],
+    "file": "apps/web/src/styles/tokens.css",
+    "line": 117,
+    "trigger": "Select or keyboard-highlight a passage in a record, brief, or other selectable browser text.",
+    "expected": "Selected medical text remains legible while the user reviews or copies it.",
+    "actual": "The global ::selection rule uses --ink (#342B2C) over --accent-text (#8C2F3B). Relative-luminance arithmetic from those exact sRGB values gives a 1.6917:1 foreground/background ratio, while white over the same background gives 8.1243:1.",
+    "impact": "Highlighting source words makes them substantially harder to read, especially when checking doses or values before copying. Normal unselected body text is unaffected.",
+    "evidence": "Exact source: apps/web/src/styles/tokens.css:12,17,117-119. Codex continuation computed luminance directly from these constants using the sRGB linearization formula; this is arithmetic evidence, not a runtime screenshot or assistive-technology test. Coordinator was asked for selection-style confirmation.",
+    "confidence": "high",
+    "smallestFix": "Use the existing white surface/button-text token for selected text on the deep-red background, preserving the approved palette.",
+    "regressionCheck": "Select a source passage and inspect both rendered colors; verify readable selected foreground/background and unchanged regular text in supported browsers.",
+    "validatorDisposition": "pending",
+    "ownerTrack": "Captain shared core/styles/scripts/config"
+  }
+]
