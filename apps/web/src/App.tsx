@@ -111,6 +111,8 @@ export function App() {
               key={item.id}
               href={`#/${item.id}`}
               className={`nav-item ${route.section === item.id ? 'active' : ''}`}
+              aria-label={item.title}
+              title={item.title}
               aria-current={route.section === item.id ? 'page' : undefined}
             >
               <item.icon size={20} />
@@ -119,7 +121,12 @@ export function App() {
             </a>
           ))}
         </nav>
-        <a href="#/records?add=symptom" className="sidebar-log">
+        <a
+          href="#/records?add=symptom"
+          className="sidebar-log"
+          aria-label="Log a symptom"
+          title="Log a symptom"
+        >
           <Activity size={19} />
           <span>Log a symptom</span>
           <ArrowUpRight size={16} />
@@ -128,6 +135,8 @@ export function App() {
           <a
             className={`nav-item ${route.section === 'settings' ? 'active' : ''}`}
             href="#/settings"
+            aria-label="Settings & connections"
+            title="Settings & connections"
             aria-current={route.section === 'settings' ? 'page' : undefined}
           >
             <Settings size={19} />

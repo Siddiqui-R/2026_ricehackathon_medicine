@@ -116,7 +116,7 @@ hr {
 }
 ::selection {
   background: var(--accent-text);
-  color: var(--ink);
+  color: var(--button-text);
 }
 
 /* MARK: - Text content helpers respect long filenames and original medical wording */
