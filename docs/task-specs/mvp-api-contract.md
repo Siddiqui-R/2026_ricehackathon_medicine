@@ -1,29 +1,25 @@
-# Two-hour MVP API implementation contract
+# Current provider API contract
 
-> Baseline provider contract, retained for history. The later [account contract](accounts-and-tiger.md) adds public `/v1/auth/signup` and `/v1/auth/login`; state, attachment and provider routes remain authenticated. [Current project scope](../reva-stack-spec.md) also includes browser WebM/Ogg audio support added after this initial MIME list. Do not use this older deadline or “all /v1” wording to override those changes.
+Updated for appointment recording and removal of calling. Provider secrets remain on the server; every `/v1` route below requires an authenticated owner. Private static tokens and account sessions are supported. Provider configuration flags are not live credential probes.
 
-Deadline14:28UTC September12. No live keys/calls; provider calls tested with mocks. Existing bearer middleware secures all /v1 routes. Provider hosts fixed, credentials server-only. POSTs are explicit user actions or enabled automatic document summarization after upload. Disable cleanly when unconfigured, return safe503 errors, never fall back silently.
+## Discovery and Gemini
 
-## JSON wire shapes (client and server implement exactly)
+`GET /v1/providers` → `{gemini:{configured:Bool,model:String},transcription:{configured:Bool,model:String}}`.
 
-GET /v1/providers => {gemini:{configured:Bool,model:String},transcription:{configured:Bool,model:String},booking:{configured:Bool,model:String},liveCallsEnabled:Bool}
+`POST /v1/ai/summarize` accepts `{recordID:String,title:String,text:String}` and returns `{summary:String,model:String}`. JSON body limit 256 KiB; source text maximum 120,000 UTF-8 bytes; summary maximum 8,000 UTF-8 bytes. Records and full timestamped appointment transcripts use this endpoint. Appointment summaries preserve stated instructions, follow-ups, numbers, negation and uncertainty without inventing speaker roles or medical advice. Oversized input is rejected, never silently truncated.
 
-POST /v1/ai/summarize {recordID:String,title:String,text:String} => {summary:String,model:String}
+`POST /v1/ai/prepare` accepts `{visit:{id,type,concern,goal,questions},records:[{id,title,date,text,summary,version}]}` and returns `{overview,questions,selectedRecordIDs,model}`. JSON body limit 1 MiB; 100 candidates, 500,000 combined source/summary bytes, 20 questions. Returned selected IDs must uniquely resolve to supplied candidates. Clients build source citations from originals.
 
-POST /v1/ai/prepare {visit:{id:String,type:String,concern:String,goal:String,questions:[String]},records:[{id:String,title:String,date:String,text:String,summary:String,version:Int}]} => {overview:String,questions:[String],selectedRecordIDs:[String],model:String}
-Client preserves exact local source citations by generating quote sections from selected IDs; overview/questions are clearly labeled AI-generated/reviewable. Server validates selectedIDs against supplied candidates, size limits, JSON validity, nonempty summary. No model-generated page numbers or unvalidated quotes enter source references.
+## Appointment audio
 
-POST /v1/audio/transcribe with raw audio bytes, Content-Type audio/mp4|audio/m4a|audio/wav|audio/mpeg, X-Filename safe filename => {text:String,segments:[{id:String,start:Double,end:Double,speaker:String,text:String}],model:String}. Whisper1 verbose_json segment timestamps, speaker label 'Speaker' (no invented diarization).16MiB input max. Existing saved audio can be transcribed, sample cannot. Output offsets relative to audio. Failures preserve local state.
+`POST /v1/audio/transcribe` accepts raw saved audio (maximum 16 MiB) with `Content-Type` and `X-Filename`. It returns `{text,segments:[{id,speaker,start,end,text}],model}`. Whisper `whisper-1` supplies recording-relative times. Generic speaker labels do not claim diarization. Clients preserve audio and let the user review/correct transcript words.
 
-POST /v1/booking/call {requestID:String,clinic:String,phone:String,reason:String,earliest:String,latest:String,timeZone:String,preferences:String,patientName:String,consent:Bool} => {conversationID:String,status:String,provider:String}. Exact phone E164, explicit consent=true, environment REVA_ENABLE_LIVE_CALLS=true plus configured agent/number/key. ElevenLabs outbound Twilio endpoint using configured imported phone number. Do not autonomously confirm an appointment from a call's completion; user reviews conversation and enters/accepts actual time manually. Owner+requestID replay receipt must prevent duplicate outbound calls including uncertain/restarted attempts. Persist an intent before calling and fail closed on an uncertain receipt. No callbacks needed for MVP; polling.
+Before recording, clients display **Get your doctor’s consent and permission from everyone present before recording.** Explicit confirmation gates capture and browser upload/save. Transcript and summary operations are explicit actions. New audio never receives unrelated demo text.
 
-GET /v1/booking/call/:requestID => {conversationID:String,status:String,provider:String,transcript:String}. Only owner can resolve own receipt; poll ElevenLabs conversation. Return bounded transcript/status, no false appointment booking.
+The clients persist optional `VisitRecording.aiSummary`, `aiSummaryModel`, and `aiSummaryGeneratedAt`. Existing `summary` remains personal notes. Transcript changes invalidate AI output, stale provider responses are rejected, and saved memory retains full transcript source and the original recording backlink.
 
-## Ownership
+## Configuration and errors
 
-Backend agent: server/Sources/RevaServer/Providers/Gemini*.swift, ProviderConfiguration.swift, ProviderRoutes.swift; register routes in HTTP.swift; make OwnerIdentity internal. Own server provider tests for Gemini/status, .env.example files + server provider README section. Coordinate VoiceServices from device_services agent via registerVoiceProviderRoutes(secured,configuration,...) minimal agreed interface.
-Voice agent: server/Sources/RevaServer/Providers/Voice*.swift and voice tests only. Coordinate exact registration signature with backend; own reusable OpenAI Whisper and ElevenLabs adapters, durable call receipt. Do not edit HTTP.swift, Configuration.swift, app files or shared examples.
-Primary: native Core/ProviderClient.swift and State/AppStore+Providers.swift, native feature integration/settings, shared Models optional fields if needed, Xcode regeneration, final integration/build/UI and docs.
-Documentation agent: docs/team-workflow.md, future feature work list. No code edits.
+Active provider variables: `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENAI_API_KEY`, `OPENAI_TRANSCRIPTION_MODEL=whisper-1`. Server URL/token are configured in native Settings; web account requests use their session. Missing configuration or provider errors preserve local state and return explicit failures. All provider tests use intercepted synthetic transports unless a separate live check is authorized.
 
-Read provider official docs using web; do not guess model names. Keep Gemini model configurable with a documented currently-supported Flash default. Environment names: GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_TRANSCRIPTION_MODEL(defaultwhisper-1), ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_PHONE_NUMBER_ID, REVA_ENABLE_LIVE_CALLS. App server URL/token via Settings, no provider secrets on device.
+Calling routes and ElevenLabs configuration are removed. `POST /v1/booking/call` and `GET /v1/booking/call/:requestID` return 404. The historical `bookings` snapshot array remains inert so existing data can still decode and sync. No destructive migration removes it.

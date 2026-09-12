@@ -167,6 +167,14 @@ export function validateSnapshot(value: unknown): AppSnapshot {
     number(recording.duration, `${path}.duration`);
     optional(recording, 'audioFilename', path);
     optional(recording, 'transcriptionModel', path);
+    optional(recording, 'aiSummary', path);
+    optional(recording, 'aiSummaryModel', path);
+    optional(recording, 'aiSummaryGeneratedAt', path);
+    if (
+      typeof recording.aiSummaryGeneratedAt === 'string' &&
+      !Number.isFinite(Date.parse(recording.aiSummaryGeneratedAt))
+    )
+      fail(`${path}.aiSummaryGeneratedAt`);
     if (typeof recording.audioFilename === 'string' && !safeFilename(recording.audioFilename))
       fail(`${path}.audioFilename`);
     const segments = array(recording.segments, `${path}.segments`).map((rawSegment) => {

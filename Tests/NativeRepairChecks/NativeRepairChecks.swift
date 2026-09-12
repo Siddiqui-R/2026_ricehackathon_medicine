@@ -67,8 +67,7 @@ enum ServerFailure: LocalizedError {
     static var preparationInput: [MedicalRecord] = []
     static let capabilities = ProviderStatus(
         gemini: .init(configured: true, model: "native-repair-double"),
-        transcription: .init(configured: false, model: "native-repair-double"),
-        booking: .init(configured: false, model: "native-repair-double"), liveCallsEnabled: false)
+        transcription: .init(configured: false, model: "native-repair-double"))
     init(url: String, token: String) throws {}
     private func wait() async throws {
         Self.requestCount += 1
@@ -98,17 +97,7 @@ enum ServerFailure: LocalizedError {
     }
     static let segment = TranscriptSegment(
         id: "current-segment", speaker: "Clinician", start: 0, end: 1, text: "Current transcript")
-    func startCall(_ input: LiveCallInput) async throws -> LiveCallResult {
-        try await wait()
-        return Self.callResult
-    }
-    func callStatus(requestID: String) async throws -> LiveCallResult {
-        try await wait()
-        return Self.callResult
-    }
-    static let callResult = LiveCallResult(
-        conversationID: "current-conversation", status: "completed", provider: "native-repair-double",
-        transcript: "Current call transcript")
+
 }
 
 // MARK: - Audited native regression checks
@@ -126,6 +115,7 @@ enum ServerFailure: LocalizedError {
         try await checkEditorMerges(fixture, root: scratch)
         try checkEditorConflicts(fixture, root: scratch)
         try checkRecordingPersistence(fixture, root: scratch)
+        try await checkAppointmentSummaries(fixture, root: scratch)
         print("ALL NATIVE REPAIR STATE CHECKS PASSED")
     }
 
@@ -140,43 +130,24 @@ enum ServerFailure: LocalizedError {
         return store
     }
 
-    static func request(_ fixture: AppSnapshot) -> BookingRequest {
-        BookingRequest(
-            id: "shared-request", visitID: fixture.visits[0].id, clinic: "Synthetic clinic",
-            phone: "+15555550123", reason: "Synthetic review", earliest: "2026-09-15T09:00:00Z",
-            latest: "2026-09-16T09:00:00Z", timeZone: "America/Chicago", preferences: "", status: "starting",
-            isLive: true)
-    }
-
     @MainActor static func checkStartupAndOrdering(_ fixture: AppSnapshot, root: URL) throws {
-        for rename in [false, true] {
-            var source = fixture
-            var interrupted = request(fixture)
-            interrupted.isLive = false
-            interrupted.status = "queued"
-            source.bookings = [interrupted]
-            if rename {
-                let i = source.records.firstIndex { $0.id == "demo-record-symptom-diary" }!
-                source.records[i].title = "Nausea and palpitation diary - date needs review"
-            }
-            let repository = LocalRepository(directory: root.appendingPathComponent(UUID().uuidString))
-            try repository.save(source)
-            let backup = repository.directory.appendingPathComponent("state.backup.json")
-            try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: false)
-            let store = AppStore(repository: repository)
-            precondition(store.startupError == nil && store.snapshot == source && store.errorMessage != nil)
-            try FileManager.default.removeItem(at: backup)
-            let retried = AppStore(repository: repository)
-            precondition(
-                retried.startupError == nil && retried.booking(interrupted.id)?.status == "needsUser")
-            if rename {
-                precondition(
-                    retried.record("demo-record-symptom-diary")?.title
-                        == "Weekly symptom diary")
-            }
-        }
+        var source = fixture
+        let i = source.records.firstIndex { $0.id == "demo-record-symptom-diary" }!
+        source.records[i].title = "Nausea and palpitation diary - date needs review"
+        let repository = LocalRepository(directory: root.appendingPathComponent(UUID().uuidString))
+        try repository.save(source)
+        let backup = repository.directory.appendingPathComponent("state.backup.json")
+        try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: false)
+        let failedRepair = AppStore(repository: repository)
+        precondition(
+            failedRepair.startupError == nil && failedRepair.snapshot == source
+                && failedRepair.errorMessage != nil)
+        try FileManager.default.removeItem(at: backup)
+        let retried = AppStore(repository: repository)
+        precondition(retried.record("demo-record-symptom-diary")?.title == "Weekly symptom diary")
+        precondition(retried.snapshot?.bookings == source.bookings)
         print(
-            "PASS RVA-03-001: both startup repair failures preserve valid loaded state; a later launch repairs it"
+            "PASS RVA-03-001: failed label repair preserves loaded state; later launch repairs labels and preserves archived data"
         )
         let store = try makeStore(fixture, root: root)
         var early = fixture.visits[0]
@@ -199,22 +170,25 @@ enum ServerFailure: LocalizedError {
 
     // MARK: - Provider success/error invalidation matrix
     @MainActor static func checkProviders(_ fixture: AppSnapshot, root: URL) async throws {
-        let operations = ["summary", "prepare", "transcribe", "start", "poll", "discovery"]
+        let operations = ["summary", "prepare", "transcribe", "appointmentSummary", "discovery"]
         let boundaries = ["token", "url", "away-and-back", "replace", "pull", "reset"]
         for operation in operations {
             for boundary in boundaries {
                 for fail in [false, true] {
                     var source = fixture
-                    source.bookings = [request(fixture)]
                     source.recordings = [
                         VisitRecording(
                             id: "shared-recording", visitID: fixture.visits[0].id, title: "Synthetic audio",
-                            duration: 2, audioFilename: "test.m4a")
+                            duration: 2, audioFilename: "test.m4a",
+                            segments: operation == "appointmentSummary" ? [ProviderClient.segment] : [])
                     ]
                     let store = try makeStore(source, root: root)
                     _ = try store.repository.storeAttachment(
                         Data("Synthetic audio".utf8), filename: "test.m4a")
                     store.useConnectedAI = true
+                    if operation == "appointmentSummary" {
+                        store.providerStatus = ProviderClient.capabilities
+                    }
                     var afterBoundary: AppSnapshot?
                     ProviderClient.duringRequest = {
                         switch boundary {
@@ -254,25 +228,21 @@ enum ServerFailure: LocalizedError {
                             && store.errorMessage == "Current workspace error")
                     precondition(!store.isProviderBusy)
                     if operation == "discovery" { precondition(store.providerStatus == nil) }
-                    if operation == "start", ["token", "url", "away-and-back"].contains(boundary) {
-                        precondition(
-                            store.booking("shared-request")?.status == "starting",
-                            "Submitted request identity must remain available for polling under its original owner"
-                        )
-                    }
+
                 }
             }
             // Normal responses still publish after unrelated notes/profile edits made during the await.
             var source = fixture
-            source.bookings = [request(fixture)]
             source.recordings = [
                 VisitRecording(
                     id: "shared-recording", visitID: fixture.visits[0].id, title: "Synthetic audio",
-                    duration: 2, audioFilename: "test.m4a")
+                    duration: 2, audioFilename: "test.m4a",
+                    segments: operation == "appointmentSummary" ? [ProviderClient.segment] : [])
             ]
             let store = try makeStore(source, root: root)
             _ = try store.repository.storeAttachment(Data("Synthetic audio".utf8), filename: "test.m4a")
             store.useConnectedAI = true
+            if operation == "appointmentSummary" { store.providerStatus = ProviderClient.capabilities }
             ProviderClient.duringRequest = {
                 try store.mutate {
                     $0.profile.name = "Unrelated profile edit"
@@ -296,14 +266,14 @@ enum ServerFailure: LocalizedError {
             case "transcribe":
                 precondition(store.recording("shared-recording")?.segments == [ProviderClient.segment])
             case "discovery": precondition(store.providerStatus == ProviderClient.capabilities)
-            default:
-                precondition(
-                    store.booking("shared-request")?.providerConversationID == "current-conversation")
+            case "appointmentSummary":
+                precondition(store.recording("shared-recording")?.aiSummary == "Current provider summary")
+            default: preconditionFailure("Unexpected synthetic operation")
             }
         }
         ProviderClient.duringRequest = nil
         print(
-            "PASS RVA-10-001: 72 stale success/error cases across 6 provider operations and 6 boundaries; unrelated edits survive normal publication"
+            "PASS RVA-10-001: 60 stale success/error cases across 5 provider operations and 6 boundaries; unrelated edits survive normal publication"
         )
         let store = try makeStore(fixture, root: root)
         store.useConnectedAI = true
@@ -324,9 +294,9 @@ enum ServerFailure: LocalizedError {
         case "summary": await store.summarizeWithAI(source.records[0].id)
         case "prepare": _ = await store.generatePreferredReport(source.visits[0].id)
         case "transcribe": await store.transcribeRecording("shared-recording")
-        case "start": await store.placeLiveCall(request(source))
+        case "appointmentSummary": await store.summarizeRecording("shared-recording")
         case "discovery": await store.checkProviders()
-        default: await store.refreshLiveCall("shared-request")
+        default: preconditionFailure("Unexpected synthetic operation")
         }
     }
 
@@ -386,33 +356,34 @@ enum ServerFailure: LocalizedError {
 
     // MARK: - Canceled requests must not publish a returned result
     @MainActor static func checkProviderCancellation(_ fixture: AppSnapshot, root: URL) async throws {
-        for operation in ["summary", "prepare", "transcribe", "start", "poll", "discovery"] {
+        for operation in ["summary", "prepare", "transcribe", "appointmentSummary", "discovery"] {
             var source = fixture
-            source.bookings = [request(fixture)]
             source.recordings = [
                 VisitRecording(
                     id: "shared-recording", visitID: fixture.visits[0].id, title: "Synthetic audio",
-                    duration: 2, audioFilename: "cancel.m4a")
+                    duration: 2, audioFilename: "cancel.m4a",
+                    segments: operation == "appointmentSummary" ? [ProviderClient.segment] : [])
             ]
             let store = try makeStore(source, root: root)
             _ = try store.repository.storeAttachment(Data("Synthetic audio".utf8), filename: "cancel.m4a")
             store.useConnectedAI = true
+            if operation == "appointmentSummary" { store.providerStatus = ProviderClient.capabilities }
             ProviderClient.duringRequest = { withUnsafeCurrentTask { $0?.cancel() } }
             // Cancel the operation task, not this harness task. The double still returns a valid result.
             let submittedSource = source
             await Task { @MainActor in await run(operation, store: store, source: submittedSource) }.value
-            var expected = source
-            if operation == "start" {
-                expected.bookings[0].status = "unknown"
-            }
+            let expected = source
             precondition(store.snapshot == expected, "Canceled \(operation) published a returned result")
-            precondition(store.providerStatus == nil && store.notice == nil && !store.isProviderBusy)
+            precondition(
+                store.providerStatus
+                    == (operation == "appointmentSummary" ? ProviderClient.capabilities : nil)
+                    && store.notice == nil && !store.isProviderBusy)
             precondition(store.errorMessage != nil)
         }
         ProviderClient.duringRequest = nil
         precondition(!Task.isCancelled)
         print(
-            "PASS provider cancellation: all 6 operations discard valid late results; submitted call identity remains recoverable"
+            "PASS provider cancellation: all 5 operations discard valid late results"
         )
     }
 
@@ -582,6 +553,114 @@ enum ServerFailure: LocalizedError {
         precondition((try? Data(contentsOf: url)) == bytes)
         print(
             "PASS RVA-05-008: production save draft retains metadata/audio after failure; retry saves the same identity/file and clears only on success"
+        )
+    }
+
+    // MARK: - Appointment summary source, edit, and memory integrity
+    @MainActor static func checkAppointmentSummaries(_ fixture: AppSnapshot, root: URL) async throws {
+        let store = try makeStore(fixture, root: root)
+        let transcript = [
+            TranscriptSegment(
+                id: "first", speaker: "Speaker", start: 0, end: 2, text: "Exact first words: café, 0.25 mg."),
+            TranscriptSegment(
+                id: "last", speaker: "Speaker", start: 2, end: 4,
+                text: String(repeating: "Full source words. ", count: 200)),
+        ]
+        let recording = VisitRecording(
+            id: "appointment", visitID: fixture.visits[0].id, title: "Synthetic appointment",
+            createdAt: "2026-09-12T02:00:00Z", duration: 4,
+            audioFilename: "appointment.m4a", segments: transcript, summary: "Private separate notes")
+        try store.save(recording)
+        let requestCount = ProviderClient.requestCount
+        await store.summarizeRecording(recording.id)
+        precondition(
+            ProviderClient.requestCount == requestCount && store.recording(recording.id)?.aiSummary == nil)
+        store.providerStatus = ProviderClient.capabilities
+        store.errorMessage = nil
+        ProviderClient.duringRequest = {
+            try store.saveRecordingNotes("Newer user notes", recordingID: recording.id)
+        }
+        await store.summarizeRecording(recording.id)
+        let summarized = store.recording(recording.id)!
+        precondition(summarized.hasAISummary && summarized.summary == "Newer user notes")
+        precondition(summarized.segments == transcript && summarized.audioFilename == recording.audioFilename)
+        precondition(ProviderClient.summaryInput?.title == recording.title)
+        precondition(ProviderClient.summaryInput?.text == recording.transcriptText)
+        precondition(ProviderClient.summaryInput?.summary == "" && ProviderClient.summaryInput?.notes == "")
+        try store.saveMemory(recordingID: recording.id)
+        let memory = store.record("memory-" + recording.id)!
+        precondition(memory.text == recording.transcriptText && memory.text.count > 1800)
+        precondition(
+            memory.summary == summarized.aiSummary && memory.summaryModel == summarized.aiSummaryModel)
+        precondition(memory.notes.contains("Newer user notes"))
+        precondition(memory.date == "2026-09-11" && summarized.createdAt == recording.createdAt)
+
+        var editedMemory = memory
+        editedMemory.notes = "Separate notes edited directly on the saved memory."
+        editedMemory.date = "2026-09-10"
+        try store.save(editedMemory)
+        ProviderClient.duringRequest = nil
+        await store.summarizeRecording(recording.id)
+        precondition(store.record(memory.id)?.notes == editedMemory.notes)
+        precondition(store.record(memory.id)?.date == editedMemory.date)
+        precondition(store.recording(recording.id)?.summary == "Newer user notes")
+
+        // A failed checkpoint cannot save the new derived summary without its memory (or vice versa).
+        let beforeFailure = store.snapshot
+        let backup = store.repository.directory.appendingPathComponent("state.backup.json")
+        try FileManager.default.removeItem(at: backup)
+        try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: false)
+        await store.summarizeRecording(recording.id)
+        precondition(store.snapshot == beforeFailure && store.errorMessage != nil)
+        try FileManager.default.removeItem(at: backup)
+        store.errorMessage = nil
+
+        // Saving unchanged transcript text retains a reviewed summary, while changed words invalidate it.
+        let unchanged = Dictionary(uniqueKeysWithValues: transcript.map { ($0.id, $0.text) })
+        try store.saveMemory(recordingID: recording.id, correctedSegmentTexts: unchanged)
+        precondition(store.recording(recording.id)?.aiSummary == summarized.aiSummary)
+        var corrected = unchanged
+        corrected["first"] = "Corrected exact words."
+        try store.saveMemory(recordingID: recording.id, correctedSegmentTexts: corrected)
+        let changed = store.recording(recording.id)!
+        precondition(
+            !changed.hasAISummary && changed.aiSummary == nil && changed.aiSummaryModel == nil
+                && changed.aiSummaryGeneratedAt == nil)
+        precondition(
+            changed.summary == "Newer user notes" && changed.segments[0].start == transcript[0].start
+                && changed.segments[0].end == transcript[0].end)
+        precondition(
+            store.record(memory.id)?.text == changed.transcriptText
+                && store.record(memory.id)?.summaryModel == nil)
+        precondition(store.record(memory.id)?.notes == editedMemory.notes)
+
+        // A result from old source text, title, or a deleted recording cannot publish.
+        for boundary in ["transcript", "title", "delete"] {
+            try store.save(recording)
+            store.errorMessage = nil
+            ProviderClient.duringRequest = {
+                try store.mutate { data in
+                    let index = data.recordings.firstIndex { $0.id == recording.id }!
+                    switch boundary {
+                    case "transcript": data.recordings[index].segments[0].text = "Concurrent correction"
+                    case "title": data.recordings[index].title = "Current title"
+                    default: data.recordings.remove(at: index)
+                    }
+                }
+            }
+            await store.summarizeRecording(recording.id)
+            precondition(store.recording(recording.id)?.aiSummary == nil && store.errorMessage != nil)
+        }
+        var empty = recording
+        empty.segments = []
+        try store.save(empty)
+        ProviderClient.duringRequest = nil
+        let beforeEmpty = ProviderClient.requestCount
+        await store.summarizeRecording(recording.id)
+        precondition(
+            ProviderClient.requestCount == beforeEmpty && store.recording(recording.id)?.aiSummary == nil)
+        print(
+            "PASS appointment summaries: configured transcript-only requests; newer notes, full source, summary provenance and timestamps preserved; corrections invalidate AI; stale/deleted/empty sources rejected"
         )
     }
 }

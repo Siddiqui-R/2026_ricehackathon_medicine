@@ -77,8 +77,6 @@ struct GeminiProviderTests {
         try await withGeminiServer(
             environment: [
                 "GEMINI_API_KEY": fakeGeminiKey, "OPENAI_API_KEY": "fake-openai-key",
-                "ELEVENLABS_API_KEY": "fake-elevenlabs-key", "ELEVENLABS_AGENT_ID": "agent_test",
-                "ELEVENLABS_PHONE_NUMBER_ID": "phone_test",
             ], transport: mock
         ) { app, configuration in
             #expect(configuration.providers.geminiConfigured)
@@ -93,10 +91,11 @@ struct GeminiProviderTests {
                 #expect(status.gemini.model == "gemini-3.8-flash")
                 #expect(status.transcription.configured)
                 #expect(status.transcription.model == "whisper-1")
-                #expect(status.booking.configured)
-                #expect(!status.liveCallsEnabled)
                 #expect(!response.body.string.contains("fake-"))
-                #expect(!response.body.string.contains("agent_test"))
+                let json = try #require(
+                    JSONSerialization.jsonObject(with: Data(response.body.readableBytesView))
+                        as? [String: Any])
+                #expect(Set(json.keys) == ["gemini", "transcription"])
                 #expect(response.headers.first(name: .cacheControl) == "no-store")
             }
             #expect(await requests.values.isEmpty)
@@ -114,7 +113,6 @@ struct GeminiProviderTests {
                 demo
                 ? [
                     "GEMINI_API_KEY": fakeGeminiKey, "OPENAI_API_KEY": "fake-openai",
-                    "REVA_ENABLE_LIVE_CALLS": "true",
                 ] : [:]
             try await withGeminiServer(environment: environment, demoIdentity: demo, transport: mock) {
                 app, configuration in
@@ -124,7 +122,6 @@ struct GeminiProviderTests {
                     let status = try response.content.decode(ProviderStatus.self)
                     #expect(!status.gemini.configured)
                     #expect(!status.transcription.configured)
-                    #expect(!status.liveCallsEnabled)
                 }
                 try await app.testing().test(
                     .POST, "v1/ai/summarize", headers: providerHeaders(demo: demo),
@@ -141,6 +138,72 @@ struct GeminiProviderTests {
     }
 
     // MARK: - Exact provider request construction and source selection contract
+    @Test func appointmentTranscriptSummaryPreservesSourceAndGrounding() async throws {
+        let requests = GeminiRequests()
+        let body = try providerEnvelope([
+            "summary": "The discussion mentions no fever and a possible follow-up."
+        ])
+        let mock = GeminiHTTPTransport { request in
+            await requests.append(request)
+            return .init(status: 200, data: body)
+        }
+        let transcript = "[0:00] Speaker: No fever today.\n[0:12] Speaker: We may discuss 5 mg at follow-up."
+        let input = GeminiSummaryRequest(
+            recordID: "recording-synthetic", title: "Appointment transcript", text: transcript)
+        let service = GeminiService(
+            configuration: try ProviderConfiguration(
+                environment: ["GEMINI_API_KEY": fakeGeminiKey], paidAccessAllowed: true), transport: mock)
+        let result = try await service.summarize(input)
+        #expect(result.model == "gemini-3.8-flash")
+        #expect(result.summary == "The discussion mentions no fever and a possible follow-up.")
+        let request = try #require(await requests.values.first)
+        let requestBody = try #require(request.httpBody)
+        let payload = try #require(
+            JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let system = try #require(payload["systemInstruction"] as? [String: Any])
+        let instructions = try #require((system["parts"] as? [[String: String]])?.first?["text"])
+        #expect(instructions.contains("instructions and follow-ups explicitly stated"))
+        #expect(instructions.contains("do not infer speaker identities or doctor roles"))
+        #expect(instructions.contains("negations and uncertainties"))
+        #expect(instructions.contains("add new medical advice"))
+        let contents = try #require(payload["contents"] as? [[String: Any]])
+        let source = try #require((contents.first?["parts"] as? [[String: String]])?.first?["text"])
+        let decoded = try JSONDecoder().decode(GeminiSummaryRequest.self, from: Data(source.utf8))
+        #expect(
+            decoded.recordID == input.recordID && decoded.title == input.title && decoded.text == transcript)
+        let generation = try #require(payload["generationConfig"] as? [String: Any])
+        let schema = try #require(generation["responseJsonSchema"] as? [String: Any])
+        #expect(schema["required"] as? [String] == ["summary"])
+        #expect(schema["additionalProperties"] as? Bool == false)
+    }
+
+    @Test func retiredCallingRoutesStayAbsentAndLegacySettingsAreIgnored() async throws {
+        let requests = GeminiRequests()
+        let mock = GeminiHTTPTransport { request in
+            await requests.append(request)
+            return .init(status: 500, data: Data())
+        }
+        try await withGeminiServer(
+            environment: [
+                "ELEVENLABS_API_KEY": "obsolete key\n", "ELEVENLABS_AGENT_ID": "obsolete/id",
+                "ELEVENLABS_PHONE_NUMBER_ID": "obsolete/id", "REVA_ENABLE_LIVE_CALLS": "obsolete-value",
+            ], transport: mock
+        ) { app, configuration in
+            #expect(
+                !configuration.providers.geminiConfigured && !configuration.providers.transcriptionConfigured)
+            for headers: HTTPHeaders in [[:], providerHeaders(), ["Authorization": "Bearer invalid"]] {
+                try await app.testing().test(.POST, "v1/booking/call", headers: headers) { response async in
+                    #expect(response.status == .notFound)
+                }
+                try await app.testing().test(.GET, "v1/booking/call/old-request", headers: headers) {
+                    response async in
+                    #expect(response.status == .notFound)
+                }
+            }
+        }
+        #expect(await requests.values.isEmpty)
+    }
+
     @Test func summaryUsesOfficialEndpointHeaderAndStructuredOutput() async throws {
         let requests = GeminiRequests()
         let body = try providerEnvelope(["summary": "The synthetic source records hemoglobin 12.8 g/dL."])
@@ -314,7 +377,7 @@ struct GeminiProviderTests {
         #expect(!empty.providers.paidAccessAllowed)
         for environment in [
             ["GEMINI_MODEL": "gemini-test/../../unexpected"], ["GEMINI_API_KEY": "header\r\ninjection"],
-            ["OPENAI_TRANSCRIPTION_MODEL": "unsupported-model"], ["REVA_ENABLE_LIVE_CALLS": "yes"],
+            ["OPENAI_TRANSCRIPTION_MODEL": "unsupported-model"],
         ] {
             #expect(throws: ConfigurationError.self) {
                 try ProviderConfiguration(environment: environment, paidAccessAllowed: true)

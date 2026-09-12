@@ -1,5 +1,5 @@
 // Purpose: Verify provider-client wire contracts and failure handling without invoking external services.
-// Inputs: Synthetic documents, visits, audio bytes, reviewed call requests, and stubbed responses.
+// Inputs: Synthetic documents, visits, audio bytes, and stubbed responses.
 // Outputs: XCTest assertions for exact request fields, decoded results, safe errors, and request counts.
 // Side effects: Installs token-scoped URLProtocol handlers and ephemeral sessions, then releases them; no provider is contacted.
 
@@ -124,14 +124,6 @@ final class ProviderClientTests: XCTestCase {
             questions: ["Keep my edited question?", "Preserve café and 0.25 exactly?"],
             notes: "Private-to-this-fixture notes excluded from the preparation DTO.")
     }
-    private func callInput() -> LiveCallInput {
-        LiveCallInput(
-            requestID: "synthetic-request-42", clinic: "Fictional clinic", phone: "+12025550123",
-            reason: "SYNTHETIC scheduling demonstration", earliest: "2026-09-15T09:00:00-05:00",
-            latest: "2026-09-18T16:30:00-05:00", timeZone: "America/Chicago",
-            preferences: "Fictional office; weekday afternoon preferred.",
-            patientName: "Jordan Avery (Synthetic)", consent: true)
-    }
     private func body(_ request: URLRequest) throws -> Data {
         if let body = request.httpBody { return body }
         guard let stream = request.httpBodyStream else { return Data() }
@@ -184,15 +176,13 @@ final class ProviderClientTests: XCTestCase {
             XCTAssertTrue(try self.body(request).isEmpty)
             return ProviderStubResponse(
                 json:
-                    #"{"gemini":{"configured":true,"model":"synthetic-summary-model"},"transcription":{"configured":false,"model":"synthetic-speech-model"},"booking":{"configured":true,"model":"synthetic-agent"},"liveCallsEnabled":false}"#
+                    #"{"gemini":{"configured":true,"model":"synthetic-summary-model"},"transcription":{"configured":false,"model":"synthetic-speech-model"}}"#
             )
         }
         let result = try await transport.client.status()
         XCTAssertEqual(result.gemini, ProviderCapability(configured: true, model: "synthetic-summary-model"))
         XCTAssertEqual(
             result.transcription, ProviderCapability(configured: false, model: "synthetic-speech-model"))
-        XCTAssertEqual(result.booking, ProviderCapability(configured: true, model: "synthetic-agent"))
-        XCTAssertFalse(result.liveCallsEnabled)
         XCTAssertEqual(calls.value, 1)
     }
 
@@ -318,84 +308,6 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual(calls.value, 1, "Rejected input must not reach transport.")
     }
 
-    // MARK: - Reviewed call requests and status lookup
-
-    func testCallStartPreservesReviewedFieldsConsentAndStableRequestIdentity() async throws {
-        let reviewed = callInput()
-        let calls = ProviderRequestCount()
-        let transport = try ProviderTestTransport { request in
-            calls.increment()
-            XCTAssertEqual(request.url?.path, "/gateway/v1/booking/call")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-            let input = try self.json(request)
-            XCTAssertEqual(
-                Set(input.keys),
-                Set([
-                    "requestID", "clinic", "phone", "reason", "earliest", "latest", "timeZone", "preferences",
-                    "patientName", "consent",
-                ]))
-            XCTAssertEqual(input["requestID"] as? String, "synthetic-request-42")
-            XCTAssertEqual(input["clinic"] as? String, reviewed.clinic)
-            XCTAssertEqual(input["phone"] as? String, "+12025550123")
-            XCTAssertEqual(input["reason"] as? String, reviewed.reason)
-            XCTAssertEqual(input["earliest"] as? String, reviewed.earliest)
-            XCTAssertEqual(input["latest"] as? String, reviewed.latest)
-            XCTAssertEqual(input["timeZone"] as? String, "America/Chicago")
-            XCTAssertEqual(input["preferences"] as? String, reviewed.preferences)
-            XCTAssertEqual(input["patientName"] as? String, "Jordan Avery (Synthetic)")
-            let consent = try XCTUnwrap(input["consent"] as? Bool)
-            if !consent {
-                return ProviderStubResponse(status: 400, json: #"{"reason":"Explicit consent is required."}"#)
-            }
-            return ProviderStubResponse(
-                json:
-                    #"{"conversationID":"synthetic-conversation-42","status":"initiated","provider":"synthetic-call-provider"}"#
-            )
-        }
-        // Two explicit attempts keep the identity; server receipts, not this stub, enforce replay safety.
-        for _ in 0..<2 {
-            let result = try await transport.client.startCall(reviewed)
-            XCTAssertEqual(result.conversationID, "synthetic-conversation-42")
-            XCTAssertEqual(result.status, "initiated")
-            XCTAssertEqual(result.provider, "synthetic-call-provider")
-            XCTAssertNil(result.transcript)
-        }
-        var notConsented = reviewed
-        notConsented.consent = false
-        await expectFailure({ try await transport.client.startCall(notConsented) }) { error in
-            self.assertProviderMessage(error, equals: "Explicit consent is required.")
-        }
-        XCTAssertEqual(calls.value, 3, "The client must not retry or silently grant consent.")
-    }
-
-    func testCallStatusUsesRequestIDRouteAndRejectsUnsafePaths() async throws {
-        let token = "synthetic-provider-" + UUID().uuidString
-        let calls = ProviderRequestCount()
-        let transport = try ProviderTestTransport(token: token) { request in
-            calls.increment()
-            XCTAssertEqual(request.url?.path, "/gateway/v1/booking/call/synthetic-request-42")
-            XCTAssertEqual(request.httpMethod, "GET")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer " + token)
-            XCTAssertTrue(try self.body(request).isEmpty)
-            return ProviderStubResponse(
-                json:
-                    #"{"conversationID":"synthetic-conversation-42","status":"done","provider":"synthetic-call-provider","transcript":"SYNTHETIC call ended; no appointment confirmed."}"#
-            )
-        }
-        let result = try await transport.client.callStatus(requestID: "synthetic-request-42")
-        XCTAssertEqual(result.conversationID, "synthetic-conversation-42")
-        XCTAssertEqual(result.status, "done")
-        XCTAssertEqual(result.provider, "synthetic-call-provider")
-        XCTAssertEqual(result.transcript, "SYNTHETIC call ended; no appointment confirmed.")
-        for id in ["", ".", "..", "../another-owner", "folder/id", "folder\\id", "nul\0id"] {
-            await expectFailure({ try await transport.client.callStatus(requestID: id) }) { error in
-                XCTAssertTrue(error is RevaError)
-            }
-        }
-        XCTAssertEqual(calls.value, 1)
-    }
-
     // MARK: - Safe failures and malformed provider results
 
     func testServiceAndAuthFailuresSurfaceSafeMessagesWithoutBodyLeakOrRetry() async throws {
@@ -433,7 +345,7 @@ final class ProviderClientTests: XCTestCase {
             ("summary", #"{"summary":"SYNTHETIC missing model"}"#),
             (
                 "status",
-                #"{"gemini":{"configured":"yes","model":"synthetic"},"transcription":{"configured":false,"model":"synthetic"},"booking":{"configured":false,"model":"synthetic"},"liveCallsEnabled":false}"#
+                #"{"gemini":{"configured":"yes","model":"synthetic"},"transcription":{"configured":false,"model":"synthetic"}}"#
             ),
             (
                 "prepare",
@@ -443,7 +355,6 @@ final class ProviderClientTests: XCTestCase {
                 "audio",
                 #"{"text":"SYNTHETIC","segments":[{"id":"segment-a","start":"tomorrow","end":1,"speaker":"Speaker","text":"SYNTHETIC"}],"model":"synthetic"}"#
             ),
-            ("call", #"{"status":"done","provider":"synthetic"}"#),
         ]
         for (kind, payload) in cases {
             let calls = ProviderRequestCount()
@@ -458,7 +369,7 @@ final class ProviderClientTests: XCTestCase {
                 case "prepare": _ = try await transport.client.prepare(self.visit(), records: [self.record()])
                 case "audio":
                     _ = try await transport.client.transcribe(bytes: Data([0x53]), filename: "synthetic.m4a")
-                default: _ = try await transport.client.startCall(self.callInput())
+                default: preconditionFailure("Unexpected synthetic operation")
                 }
             }) { error in
                 self.assertProviderMessage(

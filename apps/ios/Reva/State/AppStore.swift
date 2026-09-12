@@ -54,7 +54,7 @@ import Foundation
     }
 
     // MARK: - Startup and recovery
-    // Restore a valid snapshot, repair known demo labels/interrupted simulations, or load bundled fixtures.
+    // Restore a valid snapshot, repair known demo labels, or load bundled fixtures.
     init(repository: LocalRepository? = nil) {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Reva", isDirectory: true)
@@ -90,17 +90,7 @@ import Foundation
                         sample.tags.removeAll { $0 == "needs review" }
                         try save(sample)
                     }
-                    if snapshot?.bookings.contains(where: {
-                        $0.isLive != true && ["queued", "calling"].contains($0.status)
-                    }) == true {
-                        try mutate { data in
-                            for i in data.bookings.indices
-                            where data.bookings[i].isLive != true
-                                && ["queued", "calling"].contains(data.bookings[i].status)
-                            { data.bookings[i].status = "needsUser" }
-                        }
-                        notice = "An interrupted demo booking needs your attention. Open it to retry."
-                    }
+
                 } catch {
                     errorMessage =
                         "Your saved data is available, but a startup repair could not be saved: \(error.localizedDescription)"
@@ -127,11 +117,9 @@ import Foundation
             return left == right ? $0.id < $1.id : left < right
         }
     }
-    var bookings: [BookingRequest] { snapshot?.bookings ?? [] }
     var recordings: [VisitRecording] { snapshot?.recordings ?? [] }
     func record(_ id: String) -> MedicalRecord? { snapshot?.records.first { $0.id == id } }
     func visit(_ id: String) -> Visit? { snapshot?.visits.first { $0.id == id } }
-    func booking(_ id: String) -> BookingRequest? { bookings.first { $0.id == id } }
     func recording(_ id: String) -> VisitRecording? { recordings.first { $0.id == id } }
     func sourceURL(_ record: MedicalRecord) -> URL? { record.sourceFilename.flatMap(sourceURL) }
     func sourceURL(_ filename: String) -> URL? {

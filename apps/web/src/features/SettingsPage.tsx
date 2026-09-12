@@ -189,9 +189,8 @@ export function SettingsPage() {
                 title: 'Audio transcription',
                 detail: 'Reviewable words from saved audio',
               },
-              { key: 'booking', title: 'Appointment calls', detail: 'Only after your explicit review' },
             ].map((item) => {
-              const status = store.providers?.[item.key as 'gemini' | 'transcription' | 'booking'];
+              const status = store.providers?.[item.key as 'gemini' | 'transcription'];
               return (
                 <div className="service-status" key={item.key}>
                   <div>

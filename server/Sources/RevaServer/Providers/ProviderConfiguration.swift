@@ -13,31 +13,17 @@ public struct ProviderConfiguration: Sendable {
     public let geminiModel: String
     public let openAIAPIKey: String?
     public let transcriptionModel: String
-    public let elevenLabsAPIKey: String?
-    public let elevenLabsAgentID: String?
-    public let elevenLabsPhoneNumberID: String?
-    public let liveCallsEnabled: Bool
     public let paidAccessAllowed: Bool
 
     public var geminiConfigured: Bool { paidAccessAllowed && geminiAPIKey != nil }
     public var transcriptionConfigured: Bool {
         paidAccessAllowed && openAIAPIKey != nil && transcriptionModel == "whisper-1"
     }
-    public var bookingConfigured: Bool {
-        paidAccessAllowed && elevenLabsAPIKey != nil && elevenLabsAgentID != nil
-            && elevenLabsPhoneNumberID != nil
-    }
-
-    // MARK: - Validate supported models and explicit live-call enablement
+    // MARK: - Validate supported summary and transcription models
     public init(environment: [String: String], paidAccessAllowed: Bool) throws {
         self.paidAccessAllowed = paidAccessAllowed
         geminiAPIKey = try Self.secret(environment["GEMINI_API_KEY"], name: "GEMINI_API_KEY")
         openAIAPIKey = try Self.secret(environment["OPENAI_API_KEY"], name: "OPENAI_API_KEY")
-        elevenLabsAPIKey = try Self.secret(environment["ELEVENLABS_API_KEY"], name: "ELEVENLABS_API_KEY")
-        elevenLabsAgentID = try Self.identifier(
-            environment["ELEVENLABS_AGENT_ID"], name: "ELEVENLABS_AGENT_ID")
-        elevenLabsPhoneNumberID = try Self.identifier(
-            environment["ELEVENLABS_PHONE_NUMBER_ID"], name: "ELEVENLABS_PHONE_NUMBER_ID")
         geminiModel = environment["GEMINI_MODEL"] ?? "gemini-3.8-flash"
         guard geminiModel.hasPrefix("gemini-"), geminiModel.utf8.count <= 100,
             geminiModel.utf8.allSatisfy({ Self.identifierByte($0) || $0 == 46 })
@@ -51,28 +37,15 @@ public struct ProviderConfiguration: Sendable {
             throw ConfigurationError(
                 "OPENAI_TRANSCRIPTION_MODEL must be whisper-1 for the MVP timestamped transcript contract.")
         }
-        let enabled = environment["REVA_ENABLE_LIVE_CALLS"] ?? "false"
-        guard ["true", "false"].contains(enabled) else {
-            throw ConfigurationError("REVA_ENABLE_LIVE_CALLS must be exactly true or false.")
-        }
-        liveCallsEnabled = enabled == "true" && paidAccessAllowed
+
     }
 
-    // MARK: - Reject unsafe secret and provider-ID encodings
+    // MARK: - Reject unsafe secret and model-ID encodings
     private static func secret(_ value: String?, name: String) throws -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         guard value.utf8.count <= 2048, value.utf8.allSatisfy({ (33...126).contains($0) }) else {
             throw ConfigurationError(
                 "\(name) must contain visible ASCII characters without whitespace (maximum 2048 bytes).")
-        }
-        return value
-    }
-
-    private static func identifier(_ value: String?, name: String) throws -> String? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        guard value.utf8.count <= 200, value.utf8.allSatisfy(identifierByte) else {
-            throw ConfigurationError(
-                "\(name) must be a provider ID using letters, digits, hyphens and underscores.")
         }
         return value
     }

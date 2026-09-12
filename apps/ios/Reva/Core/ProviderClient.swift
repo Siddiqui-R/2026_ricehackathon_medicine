@@ -155,13 +155,4 @@ struct ProviderClient {
         return try await request(
             "audio/transcribe", method: "POST", bytes: bytes, contentType: type, filename: filename)
     }
-    // MARK: - Call submission and polling
-    // Use one stable local request identity; polling must never initiate a new call.
-    func startCall(_ input: LiveCallInput) async throws -> LiveCallResult {
-        try await request("booking/call", method: "POST", bytes: JSONEncoder().encode(input))
-    }
-    func callStatus(requestID: String) async throws -> LiveCallResult {
-        guard AppSnapshot.safeFilename(requestID) else { throw RevaError.invalid("Invalid call identifier.") }
-        return try await request("booking/call/" + requestID)
-    }
 }

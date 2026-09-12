@@ -85,6 +85,8 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
     setError('');
     setReading(true);
     try {
+      if (!consent)
+        throw new Error('Confirm your doctor and everyone present agreed before uploading audio.');
       const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
       if (!['m4a', 'mp4', 'mp3', 'wav', 'webm', 'ogg'].includes(extension))
         throw new Error('Choose an M4A, MP3, WAV, WebM, or Ogg audio file.');
@@ -105,6 +107,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
     setError('');
     setSaving(true);
     try {
+      if (!consent) throw new Error('Confirm your doctor and everyone present agreed before saving audio.');
       if (!title.trim()) throw new Error('Add a title for this recording.');
       if (!Number.isFinite(duration) || duration <= 0)
         throw new Error('This recording has no captured audio duration.');
@@ -136,25 +139,25 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
     }
   }
   return (
-    <Modal title="Record a visit" onClose={close}>
+    <Modal title="Record appointment" onClose={close}>
       <div className="stack">
         <p className="muted">
-          Keep the conversation with your visit. Ask everyone participating before recording.
+          Get your doctor’s consent and permission from everyone present before recording.
         </p>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={consent}
+            disabled={active || saving}
+            onChange={(event) => setConsent(event.target.checked)}
+          />
+          <span>My doctor and everyone present agreed to recording.</span>
+        </label>
         <Field label="Recording title">
           <input value={title} maxLength={180} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         {!upload && (
           <>
-            <label className="row">
-              <input
-                type="checkbox"
-                checked={consent}
-                disabled={active}
-                onChange={(event) => setConsent(event.target.checked)}
-              />
-              <span>Everyone participating has agreed to this recording.</span>
-            </label>
             {!capture.supported && (
               <p className="inline-error">
                 Microphone recording is unavailable in this browser or connection. You can upload existing
@@ -226,7 +229,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
               <input
                 type="file"
                 accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg"
-                disabled={reading}
+                disabled={reading || !consent}
                 onChange={(event) => {
                   void chooseAudio(event);
                 }}
@@ -265,7 +268,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
             onClick={() => {
               void save();
             }}
-            disabled={!original || active || saving || reading}
+            disabled={!consent || !original || active || saving || reading}
           >
             {saving ? 'Saving…' : 'Save recording'}
           </Button>

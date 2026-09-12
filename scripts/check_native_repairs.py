@@ -15,10 +15,10 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = [
     "Core/Models.swift", "Core/SymptomEntry.swift", "Core/LocalRepository.swift",
-    "Core/ProviderContracts.swift", "Core/ReportEngine.swift", "Core/BookingEngine.swift",
+    "Core/ProviderContracts.swift", "Core/ReportEngine.swift",
     "State/AppStore.swift", "State/AppStore+Records.swift", "State/AppStore+Visits.swift",
-    "State/AppStore+Providers.swift", "State/AppStore+AI.swift", "State/AppStore+Bookings.swift",
-    "State/AppStore+LiveCalls.swift", "State/AppStore+Recordings.swift",
+    "State/AppStore+Providers.swift", "State/AppStore+AI.swift",
+    "State/AppStore+Recordings.swift",
     "State/AppStore+Transcription.swift", "State/AppStore+Sync.swift",
 ]
 

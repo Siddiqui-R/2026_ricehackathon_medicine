@@ -267,7 +267,8 @@ test(
         ['/health', 'DELETE', 405],
         ['/v1/state', 'OPTIONS', 405],
         ['/v1/attachments/a.b', 'GET', 404],
-        ['/v1/booking/call/a/b', 'GET', 404],
+        ['/v1/booking/call', 'POST', 404],
+        ['/v1/booking/call/synthetic_id', 'GET', 404],
         ['/v1/auth/unknown', 'POST', 404],
         ['/v1/auth/login', 'GET', 405],
         ['/v1/auth/session', 'POST', 405],
@@ -282,8 +283,6 @@ test(
         ['/v1/ai/summarize', 'POST'],
         ['/v1/ai/prepare', 'POST'],
         ['/v1/audio/transcribe', 'POST'],
-        ['/v1/booking/call', 'POST'],
-        ['/v1/booking/call/synthetic_id', 'GET'],
         ['/v1/attachments/synthetic_id', 'DELETE'],
         ['/v1/auth/signup', 'POST'],
         ['/v1/auth/login', 'POST'],
@@ -327,9 +326,9 @@ test(
       );
       assert.equal(
         (
-          await send(webPort, '/v1/booking/call', {
+          await send(webPort, '/v1/auth/login', {
             method: 'POST',
-            chunks: [Buffer.alloc(16 * 1024), Buffer.alloc(16 * 1024 + 1)],
+            chunks: [Buffer.alloc(8 * 1024), Buffer.alloc(8 * 1024 + 1)],
           })
         ).status,
         413,
@@ -339,9 +338,9 @@ test(
         413,
       );
       assert.equal(requests.length, before);
-      const boundary = Buffer.alloc(32 * 1024, 65);
+      const boundary = Buffer.alloc(16 * 1024, 65);
       assert.equal(
-        (await send(webPort, '/v1/booking/call', { method: 'POST', chunks: [boundary] })).status,
+        (await send(webPort, '/v1/auth/login', { method: 'POST', chunks: [boundary] })).status,
         200,
       );
       assert.deepEqual(requests.at(-1).body, boundary);

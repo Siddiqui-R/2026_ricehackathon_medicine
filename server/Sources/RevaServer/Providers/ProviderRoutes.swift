@@ -1,5 +1,5 @@
 // Purpose: Register authenticated provider discovery and Gemini JSON endpoints, then attach voice routes.
-// Inputs: An already owner-authenticated /v1 route group, server provider settings, and transport/storage boundaries.
+// Inputs: An already owner-authenticated /v1 route group, server provider settings, and injectable transports.
 // Outputs: Public configuration flags or validated summary/preparation DTOs with bounded request bodies.
 // Side effects: Creates provider services and dispatches configured AI requests when their routes are invoked.
 // Boundary: Discovery exposes configuration status only. JSON/media validation occurs before service dispatch.
@@ -14,22 +14,18 @@ struct ProviderStatus: Content {
     }
     let gemini: Service
     let transcription: Service
-    let booking: Service
-    let liveCallsEnabled: Bool
 }
 
 // MARK: - Register discovery and bounded JSON operations
 func registerProviderRoutes(
     _ secured: any RoutesBuilder, configuration: ProviderConfiguration,
-    directory: URL, geminiTransport: GeminiHTTPTransport = .live
+    geminiTransport: GeminiHTTPTransport = .live
 ) {
     secured.get("providers") { _ async -> ProviderStatus in
         ProviderStatus(
             gemini: .init(configured: configuration.geminiConfigured, model: configuration.geminiModel),
             transcription: .init(
-                configured: configuration.transcriptionConfigured, model: configuration.transcriptionModel),
-            booking: .init(configured: configuration.bookingConfigured, model: "elevenlabs-agent"),
-            liveCallsEnabled: configuration.liveCallsEnabled)
+                configured: configuration.transcriptionConfigured, model: configuration.transcriptionModel))
     }
     // MARK: - Decode requests before handing source data to Gemini
     let gemini = GeminiService(configuration: configuration, transport: geminiTransport)
@@ -53,7 +49,7 @@ func registerProviderRoutes(
         }
         return try await gemini.prepare(input)
     }
-    registerVoiceProviderRoutes(secured, configuration: configuration, directory: directory)
+    registerVoiceProviderRoutes(secured, configuration: configuration)
 }
 
 // MARK: - Require explicit JSON media type

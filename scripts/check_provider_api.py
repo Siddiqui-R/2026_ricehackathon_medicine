@@ -3,11 +3,10 @@
 
 Purpose: Verify real HTTP provider wiring and fail-closed unconfigured responses without paid requests.
 Inputs: An already-built RevaAPI executable and an available loopback port.
-Outputs: Assertions for discovery, six authenticated routes, four 503 responses, and absent call receipts.
+Outputs: Assertions for discovery, four authenticated routes, three 503 responses, and removed calling endpoints.
 Side effects: Starts a temporary local server, sends synthetic HTTP requests, and removes its process/data afterward.
 Isolation: All provider, database, and Reva configuration is removed before private test settings are supplied.
 """
-from datetime import datetime, timedelta, timezone
 import io
 import json
 import os
@@ -80,12 +79,11 @@ def main():
                 status, raw = request("GET", "/v1/providers")
                 assert status == 200, (status, raw)
                 configuration = json.loads(raw)
-                assert set(configuration) == {"gemini", "transcription", "booking", "liveCallsEnabled"}
-                for name in ("gemini", "transcription", "booking"):
+                assert set(configuration) == {"gemini", "transcription"}
+                for name in ("gemini", "transcription"):
                     assert set(configuration[name]) == {"configured", "model"}
                     assert configuration[name]["configured"] is False
                     assert isinstance(configuration[name]["model"], str) and configuration[name]["model"]
-                assert configuration["liveCallsEnabled"] is False
                 assert token.encode() not in raw
 
                 # --- Build valid synthetic inputs so configuration gates are tested deliberately ---
@@ -94,12 +92,6 @@ def main():
                                           "goal": "Organize discussion questions", "questions": []},
                                "records": [{"id": "synthetic-record", "title": "Synthetic source", "date": "2026-09-12",
                                             "text": "Fictional source for a disabled-provider test.", "summary": "Fictional source", "version": 1}]}
-                future = datetime.now(timezone.utc) + timedelta(days=7)
-                call = {"requestID": "synthetic-call", "clinic": "Fictional clinic", "phone": "+12025550100",
-                        "reason": "Disabled-provider smoke only; no call is made", "patientName": "Synthetic Patient",
-                        "earliest": future.isoformat(timespec="seconds").replace("+00:00", "Z"),
-                        "latest": (future + timedelta(days=1)).isoformat(timespec="seconds").replace("+00:00", "Z"),
-                        "timeZone": "UTC", "preferences": "No real call", "consent": True}
                 audio = io.BytesIO()
                 with wave.open(audio, "wb") as wav:
                     wav.setnchannels(1)
@@ -108,24 +100,27 @@ def main():
                     wav.writeframes(b"\x00\x00" * 80)
                 audio_headers = {"Content-Type": "audio/wav", "X-Filename": "Synthetic silence.wav"}
                 posts = [("/v1/ai/summarize", summary, {}), ("/v1/ai/prepare", preparation, {}),
-                         ("/v1/audio/transcribe", audio.getvalue(), audio_headers), ("/v1/booking/call", call, {})]
+                         ("/v1/audio/transcribe", audio.getvalue(), audio_headers)]
 
-                # --- Require authentication consistently across all six provider routes ---
-                for method, path, body, extra in [("GET", "/v1/providers", None, {}),
-                                                   ("GET", "/v1/booking/call/synthetic-call", None, {})] + [
+                # --- Require authentication consistently across all four provider routes ---
+                for method, path, body, extra in [("GET", "/v1/providers", None, {})] + [
                                                        ("POST", path, body, extra) for path, body, extra in posts]:
                     status, _ = request(method, path, body, authorized=False, extra_headers=extra)
                     assert status == 401, f"Unauthenticated {method} {path}: expected 401, got {status}"
 
-                # --- Unconfigured operations must return safe errors without creating call intent ---
+                # --- Unconfigured operations must return safe errors ---
                 for path, body, extra in posts:
                     status, raw = request("POST", path, body, extra_headers=extra)
                     assert status == 503, f"Unconfigured POST {path}: expected 503, got {status}: {raw!r}"
                     error = json.loads(raw)
                     assert error["error"] is True and isinstance(error["reason"], str) and error["reason"]
                     assert token.encode() not in raw
-                assert not (data_directory / "voice-call-receipts").exists(), "Disabled call created a receipt unexpectedly"
-                print("PASS: real HTTP provider status, all six route auth checks, and four unconfigured 503 responses; no provider credentials or outbound calls.")
+                # Retired calling endpoints must remain absent, even for authenticated requests.
+                for method, path, body in [("POST", "/v1/booking/call", {}),
+                                           ("GET", "/v1/booking/call/synthetic-call", None)]:
+                    status, _ = request(method, path, body)
+                    assert status == 404, f"Retired endpoint is still registered: {method} {path}"
+                print("PASS: real HTTP provider status, four route auth checks, three unconfigured 503 responses, and retired calling routes return 404; no provider credentials.")
             # --- Preserve local diagnostics, then stop only the owned server ---
             except BaseException:
                 log.flush()

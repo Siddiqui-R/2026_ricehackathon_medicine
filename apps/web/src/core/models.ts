@@ -91,6 +91,7 @@ export interface Visit {
   status: string;
   report?: VisitReport | null;
 }
+// Legacy snapshot data only; calling and booking actions are no longer available.
 export interface BookingRequest {
   id: string;
   visitID: string;
@@ -130,6 +131,9 @@ export interface VisitRecording {
   isSample: boolean;
   status: string;
   transcriptionModel?: string | null;
+  aiSummary?: string | null;
+  aiSummaryModel?: string | null;
+  aiSummaryGeneratedAt?: string | null;
 }
 export interface AppSnapshot {
   schemaVersion: number;
@@ -152,8 +156,6 @@ export interface ProviderCapability {
 export interface ProviderStatus {
   gemini: ProviderCapability;
   transcription: ProviderCapability;
-  booking: ProviderCapability;
-  liveCallsEnabled: boolean;
 }
 export interface AISummary {
   summary: string;
@@ -169,22 +171,4 @@ export interface AudioTranscription {
   text: string;
   segments: TranscriptSegment[];
   model: string;
-}
-export interface LiveCallResult {
-  conversationID: string;
-  status: string;
-  provider: string;
-  transcript?: string | null;
-}
-export interface LiveCallInput {
-  requestID: string;
-  clinic: string;
-  phone: string;
-  reason: string;
-  earliest: string;
-  latest: string;
-  timeZone: string;
-  preferences: string;
-  patientName: string;
-  consent: boolean;
 }

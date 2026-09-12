@@ -1,6 +1,6 @@
 # Reva — original planning proposal (historical)
 
-Preserved for decision history. This proposal predates the working native/browser MVP and the account/Tiger scope extension. It is not the current implementation contract. Use [the current project specification](reva-stack-spec.md) for active requirements, implemented technology, and verification status. Provider availability, prices and commercial terms below are historical research claims and have not been revalidated by the specification refresh.
+Preserved for decision history. This proposal predates the working native/browser MVP and the account/Tiger scope extension. It is not the current implementation contract. Appointment calling was subsequently removed at the user’s request; the record/transcribe/summarize appointment flow remains in scope. Use [the current project specification](reva-stack-spec.md) for active requirements, implemented technology, and verification status. Provider availability, prices and commercial terms below are historical research claims and have not been revalidated by the specification refresh.
 
 **Product:** Reva · **Domain:** revamed.health · **Planning date:** September 12, 2026  
 **Status:** Proposed architecture for review. This document authorizes no implementation, provisioning, calls, purchases, or deployment.

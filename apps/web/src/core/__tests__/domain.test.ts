@@ -13,7 +13,7 @@ import {
   selectedRecords,
   validateSnapshot,
 } from '../domain.ts';
-import { confirmBooking, reconcileMemory, upsertRecord } from '../mutations.ts';
+import { reconcileMemory, upsertRecord } from '../mutations.ts';
 import { sample, seed } from './fixtures.ts';
 
 // MARK: - Golden signatures are also asserted by native FixtureEvidenceTests on this same seed.
@@ -165,7 +165,7 @@ describe('durable domain edits', () => {
     invalid.records.push(invalid.records[0]);
     expect(() => validateSnapshot(invalid)).toThrow('records.id');
   });
-  it('never turns a provider call result into a confirmed appointment', () => {
+  it('preserves legacy booking history as inert snapshot data', () => {
     const data = seed(),
       visit = data.visits[0];
     data.bookings = [
@@ -185,7 +185,7 @@ describe('durable domain edits', () => {
         isLive: true,
       },
     ];
-    expect(() => confirmBooking('live', data)).toThrow('simulated');
+    expect(validateSnapshot(structuredClone(data))).toEqual(data);
     expect(data.bookings[0].confirmedVisitID).toBeUndefined();
   });
 });

@@ -33,7 +33,7 @@ These are source ownership boundaries across two interfaces and one Swift server
 | App state | `State/AppStore.swift` and `AppStore+*.swift` | Own observable state; publish mutations after successful persistence. |
 | Provider operations | `AppStore+AI`, `+Transcription`, `+LiveCalls`, `+Providers` | Keep each operation's validation, concurrency checks and effects together. |
 | Domain and wire values | `Core/Models`, `SymptomEntry`, `ProviderContracts` | Define persisted/source identities and transport values. |
-| Pure rules | `Core/ReportEngine`, `BookingEngine` | Source selection/citations and simulated booking rules. |
+| Pure rules | `Core/ReportEngine` | Source selection, citations and transcript-backed summary rules. |
 | IO boundaries | `LocalRepository`, `ServerClient`, `ProviderClient`, `Device/*` | Files, HTTP, permissions and platform resources. |
 | Server | `server/Sources/RevaServer` | Route contracts, authenticated owner storage, deadlines and separate provider adapters. |
 | Browser screens | `apps/web/src/features/records`, `profile`, `visits` | Render shared state and collect input; delegate durable edits and connected requests. |
@@ -66,7 +66,7 @@ The header form also applies to TypeScript, TSX, and JavaScript modules; CSS use
 2. **Use direct control flow.** Prefer guards and explicit states over deeply nested branches. Use descriptive names, the smallest useful visibility, immutable values where possible and one statement per line.
 3. **Check boundaries.** Validate untrusted input, decoded provider output, source IDs, timestamps and revisions before publishing state. Surface recoverable errors explicitly. Document deliberately ignored failures and preserve original user data.
 4. **Bound work and own cancellation.** Apply existing byte/page/text limits and HTTP/database deadlines. Lifecycle tasks must have a named owner and explicit stop/cancel conditions. Swift concurrency deadlines remain cooperative: underlying work must honor cancellation.
-5. **Make effects visible.** Keep file/network/permission effects at their documented boundary. Native AppStore and the browser store each own their local snapshot. Awaiting a provider result requires rechecking captured source state before applying it. Browser effects clean up subscriptions, workers, object URLs, and microphone tracks; stale asynchronous completions cannot overwrite a newer attempt. Real-call retries must retain durable request identity.
+5. **Make effects visible.** Keep file/network/permission effects at their documented boundary. Native AppStore and the browser store each own their local snapshot. Awaiting a provider result requires rechecking captured source state before applying it. Browser effects clean up subscriptions, workers, object URLs, and microphone tracks; stale asynchronous completions cannot overwrite a newer attempt. Recording retries must retain original audio and stable identity.
 6. **Keep comments useful.** Explain the purpose, invariant, failure handling or reason for a limit. Public/shared boundary changes require a contract update and caller review. Do not describe generated transcripts or OCR as already reviewed.
 7. **Verify the affected behavior.** Run the formatter and structure check, relevant tests, a native build for moved SwiftUI files, and browser typechecking/build for browser changes. Tests should exercise meaningful outcomes and failures: persistence conflicts, source accuracy, cancellation, identity changes, and malformed responses. Preserve review evidence and commit checkpoints.
 

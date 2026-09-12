@@ -86,7 +86,7 @@ class Diagram(Flowable):
             box(268,108,248,62,"Swift API server", "URLSession -> HTTPS -> Vapor\nPrivate bearer identity and validated routes")
             arrow(392,108,392,84)
             box(0,12,160,72,"Gemini", "Document summaries\nVisit overview and selection", GOLD)
-            box(178,12,160,72,"Whisper and calling", "OpenAI transcription\nElevenLabs + Twilio", GOLD)
+            box(178,12,160,72,"Appointment audio", "Whisper transcription\nGemini summary", GOLD)
             box(356,12,160,72,"Server storage", "Local owner files OR\nPostgreSQL via PostgresNIO", GOLD)
             c.setStrokeColor(TEAL); c.line(80,95,436,95); c.line(392,108,392,95)
             arrow(80,95,80,84); arrow(258,95,258,84)
@@ -144,7 +144,7 @@ p=page("Working as a three person team")
 b(p,"Separation is by folders and focused AppStore extensions inside one iPhone target. The suggested feature branches below do not exist yet. Create them from the same agreed main checkpoint when the team is ready. One teammate also acts as integration captain; that is a coordination role, not a fourth developer.")
 t(p,["Owner","Primary files","Suggested branch"],[
  ["1  Records and preparation","Features/Records and Features/Preparation; AppStore +Records, +Symptoms, +Visits; document import, scan and PDF adapters.","mvp/records-preparation"],
- ["2  Booking and visit memory","Features/Visits; AppStore +Bookings and +Recordings; Device/AudioServices.swift.","mvp/visit-memory"],
+ ["2  Appointment memory","Features/Visits; AppStore +Recordings and +Transcription; Device/AudioServices.swift.","mvp/visit-memory"],
  ["3  Server and providers","server/**: HTTP routes, Gemini/voice adapters, local/Postgres stores, migrations, server tests and setup.","mvp/server-providers"],
  ["Integration captain","Core shared models/DTOs, shared UI/theme, Medical profile, root navigation, provider/sync state, scripts, project file and contracts.","Integrates into main"],
 ],[109,278,129])
@@ -166,7 +166,7 @@ t(p,["Object","Purpose and connection"],[
  ["PatientProfile","Persistent identity, allergies, medications, conditions, procedures and care notes. Quick-reference information; currently excluded from the records-only preparation input. Profile name is used in configured call requests."],
  ["MedicalRecord + SymptomEntry","Searchable source text, summary, original file reference, status and version. Optional structured symptom fields retain occurrence time/zone and the user's observations."],
  ["Visit + VisitReport","Appointment goal, notes, questions and pins; generated sections reference source record IDs, versions and original pages where known."],
- ["VisitRecording + BookingRequest","Transcript segments/audio and saved-memory backlinks; separate booking state, stable call request identity and provider outcome."],
+ ["VisitRecording","Original audio, timestamped transcript, separate personal notes, derived AI summary and saved-memory backlinks."],
 ],[150,366])
 b(p,"AppStore writes a complete AppSnapshot through LocalRepository using an atomic JSON replacement and one backup. Original files are separate. Record changes alter source versions/signatures, so old briefs become stale; user questions and notes remain authoritative. Late AI responses cannot silently replace edits made while the request was running.")
 
@@ -178,12 +178,12 @@ t(p,["Feature","What a user can do","Status"],[
  ["Symptom log","Create/edit dated User symptom entries with optional severity, duration, details, triggers and what helped.","Local"],
  ["Visit preparation","Match relevant records, pin sources, keep personal questions, regenerate stale briefs, open cited pages and share a PDF.","Local; Gemini mode needs setup"],
  ["Audio and visit memory","Record with consent, pause outside foreground, play saved audio, correct transcript words and retain a linked memory.","Native flow; live speech needs setup"],
- ["Clinic booking","Run a labeled simulation, or review/consent to a configured outbound call and check its status/transcript.","Simulation local; live calls need setup"],
+ ["Appointment recording","Get the doctor’s and everyone present’s consent, save original audio, transcribe and summarize.","Capture local; AI needs provider setup"],
  ["Server sync","Explicitly push/pull a snapshot and its attachments, with owner identity and revision conflict handling.","Local server verified; hosting needed remotely"],
 ],[112,296,108])
 h(p,"Two workflows to keep distinct")
 b(p,"**Recording:** consent -> capture original audio -> explicit transcription -> Whisper segments with relative timestamps -> review/correct -> saved memory record. The fictional sample transcript is separate and is never attached to new microphone audio. Whisper output uses generic speaker labels; diarization is not implemented.")
-b(p,"**Calling:** review the clinic, number, reason and window -> explicit consent -> persist call intent on the server -> ElevenLabs agent dials through its imported Twilio number -> manually check status and transcript. Stable request IDs and durable receipts prevent automatic redial after an uncertain outcome. Call completion does not confirm an appointment; the user updates the visit after clinic confirmation.")
+b(p,"**Appointment recording:** get the doctor’s and everyone present’s consent -> record/save original audio -> transcribe with relative timestamps -> review/correct words -> generate a separate Gemini summary -> save transcript-backed memory. Personal notes remain separate; source changes invalidate AI output.")
 h(p,"Outside the current MVP")
 b(p,"No MyChart connection, browser wrapper, custom password encryption, local Whisper integration or Google Speech-to-Text adapter is built. OCR and AI output remain reviewable; perfect extraction is not promised. Production deployment and medical-data compliance have not been established.")
 
@@ -194,15 +194,14 @@ t(p,["Technology","Role in this codebase"],[
  ["Vapor 4.122.1","Swift HTTP server and authenticated JSON/binary routes. URLSession is the app's transport. No third-party iPhone packages are required."],
  ["PostgresNIO 1.33.1","Optional PostgreSQL adapter: JSONB snapshots, BYTEA attachments and mutation audit. Local owner-file storage is the default. Live Tiger testing is pending."],
  ["Gemini Developer API","Default model in code: gemini-3.8-flash. Structured generateContent responses for summaries and preparation. GEMINI_MODEL can select an available model."],
- ["OpenAI and ElevenLabs","whisper-1 audio transcription; ElevenLabs Twilio outbound call and conversation polling APIs. Provider HTTP requests originate only from the server."],
+ ["Appointment AI","whisper-1 audio transcription; Gemini summarizes the full appointment transcript. Provider HTTP requests originate only from the server."],
 ],[152,364])
 h(p,"Native to server route map")
 t(p,["Route","Input and result"],[
- ["GET /v1/providers","Reports configured services/models and live-call flag; not a credential test."],
+ ["GET /v1/providers","Reports Gemini and transcription configuration/models; not a credential test."],
  ["POST /v1/ai/summarize","Record ID, title and text -> summary and model."],
  ["POST /v1/ai/prepare","Visit goals/questions + candidate records -> overview, questions, source IDs and model."],
  ["POST /v1/audio/transcribe","Raw audio + MIME/filename headers -> text, timestamped segments and model."],
- ["POST /v1/booking/call\nGET /v1/booking/call/:id","Reviewed stable request -> provider conversation/status; poll by local request ID."],
  ["GET/PUT/DELETE /v1/state\nPUT/GET/DELETE /v1/attachments/:id","Versioned snapshot exchange and separate original-file transfer."],
 ],[221,295])
 b(p,"HTTPS is required except explicit loopback development. Private REVA_TOKENS enables paid provider access; the public demo token cannot do so. Provider keys stay server-side and the app's access token stays in memory for the session. Snapshot commits and attachment transfers are separate transactions, so a failed sync may leave already-copied files.")
@@ -216,7 +215,6 @@ t(p,["Connection","Configuration needed"],[
  ["Private service access","REVA_TOKENS mapping and the matching app access token"],
  ["Gemini","GEMINI_API_KEY; optional GEMINI_MODEL"],
  ["Whisper","OPENAI_API_KEY; OPENAI_TRANSCRIPTION_MODEL=whisper-1"],
- ["Calling","ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_PHONE_NUMBER_ID, REVA_ENABLE_LIVE_CALLS; configured agent and imported Twilio number"],
  ["PostgreSQL and receipts","REVA_STORAGE=postgres + DATABASE_URL. Keep REVA_DATA_DIRECTORY durable for call receipts even with PostgreSQL."],
 ],[129,387])
 b(p,"Follow .env.example and server/.env.example. Root .env is empty and ignored. The launcher reads it without shell evaluation; exported values win. Keep keys out of commits. Discovery reports configuration, not credential validity.")
@@ -229,7 +227,7 @@ p.append(("small", "Source map at baseline d0af1df: docs/architecture.md; docs/t
 
 # --- Markdown equivalents of the native PDF diagrams ---
 DIAGRAM_MD = {
- "stack": "```mermaid\nflowchart TD\n  UI[SwiftUI iPhone app] --> LOCAL[AppStore and local JSON files]\n  UI --> API[URLSession to Vapor server]\n  API --> GEMINI[Gemini summaries and preparation]\n  API --> VOICE[Whisper and ElevenLabs with Twilio]\n  API --> STORE[Local files or PostgresNIO to PostgreSQL]\n```",
+ "stack": "```mermaid\nflowchart TD\n  UI[SwiftUI iPhone app] --> LOCAL[AppStore and local JSON files]\n  UI --> API[URLSession to Vapor server]\n  API --> GEMINI[Gemini record and appointment summaries / preparation]\n  API --> VOICE[Whisper appointment transcription]\n  API --> STORE[Local files or PostgresNIO to PostgreSQL]\n```",
  "worktrees": "```mermaid\nflowchart TD\n  G[Shared Git history] --> MAIN[main at d0af1df]\n  G --> IMPLEMENT[review implementation at eb2ec3a]\n  G --> REVIEW[review final at d9ec87c]\n```",
  "memory": "```mermaid\nflowchart TD\n  DOC[Documents and OCR] --> RECORD[Versioned MedicalRecords]\n  SYM[Structured symptom entries] --> RECORD\n  AUDIO[Transcript memories] --> RECORD\n  RECORD --> PREP[Relevant selection and exact quotes]\n  PREP --> PDF[Visit report and PDF]\n```",
 }

@@ -6,7 +6,6 @@
 //               debounced push after each local commit, and a cleared session plus redirect on HTTP 401.
 import type {
   AppSnapshot,
-  BookingRequest,
   MedicalRecord,
   ProviderStatus,
   ServerState,
@@ -17,11 +16,19 @@ import {
   currentSummary,
   generateReport,
   localExcerpt,
+  nowISO,
   reportSignature,
   uid,
   validateSnapshot,
 } from './domain.ts';
-import { reconcileMemory, upsertRecord, validateBooking } from './mutations.ts';
+import {
+  clearRecordingSummary,
+  createMemoryRecord,
+  invalidateChangedRecordingSummaries,
+  reconcileMemory,
+  recordingTranscript,
+  upsertRecord,
+} from './mutations.ts';
 import { APIError, RevaAPI } from './api.ts';
 import { AuthAPI, type AuthTransport } from './auth.ts';
 import { emptyPersonalSnapshot } from './account.ts';
@@ -54,8 +61,6 @@ export type APITransport = Pick<
   | 'summarize'
   | 'prepare'
   | 'transcribe'
-  | 'startCall'
-  | 'callStatus'
 >;
 // Demo mode keeps the public local token and manual sync; account mode binds one signed-in session.
 export interface DemoOptions {
@@ -184,8 +189,10 @@ export class RevaStore {
   ): Promise<void> {
     try {
       await this.queue(async () => {
-        const draft = structuredClone(this.requiredSnapshot());
+        const previous = this.requiredSnapshot();
+        const draft = structuredClone(previous);
         await change(draft);
+        invalidateChangedRecordingSummaries(previous, draft);
         this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision, attachments));
       });
       this.scheduleSync();
@@ -209,7 +216,7 @@ export class RevaStore {
     }
   }
   private assertIdentity(identity: number): void {
-    if (identity !== this.identity)
+    if (identity !== this.identity || this.sessionEnded)
       throw new Error('The workspace token changed during this request. Its result was not applied.');
   }
 
@@ -224,7 +231,6 @@ export class RevaStore {
       const existing = await this.persistence.load();
       this.adopt(existing ?? (await this.persistence.commit(await this.persistence.seed(), 0)));
       await this.refreshDemoLabels();
-      await this.recoverInterruptedCalls();
     } catch (error) {
       this.reportError(error);
     } finally {
@@ -252,21 +258,6 @@ export class RevaStore {
           tags: record.tags.filter((tag) => tag !== 'needs review'),
         },
         record.version,
-      );
-    }
-  }
-  private async recoverInterruptedCalls(): Promise<void> {
-    if (
-      this.state.snapshot?.bookings.some((request) =>
-        request.isLive ? request.status === 'starting' : ['queued', 'calling'].includes(request.status),
-      )
-    ) {
-      await this.edit((draft) =>
-        draft.bookings.forEach((request) => {
-          if (request.isLive && request.status === 'starting') request.status = 'unknown';
-          else if (!request.isLive && ['queued', 'calling'].includes(request.status))
-            request.status = 'needsUser';
-        }),
       );
     }
   }
@@ -332,13 +323,7 @@ export class RevaStore {
     } catch (error) {
       this.reportError(error);
     }
-    try {
-      if (this.state.snapshot) await this.recoverInterruptedCalls();
-    } catch {
-      /* Chunk: The failed status write was already reported; durable intent still prevents a replay. */
-    } finally {
-      this.publish({ loading: false });
-    }
+    this.publish({ loading: false });
   }
   private async reconcileWithServer(existing: StoredSnapshot | null): Promise<void> {
     const account = this.account!,
@@ -547,8 +532,22 @@ export class RevaStore {
       if (index < 0) draft.visits.push(saved);
       else draft.visits[index] = saved;
     });
-  saveMemory = (recordingID: string, correctedSegmentTexts?: Record<string, string>): Promise<void> =>
-    this.edit((draft) => reconcileMemory(draft, recordingID, correctedSegmentTexts));
+  saveMemory = (
+    recordingID: string,
+    correctedSegmentTexts?: Record<string, string>,
+    expectedTranscript?: string,
+  ): Promise<void> =>
+    this.edit((draft) => {
+      if (
+        expectedTranscript !== undefined &&
+        JSON.stringify(draft.recordings.find((recording) => recording.id === recordingID)?.segments) !==
+          expectedTranscript
+      )
+        throw new Error(
+          'The transcript changed while this editor was open. Reopen it before correcting the words.',
+        );
+      reconcileMemory(draft, recordingID, correctedSegmentTexts);
+    });
 
   // MARK: - Summary publication checks the captured source before applying provider text.
   summarizeRecord = (id: string): Promise<void> =>
@@ -716,6 +715,8 @@ export class RevaStore {
           JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
         )
           throw new Error('Audio or transcript changed during transcription. Your edits were kept.');
+        if (JSON.stringify(latest.segments) !== JSON.stringify(result.segments))
+          clearRecordingSummary(latest);
         latest.segments = result.segments;
         latest.transcriptionModel = result.model;
         latest.status = 'ready';
@@ -729,92 +730,71 @@ export class RevaStore {
       this.notify('Transcript saved. Review the words and speakers against the original recording.');
     });
 
-  // MARK: - A durable unique intent precedes an explicitly reviewed outbound call.
-  startCall = (request: BookingRequest): Promise<void> =>
+  // MARK: - Appointment summaries use only the exact saved transcript and reject stale or canceled work.
+  summarizeRecording = (id: string, signal?: AbortSignal): Promise<void> =>
     this.action(async () => {
-      validateBooking(request);
-      if (!this.state.providers?.booking.configured || !this.state.providers.liveCallsEnabled)
-        throw new Error('Live appointment calls are not enabled on this server.');
-      if (!/^\+[1-9]\d{7,14}$/.test(request.phone))
-        throw new Error('Use an international clinic phone number, such as +13125550123.');
-      const identity = this.identity,
-        api = this.apiFactory(this.state.token),
-        patientName = this.requiredSnapshot().profile.name;
-      await this.edit((draft) => {
-        if (draft.bookings.some((existing) => existing.id === request.id))
-          throw new Error(
-            'This call request already exists. Check its status instead of starting another call.',
-          );
-        if (!draft.visits.some((visit) => visit.id === request.visitID))
-          throw new Error('This visit no longer exists.');
-        draft.bookings.push({
-          ...structuredClone(request),
-          isLive: true,
-          status: 'starting',
-          confirmedVisitID: undefined,
-          providerConversationID: undefined,
-          providerTranscript: undefined,
-        });
-      });
-      try {
-        this.assertIdentity(identity);
-        const result = await api.startCall({
-          requestID: request.id,
-          clinic: request.clinic,
-          phone: request.phone,
-          reason: request.reason,
-          earliest: request.earliest,
-          latest: request.latest,
-          timeZone: request.timeZone,
-          preferences: request.preferences,
-          patientName,
-          consent: true,
-        });
-        this.assertIdentity(identity);
-        await this.edit((draft) => {
-          this.assertIdentity(identity);
-          const saved = draft.bookings.find((item) => item.id === request.id);
-          if (saved) {
-            saved.providerConversationID = result.conversationID;
-            saved.status = result.status;
-          }
-        });
-        this.notify(
-          'Call request accepted. Check its status and review the outcome; no appointment has been confirmed.',
-        );
-      } catch (error) {
-        try {
-          await this.edit((draft) => {
-            const saved = draft.bookings.find((item) => item.id === request.id);
-            if (saved) saved.status = 'unknown';
-          });
-        } catch {
-          /* Chunk: If the status write fails, durable starting intent still prevents replay. */
-        }
-        throw error;
-      }
-    });
-  refreshCall = (requestID: string): Promise<void> =>
-    this.action(async () => {
-      if (!this.requiredSnapshot().bookings.some((request) => request.id === requestID && request.isLive))
-        throw new Error('Choose an existing live call request to check.');
-      const identity = this.identity,
-        result = await this.apiFactory(this.state.token).callStatus(requestID);
+      const snapshot = this.requiredSnapshot();
+      const original = structuredClone(snapshot.recordings.find((recording) => recording.id === id));
+      if (!original || !original.segments.length || original.segments.some((segment) => !segment.text.trim()))
+        throw new Error('Transcribe this appointment before summarizing it.');
+      if (!this.state.providers?.gemini.configured)
+        throw new Error('Check a server with configured AI before summarizing this appointment.');
+      const checkCancellation = () => {
+        if (signal?.aborted)
+          throw new DOMException('Summarization canceled. Your saved audio was kept.', 'AbortError');
+      };
+      const identity = this.identity;
+      const source: MedicalRecord = {
+        id: original.id,
+        title: original.title,
+        text: recordingTranscript(original),
+        summary: '',
+        notes: '',
+        kind: 'Recording',
+        provider: '',
+        date: original.createdAt,
+        uploadedAt: original.createdAt,
+        pageCount: 1,
+        tags: [],
+        status: 'ready',
+        isDemo: original.isSample,
+        version: 1,
+      };
+      checkCancellation();
+      const result = await this.apiFactory(this.state.token).summarize(source, signal);
+      checkCancellation();
       this.assertIdentity(identity);
+      if (!result.summary.trim() || !result.model.trim())
+        throw new Error('The AI returned no usable summary. Your previous summary was kept.');
       await this.edit((draft) => {
+        checkCancellation();
         this.assertIdentity(identity);
-        const request = draft.bookings.find((item) => item.id === requestID);
-        if (request) {
-          request.providerConversationID = result.conversationID;
-          request.status = result.status;
-          request.providerTranscript = result.transcript;
-        }
+        const latest = draft.recordings.find((recording) => recording.id === id);
+        if (
+          !latest ||
+          latest.visitID !== original.visitID ||
+          latest.createdAt !== original.createdAt ||
+          latest.title !== original.title ||
+          latest.audioFilename !== original.audioFilename ||
+          latest.duration !== original.duration ||
+          latest.isSample !== original.isSample ||
+          JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+        )
+          throw new Error(
+            'The transcript or recording changed during summarization. Your edits were kept; summarize again.',
+          );
+        latest.aiSummary = result.summary;
+        latest.aiSummaryModel = result.model;
+        latest.aiSummaryGeneratedAt = nowISO();
+        const index = draft.records.findIndex(
+          (record) => record.id === `memory-${id}` || record.sourceRecordingID === id,
+        );
+        if (index >= 0) draft.records[index] = createMemoryRecord(latest, draft, true);
       });
-      this.notify('Call status updated. Review the outcome; no appointment has been confirmed.');
+      this.notify('Appointment summary saved. Review it against the transcript and original audio.');
     });
 
-  // MARK: - Discovery cannot silently advance a revision that has already become stale.
-  // Health, providers and the current server revision (or the empty-state tombstone revision) in one pass.
+  // MARK: - Revision-aware discovery and explicit synchronization.
   private async discover(api: APITransport): Promise<Discovery> {
     const health = await api.health(),
       providers = await api.providers();

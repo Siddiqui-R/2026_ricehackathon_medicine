@@ -601,7 +601,7 @@ progress {
   height: 7px;
 }
 
-/* MARK: - Appointment workspace separates preparation from supporting booking and recording tools */
+/* MARK: - Appointment workspace separates preparation from recording and transcript tools */
 .visits-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -681,37 +681,7 @@ progress {
 .report-print-heading {
   margin-bottom: 20px;
 }
-.booking-request {
-  padding: 17px 0;
-  border-bottom: 1px solid var(--line);
-}
-.booking-request:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-.booking-request h3 {
-  font-size: 14px;
-}
-.booking-request .row {
-  margin-top: 12px;
-}
-.review-details {
-  display: grid;
-  gap: 10px;
-  padding: 17px;
-  background: var(--soft);
-  border-radius: 9px;
-  overflow-wrap: anywhere;
-}
-.review-details dt {
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 600;
-}
-.review-details dd {
-  margin: 0;
-  font-size: 13px;
-}
+
 .recording-controls {
   display: flex;
   flex-wrap: wrap;

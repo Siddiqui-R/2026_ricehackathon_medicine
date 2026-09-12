@@ -1,4 +1,4 @@
-// Purpose: Exercise local evidence selection, source fidelity, persistence, dates, and booking invariants.
+// Purpose: Exercise local evidence selection, source fidelity, persistence, dates, and legacy snapshot compatibility.
 // Inputs: Checked-in synthetic snapshot data and explicitly constructed invalid or revised values.
 // Outputs: XCTest assertions for domain behavior and lossless local data handling.
 // Side effects: Persistence tests write only to a unique temporary directory and remove it afterward.
@@ -81,25 +81,20 @@ final class DomainTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(repo.load()).recovered)
         XCTAssertEqual(try repo.load()?.snapshot.records[0].notes, try fixture().records[0].notes)
     }
-    // MARK: - Booking confirmation and snapshot validation
-
-    func testBookingConfirmationIsIdempotentAndBounded() throws {
+    // MARK: - Legacy snapshot compatibility and validation
+    func testLegacyBookingDataRoundTripsWithoutChangingVisits() throws {
         var data = try fixture()
-        let visit = data.visits[0]
-        let request = BookingRequest(
-            visitID: visit.id, clinic: "Demo clinic", phone: "7135550100", reason: "Follow-up",
-            earliest: visit.date, latest: visit.date, timeZone: visit.timeZone, preferences: "",
-            status: "proposed")
-        try BookingEngine.validate(request)
-        data.bookings.append(request)
-        let count = data.visits.count
-        try BookingEngine.confirm(id: request.id, snapshot: &data)
-        try BookingEngine.confirm(id: request.id, snapshot: &data)
-        XCTAssertEqual(data.visits.count, count)
-        XCTAssertEqual(data.bookings[0].confirmedVisitID, visit.id)
-        var invalid = request
-        invalid.latest = "2000-01-01T00:00:00Z"
-        XCTAssertThrowsError(try BookingEngine.validate(invalid))
+        let visits = data.visits
+        data.bookings.append(
+            BookingRequest(
+                visitID: visits[0].id, clinic: "Archived clinic", phone: "7135550100",
+                reason: "Archived request",
+                earliest: visits[0].date, latest: visits[0].date, timeZone: visits[0].timeZone,
+                preferences: "", status: "queued"))
+        let restored = try JSONDecoder().decode(AppSnapshot.self, from: JSONEncoder().encode(data))
+        try restored.validate()
+        XCTAssertEqual(restored.bookings, data.bookings)
+        XCTAssertEqual(restored.visits, visits)
     }
     func testSnapshotRejectsDuplicateIDsAndUnsafeAttachments() throws {
         var data = try fixture()

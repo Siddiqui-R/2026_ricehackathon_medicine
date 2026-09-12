@@ -75,7 +75,7 @@ Because the token lives in `localStorage`, cross-site scripting is the threat to
 
 Inside `/app` the store runs in **account mode**: the session token is the workspace token (the Settings token field is not shown), records live in a **per-user IndexedDB database** named `reva-account-<16 hex of SHA-256(user id)>-v1` (the demo keeps `reva-workspace-v1`), and saves are pushed to the server automatically about **1.5 seconds** after the last local commit. On first login the store compares both sides: an empty server receives an empty personal snapshot built around the account (never the fictional demo); a server with data and an empty browser downloads the snapshot and its originals; when both hold data and this browser's remembered in-sync revision (`localStorage` key `reva.sync.v1.<user id>`) does not match the server, the local copy is kept, automatic pushes pause, and Settings shows "The server copy differs; pull to review it." Originals uploaded earlier in the same session (same filename and size) are not re-uploaded. Manual **Push to server** and **Pull from server** remain available; **Restore fictional demo** is demo-only. **Settings** also offers **Change password** and a typed-confirmation **Delete account**, which removes the server copy, every session and this browser's private database.
 
-Provider keys, models, agent/phone IDs, database settings, and private token mappings belong to the Swift server environment. Follow [server setup](../../server/README.md) and its [configuration example](../../server/.env.example). Paid providers require a private token mapping; live calls also require server enablement and final reviewed authorization in the UI. Checking configuration does not prove that a provider account works.
+Provider keys, models, database settings, and private token mappings belong to the Swift server environment. Follow [server setup](../../server/README.md) and its [configuration example](../../server/.env.example). Paid providers require an authenticated account or private workspace token. Checking configuration does not prove that a provider account works.
 
 **Push to server** uploads originals and then performs a revision-checked snapshot write. **Pull from server** downloads originals before replacing the active browser snapshot after confirmation. A conflict preserves local state and requires an explicit pull before another push; there is no automatic merge. The demo has no background sync; account mode adds the debounced automatic push described under **Accounts and sessions**. Attachment uploads and server snapshot writes are separate operations, so a failed push may leave copied originals. Browser pull publishes downloaded originals and state in one local transaction.
 
@@ -88,10 +88,15 @@ Provider keys, models, agent/phone IDs, database settings, and private token map
 | Symptom entries | Required symptom and occurrence time; optional severity, duration, details, triggers, and what helped. Entries retain time-zone context and participate in Records, search, source versions, and visit preparation. |
 | Medical Profile | Persistent allergies, medications, conditions, surgeries/implants, and care notes. This is quick-reference data; preparation currently reads Records, so profile edits do not rewrite sources or automatically add profile facts to a brief. |
 | Visits and preparation | Visit editing, goals/questions, pinned sources, local evidence with exact quotations/page links, stale-report detection, reviewable questions/notes, and report-only print/save-to-PDF. Configured Gemini can provide summaries and preparation. |
-| Booking | Clearly labeled local simulation, plus configurable ElevenLabs calling through the Swift server. Durable request identity and manual status refresh handle uncertain outcomes. Call completion does not confirm an appointment; the user reviews the outcome. |
 | Visit memory | Consent-gated microphone capture or audio upload, playback, configured transcription, transcript correction, and linked memory records. New audio starts without a fabricated transcript. |
 
-Local imports receive a reviewable excerpt. With connected AI enabled, saving a readable import or symptom entry also requests a configured summary after local saving; errors preserve the source. Transcription and calling use explicit connected actions. No provider account, paid request, real clinic call, or production deployment is established by installing the browser app.
+Local imports receive a reviewable excerpt. With connected AI enabled, saving a readable import or symptom entry also requests a configured summary after local saving; errors preserve the source. Transcription and appointment summaries use explicit connected actions. No provider account, paid request, or production deployment is established by installing the browser app.
+
+## Appointment recording
+
+Each appointment has **Record appointment → Transcribe → Summarize appointment**. Before recording or uploading audio, the user must confirm: “My doctor and everyone present agreed to recording.” The screen also says: “Get your doctor’s consent and permission from everyone present before recording.”
+
+Audio and its metadata are saved together in the active account or demo database. Transcription and summarization failures preserve the audio and existing saved content. AI summaries use only the full timestamped transcript, show their model and generation time, and ask the user to check the result against the transcript and audio. Changing transcript content invalidates its AI summary; changing personal notes does not. A saved memory keeps the entire transcript as its source, with the AI summary as a separate attributed summary when available. Existing snapshots retain legacy booking history as inert compatibility data; the application has no calling or booking-simulation controls or endpoints.
 
 ## Limits to keep visible
 
@@ -110,7 +115,7 @@ See [core compatibility](src/core/COMPATIBILITY.md) for timestamp/Unicode differ
 | `src/App.tsx`, `src/features/Dashboard.tsx`, `src/features/SettingsPage.tsx`, `src/features/AccountSettings.tsx` | Shell, navigation, summary dashboard, explicit connection controls, and account cards. |
 | `src/landing` | Public landing, `/login` and `/signup` forms and their shared accessible form pieces. |
 | `src/features/records`, `src/features/profile` | Source intake/review, symptoms, originals, and Medical Profile. |
-| `src/features/visits` | Visit editing/preparation, booking, recording lifecycle, transcripts, and memories. |
+| `src/features/visits` | Visit editing/preparation, consent-gated recording, transcripts, appointment summaries, and memories. |
 | `src/core` | Native-compatible values, validation, pure rules, versioned mutation queue, IndexedDB, API transport, the auth client (`auth.ts`), stored session (`session.ts`) and account-mode store logic. |
 | `src/components`, `src/styles` | Shared components, brand, responsive layout, and palette roles. |
 | `scripts`, `vite.config.ts` | Generated local assets, build/development configuration, and bounded built-preview proxy. |

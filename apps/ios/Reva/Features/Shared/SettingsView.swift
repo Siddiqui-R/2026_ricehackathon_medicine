@@ -34,15 +34,10 @@ struct SettingsView: View {
                     "Transcription",
                     value: store.providerStatus?.transcription.configured == true
                         ? store.providerStatus!.transcription.model : "Not configured")
-                LabeledContent(
-                    "Clinic calling",
-                    value: store.providerStatus?.booking.configured == true
-                        && store.providerStatus?.liveCallsEnabled == true
-                        ? "Available · review before calling" : "Simulation available")
                 Toggle("Use connected AI for records & briefs", isOn: $store.useConnectedAI).disabled(
                     store.providerStatus?.gemini.configured != true)
                 Text(
-                    "Enabling AI sends imported text and visit-preparation records to your configured server and Gemini. Transcription sends selected audio to the configured speech service. Real calling always has a separate review step. Provider keys stay on the server; this access token stays in memory for this session."
+                    "Summarizing an appointment sends its transcript to Gemini. Enabling AI sends imported text and visit-preparation records to your configured server and Gemini. Transcription sends selected audio to the configured speech service. Provider keys stay on the server; this access token stays in memory for this session."
                 ).font(.footnote).foregroundStyle(.secondary)
                 if store.isProviderBusy { ProgressView("Working with connected service…") }
             }

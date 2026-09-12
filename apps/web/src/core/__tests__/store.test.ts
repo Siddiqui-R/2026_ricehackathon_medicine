@@ -1,6 +1,6 @@
 // Purpose: Verify observable browser actions protect newer edits and require deliberate external effects.
 // Inputs: Fictional snapshots, controllable provider promises and injectable persistence failures.
-// Outputs: Assertions for durable publication, source races, CAS conflicts, atomic pull and call intent.
+// Outputs: Assertions for durable publication, source races, CAS conflicts, atomic pull and inert legacy booking data.
 // Side effects: Test memory only; no requests reach a network or paid provider.
 import { describe, expect, it, vi } from 'vitest';
 import type { AIPreparation, AISummary, AudioTranscription, BookingRequest } from '../models.ts';
@@ -100,14 +100,15 @@ describe('local state publication', () => {
     await store.resetDemo();
     expect(store.getState().snapshot!.profile.isDemo).toBe(true);
   });
-  it('marks interrupted live intent unknown on restart without starting another call', async () => {
-    const repository = new MemoryRepository(),
-      request = { ...callRequest(), isLive: true, status: 'starting' };
+  it('retains legacy booking history without recovery, calls or appointment changes', async () => {
+    const repository = new MemoryRepository();
+    const request = { ...callRequest(), isLive: true, status: 'starting' };
     repository.saved!.snapshot.bookings = [request];
-    const startCall = vi.fn(),
-      { store } = await ready(transport({ startCall }), repository);
-    expect(store.getState().snapshot!.bookings[0].status).toBe('unknown');
-    expect(startCall).not.toHaveBeenCalled();
+    const before = structuredClone(repository.saved!.snapshot);
+    const { store } = await ready(transport(), repository);
+    expect(store.getState().snapshot).toEqual(before);
+    expect('startCall' in store).toBe(false);
+    expect('refreshCall' in store).toBe(false);
   });
 });
 
@@ -366,52 +367,5 @@ describe('explicit server synchronization', () => {
       token: 'new-private-token',
     });
     expect(JSON.stringify(repository.saved)).not.toContain('new-private-token');
-  });
-});
-
-// MARK: - Live calls require configured explicit submission and persist intent before contacting a provider.
-describe('durable call intent', () => {
-  it('persists one intent before a failed call and leaves it unknown without retry or confirmation', async () => {
-    const repository = new MemoryRepository(),
-      startCall = vi.fn(async () => {
-        expect(repository.saved!.snapshot.bookings[0]).toMatchObject({
-          id: 'synthetic-call-id',
-          status: 'starting',
-          isLive: true,
-        });
-        throw new Error('Connection ended after dispatch');
-      });
-    const { store } = await ready(transport({ startCall }), repository);
-    await store.checkServer();
-    await expect(store.startCall(callRequest())).rejects.toThrow('Connection ended');
-    expect(store.getState().snapshot!.bookings[0]).toMatchObject({ status: 'unknown', isLive: true });
-    expect(store.getState().snapshot!.bookings[0].confirmedVisitID).toBeUndefined();
-    await expect(store.startCall(callRequest())).rejects.toThrow('already exists');
-    expect(startCall).toHaveBeenCalledTimes(1);
-  });
-  it('does not place a call if the durable intent cannot be saved', async () => {
-    const startCall = vi.fn(),
-      { store, repository } = await ready(transport({ startCall }));
-    await store.checkServer();
-    repository.failure = new Error('Storage full');
-    await expect(store.startCall(callRequest())).rejects.toThrow('Storage full');
-    expect(startCall).not.toHaveBeenCalled();
-  });
-  it('refreshes the existing ID without changing the visit or confirming an appointment', async () => {
-    const repository = new MemoryRepository(),
-      request = { ...callRequest(), isLive: true, status: 'unknown' };
-    repository.saved!.snapshot.bookings = [request];
-    const callStatus = vi.fn(async () => ({
-      conversationID: 'mock-conversation',
-      status: 'done',
-      provider: 'mock',
-      transcript: 'Fictional outcome for review',
-    }));
-    const { store } = await ready(transport({ callStatus }), repository),
-      visit = structuredClone(store.getState().snapshot!.visits[0]);
-    await store.refreshCall(request.id);
-    expect(callStatus).toHaveBeenCalledWith(request.id);
-    expect(store.getState().snapshot!.visits[0]).toEqual(visit);
-    expect(store.getState().snapshot!.bookings[0].confirmedVisitID).toBeUndefined();
   });
 });

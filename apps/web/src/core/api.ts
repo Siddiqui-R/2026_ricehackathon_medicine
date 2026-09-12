@@ -1,5 +1,5 @@
 // Purpose: Exchange bounded native-compatible payloads with the Swift API at one configured origin.
-// Inputs: A bearer token (static workspace or account session), reviewed snapshots, sources and call requests.
+// Inputs: A bearer token (static workspace or account session), reviewed snapshots, sources and appointment audio.
 // Outputs: Validated responses or explicit HTTP, empty-state and conflict failures with the server's reason.
 // Side effects: HTTP to the same origin or VITE_REVA_API_ORIGIN only; never stores credentials or merges.
 import type {
@@ -7,8 +7,6 @@ import type {
   AIPreparation,
   AppSnapshot,
   AudioTranscription,
-  LiveCallInput,
-  LiveCallResult,
   MedicalRecord,
   ProviderStatus,
   ServerState,
@@ -217,10 +215,14 @@ export class RevaAPI {
     headers: Record<string, string> = {},
     limit = MAX_SNAPSHOT_BYTES,
     timeout = 25_000,
+    signal?: AbortSignal,
   ) {
     const controller = new AbortController(),
       timer = setTimeout(() => controller.abort(), timeout);
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
     try {
+      if (signal?.aborted) throw new DOMException('The request was canceled.', 'AbortError');
       const response = await this.fetcher(apiURL(path), {
         method,
         body,
@@ -239,13 +241,14 @@ export class RevaAPI {
         );
       return { bytes: await boundedBytes(response, limit), headers: response.headers };
     } catch (error) {
+      if (signal?.aborted)
+        throw new DOMException('The request was canceled. Your saved audio was kept.', 'AbortError');
       if (controller.signal.aborted)
-        throw new Error(
-          'The server request timed out. Saved data was kept; a live call may still be running. Check its existing request before trying again.',
-        );
+        throw new Error('The server request timed out. Your saved data and original audio were kept.');
       throw error;
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
     }
   }
   private async json(
@@ -253,6 +256,7 @@ export class RevaAPI {
     method = 'GET',
     value?: unknown,
     timeout?: number,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
     const body = value === undefined ? undefined : JSON.stringify(value);
     if (body && new TextEncoder().encode(body).byteLength > MAX_SNAPSHOT_BYTES)
@@ -264,6 +268,7 @@ export class RevaAPI {
       { 'Content-Type': 'application/json' },
       MAX_SNAPSHOT_BYTES,
       timeout,
+      signal,
     );
     return object(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
   }
@@ -277,13 +282,13 @@ export class RevaAPI {
   }
   async providers(): Promise<ProviderStatus> {
     const result = await this.json('/v1/providers');
-    for (const key of ['gemini', 'transcription', 'booking']) {
+    const capabilities = {} as ProviderStatus;
+    for (const key of ['gemini', 'transcription'] as const) {
       const item = object(result[key]);
       if (typeof item.configured !== 'boolean') throw new Error('Provider availability was unreadable.');
-      string(item.model);
+      capabilities[key] = { configured: item.configured, model: string(item.model) };
     }
-    if (typeof result.liveCallsEnabled !== 'boolean') throw new Error('Call availability was unreadable.');
-    return result as unknown as ProviderStatus;
+    return capabilities;
   }
   async pull(): Promise<ServerState> {
     const result = await this.json('/v1/state');
@@ -330,12 +335,13 @@ export class RevaAPI {
   }
 
   // MARK: - Provider DTOs contain only reviewed inputs and validated returned fields.
-  async summarize(record: MedicalRecord): Promise<AISummary> {
+  async summarize(record: MedicalRecord, signal?: AbortSignal): Promise<AISummary> {
     const result = await this.json(
       '/v1/ai/summarize',
       'POST',
       { recordID: record.id, title: record.title, text: record.text },
       80_000,
+      signal,
     );
     return { summary: string(result.summary), model: string(result.model) };
   }
@@ -403,22 +409,5 @@ export class RevaAPI {
       };
     });
     return { text: string(result.text), segments, model: string(result.model) };
-  }
-  private callResult(result: Record<string, unknown>): LiveCallResult {
-    return {
-      conversationID: string(result.conversationID),
-      status: string(result.status),
-      provider: string(result.provider),
-      transcript: result.transcript == null ? undefined : string(result.transcript),
-    };
-  }
-  async startCall(request: LiveCallInput): Promise<LiveCallResult> {
-    return this.callResult(await this.json('/v1/booking/call', 'POST', request, 110_000));
-  }
-  async callStatus(requestID: string): Promise<LiveCallResult> {
-    if (!requestID || requestID.length > 128) throw new Error('Invalid saved call request identity.');
-    return this.callResult(
-      await this.json(`/v1/booking/call/${encodeURIComponent(requestID)}`, 'GET', undefined, 110_000),
-    );
   }
 }

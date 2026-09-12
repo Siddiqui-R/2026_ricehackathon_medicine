@@ -28,7 +28,7 @@ struct WelcomeView: View {
             }
             Spacer()
             Text(
-                "Explore with a fictional profile. Summaries and booking are local demonstrations; live services are not connected."
+                "Explore with a fictional profile. Local excerpts and appointment preparation work without a connection. Connect services for AI summaries and audio transcription."
             ).font(.footnote).foregroundStyle(.secondary)
             Button("Explore Reva", action: enter).buttonStyle(PrimaryButtonStyle())
         }.padding(28).background(RevaTheme.canvas).interactiveDismissDisabled()

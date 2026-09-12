@@ -1,6 +1,6 @@
 // Purpose: Define the native wire values exchanged with the Reva provider API.
 // Inputs: Encoded request fields and decoded provider responses.
-// Outputs: Typed capabilities, summaries, preparation, transcripts and call results.
+// Outputs: Typed capabilities, summaries, preparation, transcripts.
 // Side effects: None; provider credentials never belong in these values.
 
 import Foundation
@@ -14,8 +14,6 @@ struct ProviderCapability: Codable, Equatable {
 struct ProviderStatus: Codable, Equatable {
     var gemini: ProviderCapability
     var transcription: ProviderCapability
-    var booking: ProviderCapability
-    var liveCallsEnabled: Bool
 }
 // MARK: - AI results
 // Summaries and preparation results carry model labels and supplied source IDs.
@@ -35,24 +33,4 @@ struct AudioTranscription: Codable {
     var text: String
     var segments: [TranscriptSegment]
     var model: String
-}
-// MARK: - Call request and result values
-// A conversation status is separate from an appointment confirmation.
-struct LiveCallResult: Codable {
-    var conversationID: String
-    var status: String
-    var provider: String
-    var transcript: String?
-}
-struct LiveCallInput: Encodable {
-    var requestID: String
-    var clinic: String
-    var phone: String
-    var reason: String
-    var earliest: String
-    var latest: String
-    var timeZone: String
-    var preferences: String
-    var patientName: String
-    var consent: Bool
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic-only UI transport fixture. This does not call Gemini, OpenAI, or ElevenLabs.
+"""Synthetic-only UI transport fixture. This does not call Gemini or OpenAI.
 
 Purpose: Exercise native provider discovery/summary/preparation UI with explicitly labelled fake responses.
 Inputs: Loopback HTTP requests using the public demo token and an optional --port value.
@@ -39,8 +39,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == '/v1/providers':
             self.send_json(200, {'gemini': {'configured': True, 'model': MODEL},
-                'transcription': {'configured': False, 'model': MODEL},
-                'booking': {'configured': False, 'model': MODEL}, 'liveCallsEnabled': False})
+                'transcription': {'configured': False, 'model': MODEL}})
         else:
             self.send_json(404, {'reason': 'No fixture for this route.'})
 

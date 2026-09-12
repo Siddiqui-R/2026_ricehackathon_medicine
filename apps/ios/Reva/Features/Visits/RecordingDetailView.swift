@@ -1,7 +1,7 @@
 // Purpose: Review visit audio, transcript, separate notes, and saved record memory.
 // Inputs: A recording ID, AppStore, and AudioPlayback.
 // Outputs: Playback and transcript details with correction, notes, sharing, and memory actions.
-// Side effects: Controls playback, requests transcription, saves memory, or removes the recording from state.
+// Side effects: Controls playback, requests transcription/summary, saves memory, or removes the recording.
 
 import SwiftUI
 
@@ -71,12 +71,16 @@ struct RecordingDetailView: View {
                                 "Add notes, or connect transcription in Profile & settings to generate a reviewable transcript."
                         )
                     }
-                    if store.providerStatus?.transcription.configured == true {
-                        Button(store.isProviderBusy ? "Transcribing…" : "Transcribe saved audio") {
+                    if recording.segments.isEmpty {
+                        Button(store.isProviderBusy ? "Working…" : "Transcribe appointment") {
                             Task { await store.transcribeRecording(id) }
                         }.buttonStyle(.bordered).disabled(
                             store.isProviderBusy || recording.audioFilename == nil
-                                || !recording.segments.isEmpty)
+                                || store.providerStatus?.transcription.configured != true)
+                        if store.providerStatus?.transcription.configured != true {
+                            Text("Connect transcription in Profile & settings to turn saved audio into text.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if !recording.summary.isEmpty {
@@ -89,6 +93,36 @@ struct RecordingDetailView: View {
                     }
                 }
                 if !recording.segments.isEmpty {
+                    if recording.hasAISummary {
+                        RevaCard {
+                            Text("AI appointment summary").font(.headline)
+                            Text(recording.aiSummary!).textSelection(.enabled)
+                            Text("Generated with " + (recording.aiSummaryModel ?? "Gemini"))
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text(
+                                "Review this generated summary against the full transcript and recording. It may contain errors. Your notes are separate."
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Button(
+                        store.isProviderBusy
+                            ? "Working…"
+                            : recording.hasAISummary
+                                ? "Regenerate appointment summary" : "Summarize appointment"
+                    ) {
+                        Task { await store.summarizeRecording(id) }
+                    }.buttonStyle(.bordered).disabled(
+                        store.isProviderBusy || store.providerStatus?.gemini.configured != true)
+                    if store.providerStatus?.gemini.configured != true {
+                        Text("Connect Gemini in Profile & settings to generate an appointment summary.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text(
+                            "Summarizing sends this transcript to your connected AI service. Review it before relying on it."
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
                     RevaCard {
                         Text(
                             recording.isSample
@@ -136,7 +170,7 @@ struct RecordingDetailView: View {
                     recording.segments.isEmpty && recording.summary.isEmpty)
                 Button("Delete recording", role: .destructive) { deleting = true }.frame(maxWidth: .infinity)
                     .padding(.top, 8)
-            }.navigationTitle("Visit memory").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Appointment recording").navigationBarTitleDisplayMode(.inline)
                 .sheet(isPresented: $editing) {
                     NavigationStack { RecordingNotesEditor(recording: recording) }
                 }

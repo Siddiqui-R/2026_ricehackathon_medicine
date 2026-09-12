@@ -23,9 +23,11 @@ struct GeminiService: Sendable {
         let object = try await generate(
             input: request, schema: schema,
             task: """
-                Summarize the supplied medical document in a short, factual patient-readable paragraph.
+                Summarize the supplied medical document or appointment transcript in a short, factual patient-readable paragraph.
+                For an appointment transcript, summarize only the discussion, instructions and follow-ups explicitly stated
+                in that transcript. Timestamps locate statements; do not infer speaker identities or doctor roles.
                 Preserve source dates, numbers, units, medications, negations and uncertainties. Do not diagnose,
-                suggest treatment, infer missing facts or claim that absent documentation proves absence.
+                suggest treatment, add new medical advice, infer missing facts or claim that absent documentation proves absence.
                 Return JSON with only a nonempty summary string, at most 8000 UTF-8 bytes.
                 """)
         guard let summary = object["summary"] as? String, GeminiValidation.text(summary, maximum: 8000),

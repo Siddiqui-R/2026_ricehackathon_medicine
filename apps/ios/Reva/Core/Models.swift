@@ -125,8 +125,8 @@ struct Visit: Codable, Identifiable, Equatable {
     var status: String = "upcoming"
     var report: VisitReport?
 }
-// MARK: - Booking lifecycle value
-// Separate simulated and live state while preserving the stable request identity.
+// MARK: - Archived booking compatibility
+// Decode and round-trip historical snapshots; calling and booking actions have been removed.
 struct BookingRequest: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var visitID: String
@@ -168,6 +168,30 @@ struct VisitRecording: Codable, Identifiable, Equatable {
     var isSample: Bool = false
     var status: String = "saved"
     var transcriptionModel: String? = nil
+    var aiSummary: String? = nil
+    var aiSummaryModel: String? = nil
+    var aiSummaryGeneratedAt: String? = nil
+
+    // MARK: - Exact transcript and derived summary
+    // Keep every source word and both timestamps; user notes never become transcript evidence.
+    var transcriptText: String {
+        segments.map {
+            "[\(RevaDate.duration($0.start))–\(RevaDate.duration($0.end))] \($0.speaker): \($0.text)"
+        }.joined(separator: "\n\n")
+    }
+
+    var hasAISummary: Bool {
+        !segments.isEmpty
+            && !(aiSummary ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !(aiSummaryModel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && aiSummaryGeneratedAt != nil
+    }
+
+    mutating func clearAISummary() {
+        aiSummary = nil
+        aiSummaryModel = nil
+        aiSummaryGeneratedAt = nil
+    }
 }
 // MARK: - Persistence aggregate
 // Group related domain values for one atomic save and validate cross-object references.

@@ -1,5 +1,8 @@
 > **Latest follow-up:** [Browser extension verification](web-client.md) records the responsive web client, current heart-red palette, and updated test counts. The native MVP evidence below is historical; older teal screenshots are not the current design.
 
+> Latest scope and checks: [appointment recording, transcription and summaries](appointment-recording.md). Calling has been removed. The counts and calling evidence below are historical.
+
+
 # Reva MVP verification evidence
 
 Current scope is the [user's two-hour MVP revision](../mvp-goal.md). All application content used below is fictional. No paid AI request, actual clinic call, or live Tiger database operation was executed.

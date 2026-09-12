@@ -22,12 +22,12 @@ struct RecordingSessionView: View {
     // MARK: - Rendering and navigation
     var body: some View {
         Page {
-            Text("Keep the conversation.").font(.title2.bold())
+            Text("Record your appointment.").font(.title2.bold())
             Text(visit.title).foregroundStyle(.secondary)
             StatusNotice(
                 title: "Before you record",
                 message:
-                    "Ask everyone present for permission to record. Keep Reva on screen; recording pauses when the app leaves the foreground.",
+                    "Get your doctor’s consent and permission from everyone present before recording. Keep Reva on screen; recording pauses when the app leaves the foreground.",
                 symbol: "person.2")
             RevaCard {
                 VStack(spacing: 24) {
@@ -66,7 +66,7 @@ struct RecordingSessionView: View {
                             }.buttonStyle(.bordered).controlSize(.large)
                         }
                     } else if savedID == nil {
-                        Toggle("Everyone agreed to be recorded", isOn: $agreed)
+                        Toggle("My doctor and everyone present agreed to recording.", isOn: $agreed)
                         Button {
                             Task {
                                 starting = true
@@ -89,11 +89,11 @@ struct RecordingSessionView: View {
                 StatusNotice(title: "Recording status", message: message, symbol: "mic.badge.xmark")
             }
             StatusNotice(
-                title: "Audio now, transcription later",
+                title: "Record → transcribe → summarize",
                 message:
-                    "Captured audio is saved for playback. Live transcription is not configured. The fictional sample transcript is a separate action on the visit screen."
+                    "Save your audio, then use connected transcription and an AI appointment summary. Review both against the recording; your separate notes remain editable. The fictional sample transcript is separate from your audio."
             )
-        }.navigationTitle("Record visit").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Record appointment").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {

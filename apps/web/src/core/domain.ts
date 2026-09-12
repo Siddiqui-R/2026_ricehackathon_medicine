@@ -5,7 +5,7 @@
 import type { MedicalRecord, Visit, VisitReport } from './models';
 export { validateSnapshot, safeFilename } from './validation';
 export { makeSymptomRecord, validateSymptomEntry } from './symptoms';
-export { createMemoryRecord, reconcileMemory, validateBooking, confirmBooking } from './mutations';
+export { createMemoryRecord, reconcileMemory } from './mutations';
 export { defaultTimeZone, displayTimeZone, formatDate, validZone } from './dates';
 
 // MARK: - Shared display and identity conventions.

@@ -3,25 +3,34 @@
 // Outputs: Audio playback, faithful segment corrections, separate notes, and links to saved memory records.
 // Side effects: Loads original audio; explicit actions transcribe or persist corrections/notes through context.
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
 import type { VisitRecording } from '../../core/models';
 import { durationLabel, formatDate } from '../../core/domain';
+import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Field, Modal } from '../../components/ui';
 
 // MARK: - Original playback and explicit connected transcription
 export function RecordingDetail({ recording, onClose }: { recording: VisitRecording; onClose: () => void }) {
-  const { snapshot, providers, transcribeRecording, saveMemory, getAttachment, busy } = useReva();
+  const { snapshot, providers, transcribeRecording, summarizeRecording, saveMemory, getAttachment, busy } =
+    useReva();
+  const summaryRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => summaryRequest.current?.abort(), []);
   const [audio, setAudio] = useState('');
   const [audioError, setAudioError] = useState('');
   const [editor, setEditor] = useState<'transcript' | 'notes' | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const hasSummary = hasRecordingSummary(recording);
   const memory = snapshot?.records.find(
     (item) => item.sourceRecordingID === recording.id || item.id === `memory-${recording.id}`,
   );
+  function close() {
+    summaryRequest.current?.abort();
+    onClose();
+  }
   useEffect(() => {
     let cancelled = false;
     let objectURL = '';
@@ -60,7 +69,7 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
   if (editor === 'notes')
     return <RecordingNotesEditor recording={recording} onClose={() => setEditor(null)} />;
   return (
-    <Modal title={demoLabel(recording.title, recording.isSample)} onClose={onClose} wide>
+    <Modal title={demoLabel(recording.title, recording.isSample)} onClose={close} wide>
       <div className="stack">
         <div className="row">
           <Badge tone={recording.isSample ? 'review' : 'accent'}>
@@ -94,11 +103,7 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
               }}
             >
               <Sparkles size={16} />
-              {working
-                ? 'Working…'
-                : recording.segments.length
-                  ? 'Transcribe original again'
-                  : 'Create transcript'}
+              {working ? 'Working…' : recording.segments.length ? 'Transcribe again' : 'Transcribe'}
             </Button>
             {!providers?.transcription.configured && (
               <p className="muted small">
@@ -111,6 +116,59 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
             )}
           </div>
         )}
+        <section className="stack">
+          <div className="section-heading">
+            <h3>Appointment summary</h3>
+            <Button
+              disabled={!recording.segments.length || !providers?.gemini.configured || busy || working}
+              onClick={() => {
+                const controller = new AbortController();
+                summaryRequest.current = controller;
+                void act(async () => {
+                  try {
+                    await summarizeRecording(recording.id, controller.signal);
+                  } finally {
+                    if (summaryRequest.current === controller) summaryRequest.current = null;
+                  }
+                });
+              }}
+            >
+              <Sparkles size={16} /> Summarize appointment
+            </Button>
+          </div>
+          {working && summaryRequest.current && (
+            <Button variant="secondary" onClick={() => summaryRequest.current?.abort()}>
+              Cancel summarization
+            </Button>
+          )}
+          {hasSummary ? (
+            <>
+              <p className="prose">{recording.aiSummary}</p>
+              <p className="muted small">
+                AI summary{recording.aiSummaryModel ? ` · ${recording.aiSummaryModel}` : ''}
+                {recording.aiSummaryGeneratedAt
+                  ? ` · ${formatDate(recording.aiSummaryGeneratedAt, true)}`
+                  : ''}
+                . Review it against the transcript and original audio. It may contain mistakes.
+              </p>
+            </>
+          ) : (
+            <p className="muted small">
+              {recording.segments.length
+                ? 'Summarize the saved transcript to review what was discussed. Your personal notes stay separate.'
+                : 'Transcribe the appointment first. The summary is generated only from the saved transcript.'}
+            </p>
+          )}
+          {!providers?.gemini.configured && (
+            <p className="muted small">
+              Check your AI service in{' '}
+              <a className="text-link" href="#/settings" onClick={close}>
+                Settings
+              </a>{' '}
+              to enable summaries.
+            </p>
+          )}
+        </section>
         <section className="stack">
           <div className="section-heading">
             <h3>Transcript</h3>
@@ -203,7 +261,7 @@ function TranscriptEditor({ recording, onClose }: { recording: VisitRecording; o
         throw new Error(
           'Keep every segment nonempty and under 20,000 characters, with at most 200,000 characters overall.',
         );
-      await saveMemory(recording.id, texts);
+      await saveMemory(recording.id, texts, original);
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Corrections could not be saved.');

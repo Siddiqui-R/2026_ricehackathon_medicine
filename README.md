@@ -1,6 +1,6 @@
 # Reva
 
-**Making every appointment count.** A SwiftUI iPhone and responsive React browser MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [revised MVP goal](docs/mvp-goal.md) defines the current scope.
+**Making every appointment count.** A SwiftUI iPhone and responsive React browser MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [current scope and spec comparison](docs/reva-stack-spec.md) describes what is built and what remains deferred.
 
 Both clients follow the selected [heart-red palette](design/palette.json) in **light appearance only**: blush ivory `#FBF7F5`, white cards, heart red `#B84250`, deep red `#8C2F3B`, petal `#FAE6E5`, and linen `#DBCBC9`. The [earlier supplied palette](design/palette-supplied.json) is preserved as historical provenance.
 
@@ -40,21 +40,20 @@ Follow the [presentation walkthrough](demo/demo-script.md) using the [standalone
 - Import a PDF, text file or image, review its extraction, and save the automatic local excerpt. Compare any uncertain extraction with its original.
 - Prepare the nausea/palpitations and orthopedic visits to see different relevant histories. The orthopedic implant evidence opens its original PDF on page 2.
 - Edit questions, pin records, correct a source, regenerate a stale brief, and export/share its formatted PDF.
-- Review a booking request and run the clearly labeled simulated outcome. Confirmation updates the existing local visit once.
+- Open an appointment, get the doctor’s and everyone present’s consent, record and save audio, then transcribe and summarize it when the providers are configured. AI summaries remain separate from your personal notes.
 - Open the separate sample transcript, correct text or add notes, save a visit memory, and follow its source link. New microphone audio never receives an unrelated sample transcript.
 
 The gear in Medical profile opens Settings for server configuration and explicit demo reset. Local state survives relaunch. Deleted/reset items leave active history, while original files and one previous-state backup remain in app storage for recovery; uninstalling clears that sandbox. No real records are bundled or automatically imported.
 
 ## Configurable APIs
 
-The Swift server, native client, and browser entry points are implemented. **No live provider request or real call was made during this build; accounts and credentials remain manual setup.** Configuration flags report settings, not a successful credential probe.
+The Swift server, native client, and browser entry points are implemented. **Live provider and database readiness remain unverified; credentials and hosting require setup.** Configuration flags report settings, not a successful credential probe.
 
 | Feature | Implemented behavior |
 | --- | --- |
-| Gemini | Document summaries and visit preparation; configurable model, default `gemini-3.8-flash`. Selected IDs are validated; original-source citations come from local records. |
+| Gemini | Document summaries, visit preparation and summaries of full appointment transcripts; configurable model, default `gemini-3.8-flash`. Selected IDs are validated; original-source citations come from local records. |
 | OpenAI Whisper | Saved-audio transcription using `whisper-1`, with recording-relative segment times and generic speaker labels; no diarization claim. |
-| ElevenLabs / Twilio | Outbound call through a configured ElevenLabs agent and imported Twilio number, followed by status/transcript polling. Durable intent/receipts prevent automatic duplicate attempts. A call's completion never confirms an appointment; the user reviews and confirms details manually. |
-| Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, simulated booking, recording/playback and sample memory work without provider setup. |
+| Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, consent-gated recording/playback and sample memory work without provider setup. |
 | Tiger Data PostgreSQL | Compiled PostgresNIO adapter and versioned JSONB/BYTEA schema for domain snapshots and attachments. Live database setup/testing remains manual. |
 
 From the repository root, start the local API:
@@ -65,13 +64,19 @@ python3 scripts/run_server.py --build
 
 The launcher reads optional dotenv values without shell evaluation; exported environment variables take precedence. The root `.env` is local and Git-ignored. A fresh clone can create it with `touch .env`. Use the commented [root example](.env.example) and [server example](server/.env.example) for later manual setup; provider secrets stay on the server.
 
-Local defaults are `http://127.0.0.1:8080` and the public demo token `reva-local-demo-token`. Set the URL/token in the app's server settings. Paid providers additionally require a private configured token mapping; outbound calls require the live-call enable flag and explicit consent. See the [provider setup and routes](server/README.md#configurable-mvp-providers) and [MVP wire contract](docs/task-specs/mvp-api-contract.md).
+Local defaults are `http://127.0.0.1:8080` and the public demo token `reva-local-demo-token`. Set the URL/token in the app's server settings. Provider requests require a private configured identity and server-side keys. See the [provider setup and routes](server/README.md#configurable-mvp-providers) and [MVP wire contract](docs/task-specs/mvp-api-contract.md).
 
-The phone stays locally authoritative between explicit server push/pull actions. The server provides owner-scoped revisions and conflict errors. Attachment transfers and snapshot commits are separate transactions, so a failed transfer may leave files already copied. Call receipts need persistent server storage even when snapshots use PostgreSQL. Details and limits are in the [server guide](server/README.md).
+The phone stays locally authoritative between explicit server push/pull actions. The server provides owner-scoped revisions and conflict errors. Attachment transfers and snapshot commits are separate transactions, so a failed transfer may leave files already copied. Details and limits are in the [server guide](server/README.md).
 
 See the [full-stack architecture and flow diagrams](docs/architecture.md) for the implemented client, server, database, provider boundaries, and data journeys.
 
 Accounts and hosted persistence: the browser's `/signup`, `/login`, and `/app` pages use the API's `POST /v1/auth/signup`, `POST /v1/auth/login`, `GET /v1/auth/session`, `POST /v1/auth/logout`, `POST /v1/auth/logout-all`, `PUT /v1/auth/password`, and `DELETE /v1/auth/account` routes, with each account's data in Tiger Cloud PostgreSQL when `REVA_STORAGE=postgres`. The [Tiger setup guide](docs/tiger-setup.md) covers the free shared service (`scripts/tiger_provision.py`), `server/Dockerfile`, the Vercel `VITE_REVA_API_ORIGIN` setting, and a verification checklist; the [accounts architecture section](docs/architecture.md#accounts-and-tiger-persistence) shows the flows. Configured, not live-verified.
+
+## Appointment recording
+
+Choose **Record appointment** in an appointment. **Get your doctor’s consent and permission from everyone present before recording.** The confirmation gates microphone capture; browser uploads require it too. Saved original audio can be transcribed with Whisper, reviewed/corrected, and summarized with Gemini. Generated summaries are labeled, remain separate from personal notes, and are invalidated when the transcript changes. Save a visit memory to retain the full transcript source and its recording link in Records.
+
+Appointment calling and booking simulation have been removed. Older snapshot booking data is preserved only for compatibility.
 
 ## Project overview packet
 
@@ -84,14 +89,14 @@ The [three-person workflow](docs/team-workflow.md) assigns exact files, safe wor
 | Area | Source |
 | --- | --- |
 | Records and preparation | [Features/Records](apps/ios/Reva/Features/Records), [Features/Preparation](apps/ios/Reva/Features/Preparation) |
-| Booking and visit memory | [Features/Visits](apps/ios/Reva/Features/Visits) |
+| Appointment recording and visit memory | [Features/Visits](apps/ios/Reva/Features/Visits) |
 | Browser UI and state | [apps/web](apps/web), [browser wire compatibility](apps/web/src/core/COMPATIBILITY.md) |
 | Shared native contracts/state | [Core](apps/ios/Reva/Core), [State](apps/ios/Reva/State), [Features/Shared](apps/ios/Reva/Features/Shared) |
 | Device adapters / backend providers | [Device](apps/ios/Reva/Device), [server](server) |
 
 ## Verification and limits
 
-The [current repair report](docs/reviews/06-audit-repairs.md) and [23-finding checklist](docs/reviews/audit-repair-status.csv) record the integrated fixes, fresh native/browser checks, concurrent Windows-checkpoint reconciliation and remaining device/service gates. The earlier totals below are historical.
+The [appointment recording verification](docs/verification/appointment-recording.md), [integration report](docs/reviews/08-preserved-integration.md), [repair report](docs/reviews/06-audit-repairs.md) and [23-finding checklist](docs/reviews/audit-repair-status.csv) record the integrated fixes, fresh native/browser checks, concurrent Windows-checkpoint reconciliation and remaining device/service gates. The earlier totals below are historical.
 
 Latest browser-extension verification: **77 browser tests, 7 isolated HTTP-wrapper tests, 43 native tests, and 30 server tests passed**; one native real-server gate and one live PostgreSQL gate skipped. TypeScript/production build, native simulator compilation, formatting, and responsibility-block checks passed. See [browser verification and screenshots](docs/verification/web-client.md) for the tested responsive widths and local user journeys. Earlier [native verification](docs/verification/README.md) remains historical evidence; older teal screenshots do not show the current heart-red design.
 
@@ -104,7 +109,7 @@ python3 scripts/check_provider_api.py
 
 Build the server before running the two Python checks. [Progress](docs/build-progress.md), [verification evidence](docs/verification/README.md), and [review history](docs/reviews/review-log.md) distinguish executed checks from manual setup.
 
-Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider accounts/keys/agent/number and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, custom encryption and production deployment remain outside this MVP. The browser extension is implemented; live provider credentials, cross-browser hardware checks and production operations remain manual setup.
+Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider keys and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, custom encryption and production deployment remain outside this MVP. The browser extension is implemented; live provider credentials, cross-browser hardware checks and production operations remain manual setup.
 
 ### Optimization regression checks
 

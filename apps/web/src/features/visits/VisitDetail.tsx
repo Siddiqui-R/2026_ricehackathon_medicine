@@ -1,6 +1,6 @@
-// Purpose: Bring one appointment's preparation, scheduling, and visit memory into one workspace.
+// Purpose: Bring one appointment's preparation, recording, and visit memory into one workspace.
 // Inputs: A routed visit ID and the current persisted snapshot.
-// Outputs: Appointment details, editable context, source-linked brief, booking, and recording sections.
+// Outputs: Appointment details, editable context, source-linked brief and recording sections.
 // Side effects: Opens child flows; mutations and connected requests remain owned by context methods.
 
 import { useState } from 'react';
@@ -11,7 +11,6 @@ import { demoLabel } from '../../core/presentation';
 import { Badge, Button, Card, EmptyState, PageHeading } from '../../components/ui';
 import { VisitEditor } from './VisitEditor';
 import { VisitBrief } from './VisitBrief';
-import { BookingPanel } from './BookingPanel';
 import { RecordingsPanel } from './RecordingsPanel';
 
 // MARK: - Appointment workspace and child feature boundaries
@@ -76,7 +75,6 @@ export function VisitDetail({ id }: { id: string }) {
           <VisitBrief visit={visit} />
         </div>
         <aside className="stack visit-secondary no-print">
-          <BookingPanel visit={visit} />
           <RecordingsPanel key={visit.id} visit={visit} />
         </aside>
       </div>

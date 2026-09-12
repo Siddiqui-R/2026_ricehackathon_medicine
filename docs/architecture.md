@@ -1,319 +1,89 @@
-# Reva — as-built MVP stack
+# Reva — as-built architecture
 
-**September 12, 2026 · browser checkpoint `2640360` · remote sync integration `77c03da` · current diagram updated before the documentation push.**
-
-Reva has a native SwiftUI iPhone app, a responsive React browser client, and a shared Swift server. Both clients run the same fictional local demo and retain source provenance. Provider adapters are implemented and tested with mocks; their accounts/credentials and a live Tiger database remain manual setup. The app never needs provider keys to demonstrate the local patient journey. The [revised MVP goal](mvp-goal.md), [setup guide](../README.md), [API contract](task-specs/mvp-api-contract.md), and [verification evidence](verification/README.md) define the delivered scope.
-
-For a shareable teammate handoff, use the [seven-page project overview packet](../output/pdf/reva-project-overview-packet.pdf) or its [editable source](project-overview-packet.md). It records the inspected worktree inventory, proposed ownership split, functionality matrix, and setup guide at baseline `d0af1df`. The [coding standard](coding-standard.md), [browser guide](../apps/web/README.md), and current team guide describe the later source-file split and browser extension; the baseline PDF is historical.
+Updated September 12, 2026. The [current scope](reva-stack-spec.md) compares the repository with the [original spec sheet and diagram](reva-stack-spec-planning.md). Appointment calling has been removed; appointment capture, transcription and summaries are the supported post-visit flow. Live provider and Tiger deployment readiness is still unverified.
 
 ## Full stack at a glance
 
-Petal nodes work locally. White nodes with red outlines are implemented provider/database boundaries that need configuration. Dashed nodes are external accounts or infrastructure that have not been activated by this build.
+Solid arrows show implemented code. Dashed arrows require external configuration and live verification.
 
 ```mermaid
 flowchart TB
-    subgraph PHONE["Native iPhone app · SwiftUI · iOS18+"]
-        UI["Summary / Records / Visits / Medical profile / Settings"]
-        FEATURES["Feature modules and AppStore extensions"]
-        CORE["Codable domain models / source versions / report engine"]
-        LOCAL["LocalRepository: atomic JSON + one backup + original files"]
-        DEVICE["PDFKit / Vision OCR / VisionKit scan / AVFoundation / PDF export"]
-        CLIENT["ServerClient + ProviderClient / URLSession"]
-        UI --> FEATURES --> CORE
-        FEATURES --> LOCAL
-        FEATURES --> DEVICE
-        FEATURES --> CLIENT
-    end
-    subgraph WEB["Responsive browser · React19 / TypeScript7 / Vite8"]
-        WEBUI["Overview / Records / Visits / Medical profile / Settings"]
-        WEBSTATE["RevaContext + serialized store / shared Codable JSON contract"]
-        IDB["IndexedDB: snapshot revisions + original Blobs"]
-        WEBDEVICE["PDF.js / local Tesseract English OCR / MediaRecorder / browser print"]
-        PROXY["Same-origin Node static host / fixed loopback API proxy"]
-        WEBUI --> WEBSTATE --> IDB
-        WEBSTATE --> WEBDEVICE
-        WEBSTATE -->|"fetch /v1 / memory-only bearer token"| PROXY
-    end
-    subgraph API["Swift server · Vapor4 / private bearer owner identity"]
-        ROUTES["Authenticated state, attachment and provider routes"]
-        STORE["RevaStore boundary / revisions / owner-scoped writes"]
-        FILES["LocalFileStore / private durable owner files"]
-        PG["PostgresNIO / migration001 / parameterized transactions"]
-        GEMINI["Gemini summary and preparation adapter"]
-        WHISPER["Whisper multipart audio adapter"]
-        CALL["ElevenLabs outbound + conversation polling"]
-        RECEIPTS["Durable owner/request call receipts / fsync / single-writer lock"]
-        ROUTES --> STORE
-        STORE --> FILES
-        STORE --> PG
-        ROUTES --> GEMINI
-        ROUTES --> WHISPER
-        ROUTES --> CALL --> RECEIPTS
-    end
-    CLIENT -->|"HTTPS; loopback HTTP for simulator"| ROUTES
-    PROXY -->|"Explicit authenticated push/pull and provider requests"| ROUTES
-    PG -.-> TIGER["Tiger Data PostgreSQL account"]
-    GEMINI -.-> GOOGLE["Google Gemini Developer API"]
-    WHISPER -.-> OPENAI["OpenAI Audio Transcriptions API"]
-    CALL -.-> ELEVEN["ElevenLabs configured agent"]
-    ELEVEN -.-> TWILIO["Imported Twilio number → clinic"]
-    classDef local fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    classDef adapter fill:#FFFFFF,stroke:#B84250,color:#342B2C;
-    classDef external fill:#FBF7F5,stroke:#DBCBC9,color:#342B2C,stroke-dasharray:5 5;
-    class UI,FEATURES,CORE,LOCAL,DEVICE,CLIENT,WEBUI,WEBSTATE,IDB,WEBDEVICE,PROXY,ROUTES,STORE,FILES,RECEIPTS local;
-    class PG,GEMINI,WHISPER,CALL adapter;
-    class TIGER,GOOGLE,OPENAI,ELEVEN,TWILIO external;
+    IOS["SwiftUI iPhone"] --> NATIVE["AppStore / Codable / atomic JSON and original files"]
+    IOS --> DEVICE["PDFKit / Vision / VisionKit / AVFoundation / PDF export"]
+    WEB["React / TypeScript browser"] --> STATE["RevaContext / serialized store"]
+    STATE --> IDB["Per-workspace IndexedDB / original Blobs"]
+    WEB --> BROWSER["PDF.js / local Tesseract / MediaRecorder / print"]
+    NATIVE --> API["Swift / Vapor / authenticated REST"]
+    STATE --> API
+    API --> AUTH["Bcrypt accounts / hashed sessions / static bearer compatibility"]
+    API --> LOCAL["LocalFileStore / private atomic files"]
+    API --> PG["PostgresNIO / revisioned JSONB and BYTEA / migrations 001 + 002"]
+    PG -.-> TIGER["Tiger PostgreSQL deployment"]
+    API --> SUMMARY["Record / pre-visit / appointment summaries"]
+    SUMMARY -.-> GEMINI["Google Gemini API"]
+    API --> AUDIO["Bounded original-audio transcription"]
+    AUDIO -.-> WHISPER["OpenAI Whisper API"]
+    VERCEL["Vercel static hosting configuration"] --> WEB
 ```
 
-Each client remains locally authoritative between sync operations. Its server snapshot transfers are explicit push/pull actions; they are separate from individual AI or calling requests. Neither client connects directly to PostgreSQL. The browser is a separate interface using the existing wire contract, not a SwiftUI-to-web compilation. Its production host permits only current API routes and a fixed loopback destination; HTTPS termination is a hosting setup step. Provider responses update local state only after validation, and generation checks protect source/visit edits made while a request is running.
+The original proposal’s managed identity, cloud buckets, Document AI, Google Speech-to-Text, Cloud Tasks/workers and APNs are not implemented. The browser, custom accounts, local OCR, Whisper and inline provider requests are the actual stack. Provider keys never enter client code.
 
-## Stack inventory
+## Records and preparation
 
-| Layer | Actual implementation | Entry point / setup |
-| --- | --- | --- |
-| Native app | Swift6.3 compiler, SwiftUI, iOS18 deployment target; verified Xcode26.4/iOS26.4 simulator | [RevaApp.swift](../apps/ios/Reva/RevaApp.swift), [Xcode project](../Reva.xcodeproj) |
-| Design | Selected blush ivory `#FBF7F5`, white, heart red `#B84250`, deep red `#8C2F3B`, petal `#FAE6E5`, linen `#DBCBC9`; fixed light appearance | [Theme](../apps/ios/Reva/Features/Shared/Theme.swift), [source palette](../design/palette.json) |
-| Browser | React19.3.0, TypeScript7.0.2, Vite8.3.0, lucide-react1.45.0; desktop sidebar/two-column layout and mobile bottom navigation | [Browser guide](../apps/web/README.md), [app shell](../apps/web/src/App.tsx) |
-| Browser state and devices | IndexedDB revisions/Blobs; PDF.js6.3.289; Tesseract.js7 with local English assets; MediaRecorder; print CSS | [Core](../apps/web/src/core), [records](../apps/web/src/features/records), [visits](../apps/web/src/features/visits) |
-| Browser hosting | Node24 verified; static dist + bounded same-origin loopback proxy; no arbitrary external target or client provider keys | [serve.mjs](../apps/web/scripts/serve.mjs), [HTTP regression suite](../apps/web/scripts/serve.test.mjs) |
-| State/domain | Codable snapshots, record versions, source-page references, visit/report/question authority, booking and recording state | [Core](../apps/ios/Reva/Core), [focused AppStore extensions](../apps/ios/Reva/State) |
-| Local storage | App Support JSON state with atomic save/backup; original documents/audio stored separately | [LocalRepository.swift](../apps/ios/Reva/Core/LocalRepository.swift) |
-| Document intake | Files/PhotosUI, PDFKit embedded text, Vision OCR, VisionKit supported-device scanner; review warnings and bounded inputs | [Device adapters](../apps/ios/Reva/Device) |
-| Recording/export | AVFoundation capture/playback, timestamped transcript UI, UIKit/CoreText PDF pagination, PDFKit/QuickLook preview and native sharing | [Visit features](../apps/ios/Reva/Features/Visits), [ReportPDFRenderer](../apps/ios/Reva/Device/ReportPDFRenderer.swift) |
-| Native HTTP | Foundation URLSession; explicit bearer token; HTTPS except loopback; provider secrets stay on server | [ServerClient](../apps/ios/Reva/Core/ServerClient.swift), [ProviderClient](../apps/ios/Reva/Core/ProviderClient.swift) |
-| Swift backend | Vapor4.122.1, bounded authenticated routes, safe errors and owner-scoped data access | [HTTP.swift](../server/Sources/RevaServer/HTTP.swift), [server package](../server/Package.swift) |
-| Database | PostgresNIO1.33.1, TLS verification, migration001; JSONB snapshots, BYTEA originals and mutation audit | [PostgresStore](../server/Sources/RevaServer/PostgresStore.swift), [SQL](../server/Sources/RevaServer/Migrations/001_snapshot.sql) |
-| Document/visit AI | Gemini Developer API `generateContent`; default `gemini-3.8-flash`, configurable `GEMINI_MODEL`; structured JSON validation | [Gemini provider files](../server/Sources/RevaServer/Providers/GeminiService.swift) |
-| Speech AI | OpenAI `whisper-1`, multipart `verbose_json`, segment timestamps and generic speaker labels | [Whisper adapter](../server/Sources/RevaServer/Providers/VoiceTranscription.swift) |
-| Calling | ElevenLabs Twilio outbound endpoint and conversation status API; durable replay receipts; no automatic appointment confirmation | [VoiceCalls.swift](../server/Sources/RevaServer/Providers/VoiceCalls.swift) |
-| Configuration | Root `.env` delivered empty and ignored; optional safe dotenv launcher; exported environment overrides file values | [run_server.py](../scripts/run_server.py), [example](../.env.example), [provider setup](../server/README.md#configurable-mvp-providers) |
+Imports preserve original bytes and page text. Native uses PDFKit/Vision/VisionKit; browser uses PDF.js and local Tesseract. Mixed PDFs retain readable embedded text, bounded OCR and extraction warnings. Exact page excerpts, record versions and source links remain separate from AI summaries. Record edits invalidate affected briefs without replacing newer notes or provider results.
 
-The verified Gemini default uses a current documented model ID. The earlier planning names are not assumed available: choose a model your account supports through `GEMINI_MODEL`. The selected MVP speech path is Whisper; local Whisper and Google Speech-to-Text are alternatives for later work, not extra hidden integrations. Official API references are linked in the [server guide](../server/README.md) and adapter source.
+Visit preparation combines relevant original records, pinned sources and the user’s concern/questions. Local preparation works without providers; configured Gemini supplies an overview, questions and validated source selections. Clients construct citations from original text. Native PDF export and browser print retain readable evidence. No model output diagnoses or independently changes treatment.
 
-## Documents → memory → visit brief
-
-```mermaid
-flowchart TD
-    SYMPTOM["Log symptoms: observed time + optional severity/details"] --> OBSERVATION["Save self-reported MedicalRecord + structured SymptomEntry"]
-    OBSERVATION --> MEMORY
-    IMPORT["Files / photo / iPhone scanner or browser camera picker"] --> EXTRACT["Native PDFKit + Vision / browser PDF.js + Tesseract"]
-    EXTRACT --> REVIEW["Preview original + text + warnings; correct date/text"]
-    REVIEW --> SAVE["Save original bytes + record + local excerpt"]
-    SAVE --> MEMORY["Searchable versioned record memory"]
-    SAVE --> ENABLED{"Connected AI enabled?"}
-    ENABLED -->|"Yes, usable text"| SUMMARY["POST /v1/ai/summarize → Gemini"]
-    SUMMARY --> VALID["Validate response; keep concurrent edits; label model"] --> MEMORY
-    MEMORY --> VISIT["Visit type, concern, goal and pinned records"]
-    VISIT --> MODE{"Preparation mode"}
-    MODE -->|"Local"| LOCAL["Keyword/context selection over full text"]
-    MODE -->|"Connected"| AI["POST /v1/ai/prepare → overview, questions, valid source IDs"]
-    LOCAL --> QUOTES["Original text passages + page/version references + pins"]
-    AI --> QUOTES
-    QUOTES --> BRIEF["Reviewable brief; preserve personal questions/notes"]
-    BRIEF --> SOURCE["Open original evidence"]
-    BRIEF --> PDF["Native paginated PDF / browser print or Save as PDF"]
-    MEMORY -->|"Source changes"| STALE["Mark prior briefs stale; regenerate before export"]
-    classDef reva fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    class SYMPTOM,OBSERVATION,IMPORT,EXTRACT,REVIEW,SAVE,MEMORY,ENABLED,SUMMARY,VALID,VISIT,MODE,LOCAL,AI,QUOTES,BRIEF,SOURCE,PDF,STALE reva;
-```
-
-Local excerpts quote source wording; authored fictional summaries are labeled separately. Connected summaries/overviews identify the model and require review. Gemini selects only supplied IDs; the client constructs original-source quotes and page references. OCR is reviewable, with explicit uncertainty; perfect extraction is not claimed. Imported unreadable text remains a needs-review record rather than pretending AI processing succeeded.
-
-## Medical profile and symptom entry structure
-
-```mermaid
-flowchart TD
-    AVATAR["Summary avatar / Medical profile tab"] --> PROFILE["Persistent medical profile"]
-    PROFILE --> EDIT["Edit identity, allergies, medications, conditions, procedures, care notes"]
-    EDIT --> PATIENT["PatientProfile in AppSnapshot"]
-    PROFILE --> SETTINGS["Gear → service and app Settings"]
-    LOG["Summary Log symptoms / Records add menu"] --> FORM["Required observation and time; optional severity and detail"]
-    FORM --> ENTRY["SymptomEntry + self-reported MedicalRecord"]
-    ENTRY --> RECORDS["Searchable Records / Symptoms filter / edit / delete"]
-    RECORDS --> PREP["Relevant source selection and exact quotes for visit briefs"]
-    PATIENT --> JSON["Local atomic snapshot / explicit server push and pull"]
-    ENTRY --> JSON
-    ALL["Recent records footer: View all records"] --> RECORDS
-    classDef reva fill:#FBF7F5,stroke:#B84250,color:#342B2C;
-    class AVATAR,PROFILE,EDIT,PATIENT,SETTINGS,LOG,FORM,ENTRY,RECORDS,PREP,JSON,ALL reva;
-```
-
-The medical profile is editable quick-reference data, separate from historical source documents. Optional `surgeriesAndImplants` and `careNotes` fields preserve earlier snapshots. The preparation contract currently uses records, so profile edits do not silently rewrite evidence. User symptom entries contain their structured observation and exact labelled source text; edits preserve identity and creation time while the usual source versioning marks prior briefs stale. Full ISO occurrence time and time zone are preserved, and the record list uses the observation's local calendar day.
-
-Both clients default new visits, symptom observations, unspecified display zones, and “today” fields to US Central time (`America/Chicago`, following CST/CDT daylight-saving changes). Existing explicit time zones remain authoritative. Date-only record dates and birthdays keep their calendar date; UTC remains their neutral encoding and the wire format for absolute timestamps. Native defaults live in `RevaDate`; browser defaults and wall-time conversion live in `core/dates.ts`.
-
-Both clients now use exact blush ivory `#FBF7F5`, white outlined cards, and heart-red `#B84250` actions. Small labels on petal use deep red `#8C2F3B`. The [browser verification](verification/web-client.md) records the current responsive pass. The [earlier native follow-up](verification/profile-symptoms.md) preserves historical teal-palette evidence.
-
-## Booking: simulation and configured calls
-
-```mermaid
-flowchart TD
-    VISIT["Existing visit"] --> REVIEW["Review clinic, number, reason, window and constraints"]
-    REVIEW --> MODE{"User chooses flow"}
-    MODE -->|"Simulation"| DEMO["Queued → simulated call → proposal / needs-input / failure"]
-    DEMO --> CONFIRM["Confirm once; update existing local visit"]
-    MODE -->|"Real call, configured"| CONSENT["Explicit sharing/call consent and final review"]
-    CONSENT --> API["POST /v1/booking/call / stable requestID"]
-    API --> INTENT["Persist owner/request intent before dialing"]
-    INTENT --> CALL["ElevenLabs agent + imported Twilio number"]
-    CALL --> RECEIPT["Persist conversation ID or uncertain outcome"]
-    RECEIPT --> POLL["User checks status / GET call by requestID"]
-    POLL --> TRANSCRIPT["Review conversation status and bounded transcript"]
-    TRANSCRIPT --> EDIT["Manually update visit only after clinic confirmation"]
-    INTENT --> REPLAY["Repeated or uncertain request never automatically redials"]
-    classDef reva fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    class VISIT,REVIEW,MODE,DEMO,CONFIRM,CONSENT,API,INTENT,CALL,RECEIPT,POLL,TRANSCRIPT,EDIT,REPLAY reva;
-```
-
-Calling requires private server tokens, ElevenLabs key/agent/phone-number IDs, `REVA_ENABLE_LIVE_CALLS=true`, and explicit per-request consent. The server passes the reviewed patient/clinic/scheduling variables to the configured agent. It requests provider call recording disabled. Conversation completion is not treated as an appointment confirmation. Uncertain calls need inspection in ElevenLabs before authorizing any new request.
-
-Call receipts live in a persistent server directory even in PostgreSQL mode. A single-writer lock and durable intent protect against duplicate attempts across concurrency and process restarts; keep that directory across deployments. Snapshot deletion does not remove call receipts.
-
-## Recording → transcript → future memory
-
-```mermaid
-flowchart TD
-    VISIT["Visit"] --> CONSENT["Recording consent + microphone permission"]
-    CONSENT --> AUDIO["Native AVFoundation / browser MediaRecorder; pause / finish / saved original"]
-    AUDIO --> PLAY["Playback from original saved file"]
-    AUDIO --> REQUEST["Explicit transcribe action when configured"]
-    REQUEST --> SERVER["Raw audio to Swift API; max16MiB"]
-    SERVER --> WHISPER["Whisper1 multipart request;90s server bound"]
-    WHISPER --> SEGMENTS["Validated relative offsets + generic speaker + text"]
-    SAMPLE["Separate fictional transcript / no matching audio"] --> SEGMENTS
-    SEGMENTS --> EDIT["Correct words; retain timestamps, speakers and separate notes"]
-    EDIT --> MEMORY["Stable saved-memory record linked to originating transcript"]
-    MEMORY --> FUTURE["Search and future pre-visit source selection"]
-    classDef reva fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    class VISIT,CONSENT,AUDIO,PLAY,REQUEST,SERVER,WHISPER,SEGMENTS,SAMPLE,EDIT,MEMORY,FUTURE reva;
-```
-
-New audio never receives the sample transcript. Recording pauses when the app leaves the foreground. Existing saved memory updates under its stable ID, while corrections retain source identity and separate notes. Browser media uses a secure context (HTTPS or localhost), capability checks, consent and original codec metadata; WebM/Ogg are accepted by the Swift transport, while playback depends on the receiving device. Physical capture/signing and Safari/Firefox hardware validation remain manual checks; sample and adapter tests provide the deterministic demo.
-
-## Data and ownership boundaries
-
-| Storage | What it holds | Consistency boundary |
-| --- | --- | --- |
-| iPhone App Support | Medical profile, records including structured symptom entries, visits/reports, bookings, recordings/transcripts; original document/audio files | Atomic snapshot plus one backup; pulled originals stage without overwriting conflicting local bytes |
-| Browser IndexedDB | Native-compatible snapshot, local revision, original document/audio Blobs | Atomic snapshot/CAS and downloaded-original transaction; quota errors visible; no silent reset |
-| Local Swift server | Owner-scoped snapshot/revision and bounded attachments | Single writer, atomic owner-file replacement |
-| Tiger PostgreSQL | `reva_owner_state` JSONB, `reva_attachments` BYTEA, `reva_mutations` audit | Owner row lock and transactional mutation; parameter binding and verified TLS |
-| Server call-receipt directory | Reviewed request, durable intent, conversation ID/status | Owner/request identity, file sync/rename, process lock; retained independently of snapshots |
-| Provider services | Only content explicitly submitted for that operation | External account policies and credentials; no automatic account provisioning |
-
-Native transfers now deduplicate filenames, capture the source snapshot and connection generation, and reject newer local edits or conflicting original bytes during pull. Browser pulls commit their downloaded originals and revision-checked snapshot in one IndexedDB transaction; the two clients retain their respective storage boundaries. Server snapshot push uses a base revision. Conflict resolution is explicit. Attachment transfers and snapshot commits are separate operations; a failed sync can leave already-copied files, so this MVP does not claim atomic rollback across both. Root `.env` stays untracked. Client access tokens remain in memory for the session; provider keys never enter either client. Browser originals are SHA256-checked before fixture fallback; source IDs, page/version citations and all three demo report hashes match the native engine. See the [compatibility limits](../apps/web/src/core/COMPATIBILITY.md).
-
-## Three-person development map
+## Appointment recording and memory
 
 ```mermaid
 flowchart LR
-    P1["Person1 / records, profile and preparation"] --> R["Native Records + Preparation / browser records + profile + visit brief"]
-    P2["Person2 / booking and visit memory"] --> V["Native Visits / browser booking + recordings + capture"]
-    P3["Person3 / server and providers"] --> S["Server / SQL / provider adapters / native and browser API transport"]
-    CAP["Integration captain"] --> SHARED["Shared DTOs / stores / theme and shell / package and project generators"]
-    R --> CONTRACT["Versioned wire contract and coordinated shared edits"]
-    V --> CONTRACT
-    S --> CONTRACT
-    SHARED --> CONTRACT
-    classDef reva fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    class P1,P2,P3,R,V,S,CAP,SHARED,CONTRACT reva;
+    CONSENT["Doctor and everyone present consent"] --> CAPTURE["Record appointment / upload existing audio"]
+    CAPTURE --> SAVE["Save original audio and metadata"]
+    SAVE --> TRANSCRIBE["Whisper timestamped transcript"]
+    TRANSCRIBE --> REVIEW["Review / correct words; preserve timing"]
+    REVIEW --> AI["Gemini appointment summary"]
+    REVIEW --> NOTES["Separate personal notes"]
+    AI --> MEMORY["Save visit memory to Records"]
+    NOTES --> MEMORY
+    REVIEW --> MEMORY
+    MEMORY --> SOURCE["Full transcript / original-audio backlink"]
 ```
 
-The [team guide](team-workflow.md) assigns exact files, worktree commands and starter tasks. Feature modules remain one Swift target to keep the MVP simple; separation is by owned folders and focused state extensions. Shared model/wire changes and Xcode project regeneration have one integration owner. Screens/editors now occupy separate files; `BookingEngine` is separate from `ReportEngine`, and provider wire values live in `ProviderContracts`. Every production Swift file and browser source block has a leading responsibility contract and named logical sections, checked by `scripts/check_code_structure.py`; see the [coding standard and block diagram](coding-standard.md).
+Before capture, both clients display: **Get your doctor’s consent and permission from everyone present before recording.** Recording requires explicit confirmation. Capture supports pause/finish and retains completed audio after save failure. Browser audio and metadata commit atomically in the active account/demo repository. Native keeps a recoverable local file. Fictional sample transcripts are separate from new audio.
 
-## Ready now and manual next steps
+Whisper returns recording-relative segments with generic speaker labels; this is not reliable doctor/patient diarization. Appointment summarization uses the complete timestamped transcript, never unrelated personal notes or a truncated local excerpt. Existing recording `summary` stores personal notes. Optional `aiSummary`, `aiSummaryModel`, and `aiSummaryGeneratedAt` store the derived output separately and remain backward-decodable.
 
-The native build, local journeys, provider request/response mocks, real local-server auth/persistence checks and native provider-fixture UI have passed. The [verification sheet](verification/README.md) records exact counts and limitations. Before using live integrations, configure private tokens, keys/model access, the ElevenLabs agent and imported Twilio number, a persistent server directory, HTTPS hosting for a physical phone, and Tiger credentials if selecting PostgreSQL; then run a credentialed smoke check with synthetic data. No such live activation was performed here.
-
-The browser extension is implemented and verified locally. MyChart import, custom password encryption, production medical-data deployment and extensive post-MVP polish remain outside this deadline. Checkpoint history and the manual feedback workflow are preserved for the next revisions.
+Transcript changes invalidate derived AI output. Provider results require the same source and connection context before publication. Saving a memory retains full transcript source text and original recording identity; the optional AI summary is a separate derived view. User notes and source corrections survive provider failures.
 
 ## Accounts and Tiger persistence
 
-**Configured, not live-verified.** The pieces below exist in source and documentation: the server accounts contract (bcrypt users, hashed session tokens, CORS), the browser `/signup`, `/login`, and `/app` pages, [`server/Dockerfile`](../server/Dockerfile), [`scripts/tiger_provision.py`](../scripts/tiger_provision.py), and the [Tiger setup guide](tiger-setup.md). No Tiger Cloud service, deployed API host, or Docker image build was exercised during this build. Petal nodes are implemented code paths; the white node is the static host configuration; dashed nodes are the hosted database objects that the first deployment creates.
+Browser `/signup`, `/login`, and `/app` use the implemented auth routes. Sessions persist in `reva.session.v1`; account data uses per-user IndexedDB and debounced auto-sync. `/demo` has three isolated fictional profiles and manual sync. Native continues using configured static bearer tokens. Both identity types resolve to an authenticated owner on the server.
 
-```mermaid
-flowchart LR
-    subgraph BROWSER["Browser"]
-        PAGES["/ landing · /signup · /login forms"]
-        WORKSPACE["/app workspace · session in localStorage reva.session.v1 · debounced auto-sync"]
-        DEMO["/demo · fictional data · unchanged"]
-    end
-    subgraph VERCEL["Vercel static site · apps/web dist"]
-        STATIC["index.html + hashed assets · VITE_REVA_API_ORIGIN baked at build time"]
-    end
-    subgraph HOST["API host · server/Dockerfile · Vapor on 0.0.0.0:8080 behind platform HTTPS"]
-        CORS["CORS for REVA_ALLOWED_ORIGINS exact origins"]
-        AUTH["/v1/auth signup · login · session · logout · logout-all · password · account"]
-        BEARER["BearerMiddleware: constant-time static token, else rs_ token → SHA-256 lookup"]
-        STATE["/v1/state · /v1/attachments · provider routes · owner = user id"]
-        MIGRATE["Start-up migrations 001 → 002 under advisory lock"]
-    end
-    subgraph TIGER["Tiger Cloud PostgreSQL · free shared · us-east-1 · TLS"]
-        USERS[("reva_users · bcrypt hash")]
-        SESSIONS[("reva_sessions · token hash · expiry · revocation")]
-        OWNER[("reva_owner_state · reva_attachments · reva_mutations")]
-        VERSIONS[("reva_schema_migrations")]
-    end
-    PAGES -->|"GET static"| STATIC
-    WORKSPACE -->|"GET static"| STATIC
-    DEMO -->|"GET static"| STATIC
-    PAGES -->|"POST JSON ≤ 16 KiB"| CORS
-    WORKSPACE -->|"Authorization: Bearer rs_…"| CORS
-    CORS --> AUTH
-    CORS --> BEARER
-    BEARER --> STATE
-    AUTH -.-> USERS
-    AUTH -.-> SESSIONS
-    BEARER -.->|"lookup · touch lastUsedAt ≤ once per 5 min"| SESSIONS
-    STATE -.-> OWNER
-    MIGRATE -.-> VERSIONS
-    classDef local fill:#FAE6E5,stroke:#B84250,color:#342B2C;
-    classDef adapter fill:#FFFFFF,stroke:#B84250,color:#342B2C;
-    classDef external fill:#FBF7F5,stroke:#DBCBC9,color:#342B2C,stroke-dasharray:5 5;
-    class PAGES,WORKSPACE,DEMO,CORS,AUTH,BEARER,STATE,MIGRATE local;
-    class STATIC adapter;
-    class USERS,SESSIONS,OWNER,VERSIONS external;
-```
-
-Sign-up, log-in, and the bearer flow as configured:
+Bcrypt work runs off the Vapor event loop. Session tokens are stored as hashes server-side, with expiration, revocation and a 20-live-session cap. Password changes and session issuance share an atomic user check. Local `.accounts.json` avoids valid owner filenames; shape-checked migration preserves old registries and static owner data. PostgreSQL account/session tables and owner state are separate, parameter-bound and transactional.
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser (/signup → /app)
-    participant V as Vercel static site
-    participant A as API host (Vapor)
-    participant T as Tiger PostgreSQL
-    B->>V: GET /signup
-    V-->>B: static page; API origin from VITE_REVA_API_ORIGIN
-    B->>A: POST /v1/auth/signup {email, password, name}
-    A->>A: normalize email · check policy · bcrypt cost 12 off the event loop
-    A->>T: INSERT reva_users · INSERT reva_sessions (SHA-256 of rs_ token)
-    A-->>B: 201 {token rs_…, expiresAt, user}
-    B->>B: store reva.session.v1 · location.assign('/app')
-    B->>A: GET /v1/state · Authorization: Bearer rs_…
-    A->>T: SELECT session by token hash JOIN user · reject expired/revoked
-    A->>T: SELECT reva_owner_state WHERE owner_id = user id
-    A-->>B: 404 + X-State-Revision: 0 on first use
-    B->>A: PUT /v1/state {baseRevision: 0, empty personal snapshot}
-    A->>T: lock owner row · write snapshot revision 1 · audit row
-    A-->>B: {revision: 1}
-    Note over B,A: Log-in repeats with POST /v1/auth/login; 8 failures per email in 15 min → 429 Retry-After
-    Note over A,T: REVA_STORAGE=postgres · DATABASE_URL sslmode=require · no local fallback
+    participant B as Browser
+    participant A as Vapor API
+    participant D as Local store / PostgreSQL
+    B->>A: Sign up or log in
+    A->>D: Verify user / create hashed session
+    A-->>B: Opaque session + user
+    B->>B: Open per-user IndexedDB
+    B->>A: Authenticated state / attachment sync
+    A->>D: Owner-scoped revisions and originals
+    D-->>B: Saved data or explicit conflict
 ```
 
-| Setting | Where | Value |
-| --- | --- | --- |
-| `REVA_STORAGE`, `DATABASE_URL` | API host | `postgres`, the Tiger connection string printed once by `scripts/tiger_provision.py create` |
-| `REVA_ACCOUNTS`, `REVA_SIGNUP`, `REVA_SESSION_DAYS` | API host | `enabled`, `open`, `30` by default |
-| `REVA_ALLOWED_ORIGINS` | API host | exact `https://<vercel-domain>` origins; never `*` |
-| `VITE_REVA_API_ORIGIN` | Vercel project | `https://<api-host>`; rebuilt into the bundle on redeploy |
-| `connect-src` in `vercel.json` | Vercel | must add the API origin before cross-origin requests can leave the page |
+Native snapshots use atomic JSON plus a backup and separate original files. Browser snapshots/originals use revision-checked IndexedDB transactions. Server local storage uses owner files; PostgreSQL uses JSONB snapshots and BYTEA attachments. Network attachment transfers and snapshot commits are separate requests, so cross-request sync is not a single transaction.
 
-Static `REVA_TOKENS` identities keep working beside accounts for the iOS developer path. The demo at `/demo` still uses the local demo token and manual sync. The setup guide's checklist (health, sign-up, log-in, session, state round trip, CORS preflight, `SELECT count(*) FROM reva_users;`) is the acceptance test for the first real deployment; until it runs, this section describes configuration, not observed behaviour.
+The legacy `bookings` array remains inert for old snapshot compatibility. Call execution, simulation, routes, settings and provider integration have been removed. Historical user data is retained without a destructive migration.
 
+## Time, hosting and verification
 
-## Preserved integration boundaries — September 12, 2026
+Both clients default to `America/Chicago`, following CST/CDT. Existing explicit zones remain authoritative. Date-only record dates and birthdays retain their calendar date, while absolute timestamps remain ISO/UTC on the wire.
 
-The remote ElevenLabs documentation and original browser, native, and evidence repair branch histories are merged with the account/landing work and the approved native glass tab behavior. Central time defaults, source evidence, OCR limits, recording recovery, and the streamlined record workflow remain in place. The [integration report](reviews/08-preserved-integration.md) records verification and the preserved worktree checkpoints.
+The root Vercel configuration builds the browser. The production web bundle needs a configured HTTPS API origin plus matching CSP/CORS; local development uses a fixed loopback proxy. The server Dockerfile and Tiger provisioning/setup path exist. A successful build or push does not prove a deployed API, live database or provider credentials work.
 
-Account storage uses `.accounts.json` locally, outside valid owner filenames. Only an unambiguous legacy account registry is migrated from `accounts.json`; static owner data stays intact. PostgreSQL migrations discard standalone SQL comment lines before splitting bundled statements. Password changes and session issuance share an atomic user check so older verified credentials cannot create a session after replacement. Browser original-file previews and captured audio use the active store repository; recording metadata and original bytes commit together before auto-sync.
+Current checks: [appointment recording verification](verification/appointment-recording.md). Earlier integration/recovery: [preserved integration report](reviews/08-preserved-integration.md). Team boundaries and required checks: [workflow](team-workflow.md) and [coding standard](coding-standard.md). Physical camera/microphone behavior, live provider quality and hosted PostgreSQL require separate verification.

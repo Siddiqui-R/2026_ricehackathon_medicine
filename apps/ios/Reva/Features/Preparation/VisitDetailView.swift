@@ -1,19 +1,18 @@
-// Purpose: Coordinate preparation, booking, and memory actions for one visit.
-// Inputs: A visit ID plus AppStore visits, records, bookings, and recordings.
-// Outputs: Visit details and routes to briefs, booking, audio, and editors.
+// Purpose: Coordinate preparation and appointment memory actions for one visit.
+// Inputs: A visit ID plus AppStore visits, records and recordings.
+// Outputs: Visit details and routes to briefs, audio, and editors.
 // Side effects: Can generate a brief, load a sample transcript, or update visit status through AppStore.
 
 import SwiftUI
 
 // MARK: - VisitDetailView
-/// Coordinate preparation, booking, and memory actions for one visit.
+/// Coordinate preparation and appointment memory actions for one visit.
 struct VisitDetailView: View {
     // MARK: - Inputs and view state
 
     @EnvironmentObject private var store: AppStore
     let id: String
     @State private var editing = false
-    @State private var booking = false
     @State private var recording = false
     @State private var showReport = false
     @State private var generating = false
@@ -86,43 +85,15 @@ struct VisitDetailView: View {
                             ).font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    SectionHeading(title: "Plan the appointment")
-                    RevaCard {
-                        Button {
-                            booking = true
-                        } label: {
-                            Label("Request a booking · simulation", systemImage: "phone.arrow.up.right").font(
-                                .headline)
-                        }.padding(.vertical, 5)
-                        if store.providerStatus?.booking.configured == true
-                            && store.providerStatus?.liveCallsEnabled == true
-                        {
-                            NavigationLink {
-                                LiveBookingEditorView(visit: visit)
-                            } label: {
-                                Label("Call clinic with connected agent", systemImage: "phone.arrow.up.right")
-                            }
-                        }
-                        ForEach(store.bookings.filter { $0.visitID == id }) { request in
-                            Divider()
-                            NavigationLink {
-                                BookingStatusView(id: request.id)
-                            } label: {
-                                HStack {
-                                    Text(request.clinic)
-                                    Spacer()
-                                    StatusChip(text: BookingStatusView.label(request.status))
-                                }
-                            }
-                        }
-                    }
                     SectionHeading(title: "During & after your visit")
                     RevaCard {
                         Button {
                             recording = true
                         } label: {
-                            Label("Record this visit", systemImage: "mic").font(.headline)
+                            Label("Record appointment", systemImage: "mic").font(.headline)
                         }.padding(.vertical, 5)
+                        Text("Record with permission, then transcribe and summarize your appointment.")
+                            .font(.caption).foregroundStyle(.secondary)
                         Divider()
                         Button {
                             store.perform { sampleID = try store.loadSample(visitID: id) }
@@ -155,7 +126,6 @@ struct VisitDetailView: View {
                     }.frame(maxWidth: .infinity).padding(.vertical, 8)
                 }
                 .sheet(isPresented: $editing) { NavigationStack { VisitEditorView(existing: visit) } }
-                .sheet(isPresented: $booking) { NavigationStack { BookingEditorView(visit: visit) } }
                 .sheet(isPresented: $recording) { NavigationStack { RecordingSessionView(visit: visit) } }
                 .navigationDestination(isPresented: $showReport) { ReportView(visitID: id) }
                 .navigationDestination(item: $sampleID) { RecordingDetailView(id: $0) }

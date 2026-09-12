@@ -9,6 +9,7 @@ import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
 import type { Visit, VisitRecording } from '../../core/models';
 import { durationLabel, formatDate, uid } from '../../core/domain';
+import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Card } from '../../components/ui';
 import { RecordingCapture } from './RecordingCapture';
 import { RecordingDetail } from './RecordingDetail';
@@ -62,13 +63,13 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
     <Card className="stack recordings-panel">
       <div className="section-heading">
         <div>
-          <h2>Recordings & visit memories</h2>
-          <p className="muted small">Save the conversation and return to what was discussed.</p>
+          <h2>Appointment recording</h2>
+          <p className="muted small">Record, transcribe, then summarize what was discussed.</p>
         </div>
         <Mic size={21} />
       </div>
       <Button onClick={() => setCapturing(true)}>
-        <Mic size={17} /> Record or upload audio
+        <Mic size={17} /> Record appointment
       </Button>
       {recordings.length ? (
         <div className="record-list">
@@ -89,9 +90,11 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
                 <Badge tone={recording.isSample ? 'review' : 'neutral'}>
                   {recording.isSample
                     ? 'Sample · no audio'
-                    : recording.segments.length
-                      ? 'Transcript available'
-                      : 'Original audio saved'}
+                    : hasRecordingSummary(recording)
+                      ? 'Summary available'
+                      : recording.segments.length
+                        ? 'Transcript available'
+                        : 'Original audio saved'}
                 </Badge>
               </span>
               <ChevronRight size={17} />

@@ -79,7 +79,7 @@ docker build -t reva-api ./server
 
 [`server/Dockerfile`](../server/Dockerfile) is a multi-stage build: `swift:6.1-noble` runs `swift build -c release --product RevaAPI --static-swift-stdlib`, then the executable and every `*.resources` bundle (including `RevaServer_RevaServer.resources/Migrations/*.sql`, which the migration runner loads through `Bundle.module`) are copied into `swift:6.1-noble-slim` with `ca-certificates` for Tiger's TLS chain. The image runs as the non-root user `reva`, sets `REVA_HOST=0.0.0.0`, `REVA_PORT=8080`, and `REVA_DATA_DIRECTORY=/app/data`, declares `EXPOSE 8080`, and starts with `CMD ["./RevaAPI", "serve"]`. [`server/.dockerignore`](../server/.dockerignore) keeps `.build`, `.local-data`, env files, and logs out of the context. **The image has not been built locally.**
 
-Any platform that builds a Dockerfile works (Fly.io, Render, Railway, Cloud Run, or a VM behind Caddy). The container serves plain HTTP, so the platform must terminate HTTPS in front of it; the browser client refuses a non-HTTPS API origin except loopback. If the platform injects a `PORT` variable, set `REVA_PORT` to the same value: the server reads only `REVA_PORT` and rejects Vapor `--port`/`--hostname` overrides. Mount a persistent volume at `/app/data`; outbound-call receipts live there even in PostgreSQL mode.
+Any platform that builds a Dockerfile works (Fly.io, Render, Railway, Cloud Run, or a VM behind Caddy). The container serves plain HTTP, so the platform must terminate HTTPS in front of it; the browser client refuses a non-HTTPS API origin except loopback. If the platform injects a `PORT` variable, set `REVA_PORT` to the same value: the server reads only `REVA_PORT` and rejects Vapor `--port`/`--hostname` overrides. Local-file mode needs persistent storage at `/app/data`; PostgreSQL mode stores account, snapshot and original-file data in the database.
 
 ### Environment for the API host
 
@@ -95,7 +95,7 @@ Any platform that builds a Dockerfile works (Fly.io, Render, Railway, Cloud Run,
 | `REVA_ALLOWED_ORIGINS` | `https://<vercel-domain>` | Exact origins, comma-separated; never `*`. Add preview domains explicitly. Invalid entries fail start-up. |
 | `REVA_DATA_DIRECTORY` | `/app/data` | Set in the image. Call receipts; mount a volume. |
 | `REVA_TOKENS` | optional JSON `{"<24+ char token>":"<owner-id>"}` | iOS developer path: a static token entered in Profile > Developer server connection, and the mapping that unlocks paid providers. Not needed for browser accounts. |
-| Provider keys | optional | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ELEVENLABS_*` as in [server/README.md](../server/README.md#configurable-mvp-providers). |
+| Provider keys | optional | `GEMINI_API_KEY`, `OPENAI_API_KEY` as in [server/README.md](../server/README.md#configurable-mvp-providers). |
 
 Identity rule: PostgreSQL mode (and any non-loopback listener) requires `REVA_TOKENS` **or** `REVA_ACCOUNTS=enabled`. With accounts enabled and no `REVA_TOKENS`, there is no public demo token and `/health` reports `isDemo: false`.
 

@@ -171,7 +171,7 @@ public func configure(
             hasher: PasswordHasher(cost: passwordCost, threadPool: app.threadPool))
     }
     registerProviderRoutes(
-        secured, configuration: configuration.providers, directory: configuration.directory,
+        secured, configuration: configuration.providers,
         geminiTransport: geminiTransport ?? .live)
     secured.get("state") { request async throws -> StateEnvelope in
         try await store.getState(owner: request.auth.require(OwnerIdentity.self).id)

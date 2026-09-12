@@ -39,10 +39,7 @@ extension AppStore {
             latest.segments = result.segments
             latest.transcriptionModel = result.model
             latest.status = "transcribed"
-            try save(latest)
-            if records.contains(where: { $0.sourceRecordingID == id || $0.id == "memory-" + id }) {
-                try saveMemory(recordingID: id)
-            }
+            try saveRecordingWithExistingMemory(latest)
             notice = "Transcript saved. Review the words and speaker attribution before using it."
         } catch {
             guard context == providerContext else { return }

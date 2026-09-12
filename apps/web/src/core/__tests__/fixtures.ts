@@ -18,8 +18,6 @@ export const sample = (): VisitRecording => structuredClone(sampleJSON);
 export const capabilities: ProviderStatus = {
   gemini: { configured: true, model: 'mock-gemini' },
   transcription: { configured: true, model: 'mock-whisper' },
-  booking: { configured: true, model: 'mock-agent' },
-  liveCallsEnabled: true,
 };
 export function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -123,8 +121,6 @@ export function transport(overrides: Partial<APITransport> = {}): APITransport {
     summarize: unavailable,
     prepare: unavailable,
     transcribe: unavailable,
-    startCall: unavailable,
-    callStatus: unavailable,
     ...overrides,
   };
 }

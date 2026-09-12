@@ -1,9 +1,10 @@
-// Purpose: Preserve native record-version, transcript-memory and booking invariants.
-// Inputs: Snapshot drafts and user-reviewed source/booking values.
+// Purpose: Preserve native record-version, transcript-memory and appointment-summary invariants.
+// Inputs: Snapshot drafts and user-reviewed source and transcript values.
 // Outputs: Updated in-memory draft values or validation errors.
 // Side effects: Mutates only supplied drafts; never persists or calls providers.
-import type { AppSnapshot, BookingRequest, MedicalRecord, VisitRecording } from './models';
-import { durationLabel, localExcerpt, nowISO, validZone } from './domain';
+import type { AppSnapshot, MedicalRecord, VisitRecording } from './models';
+import { durationLabel, localExcerpt, nowISO } from './domain';
+import { calendarDay } from './dates';
 
 // MARK: - Source-aware version increments and optimistic record editing.
 export function upsertRecord(snapshot: AppSnapshot, incoming: MedicalRecord, expectedVersion?: number): void {
@@ -25,6 +26,42 @@ export function upsertRecord(snapshot: AppSnapshot, incoming: MedicalRecord, exp
 }
 
 // MARK: - Transcript memory preserves stable IDs, original text and separate notes.
+export function recordingTranscript(recording: VisitRecording): string {
+  return recording.segments
+    .map(
+      (segment) =>
+        `[${durationLabel(segment.start)}–${durationLabel(segment.end)}] ${segment.speaker}: ${segment.text}`,
+    )
+    .join('\n\n');
+}
+export function hasRecordingSummary(recording: VisitRecording): boolean {
+  return (
+    recording.segments.length > 0 &&
+    Boolean(
+      recording.aiSummary?.trim() &&
+      recording.aiSummaryModel?.trim() &&
+      recording.aiSummaryGeneratedAt &&
+      Number.isFinite(Date.parse(recording.aiSummaryGeneratedAt)),
+    )
+  );
+}
+export function clearRecordingSummary(recording: VisitRecording): void {
+  recording.aiSummary = undefined;
+  recording.aiSummaryModel = undefined;
+  recording.aiSummaryGeneratedAt = undefined;
+}
+export function invalidateChangedRecordingSummaries(previous: AppSnapshot, draft: AppSnapshot): void {
+  for (const recording of draft.recordings) {
+    const before = previous.recordings.find((item) => item.id === recording.id);
+    if (!before || JSON.stringify(before.segments) === JSON.stringify(recording.segments)) continue;
+    clearRecordingSummary(recording);
+    const index = draft.records.findIndex(
+      (record) => record.id === `memory-${recording.id}` || record.sourceRecordingID === recording.id,
+    );
+    if (index >= 0 && (recording.segments.length || recording.summary.trim()))
+      draft.records[index] = createMemoryRecord(recording, draft, true);
+  }
+}
 export function createMemoryRecord(
   recording: VisitRecording,
   snapshot: AppSnapshot,
@@ -33,15 +70,11 @@ export function createMemoryRecord(
   const existing =
     snapshot.records.find((record) => record.id === `memory-${recording.id}`) ??
     snapshot.records.find((record) => record.sourceRecordingID === recording.id);
-  const full = recording.segments
-    .map(
-      (segment) =>
-        `[${durationLabel(segment.start)}–${durationLabel(segment.end)}] ${segment.speaker}: ${segment.text}`,
-    )
-    .join('\n\n');
+  const full = recordingTranscript(recording);
   const text = full || recording.summary;
   if (!text.trim()) throw new Error('Add notes or a transcript before saving a visit memory.');
-  const summary = localExcerpt(text),
+  const generated = hasRecordingSummary(recording) ? recording.aiSummary! : undefined;
+  const summary = generated ?? localExcerpt(text),
     origin = recording.isSample
       ? 'Fictional sample transcript. No matching audio.'
       : recording.transcriptionModel
@@ -53,7 +86,7 @@ export function createMemoryRecord(
       title: `${recording.title} · memory`,
       kind: 'Recording',
       provider: snapshot.visits.find((visit) => visit.id === recording.visitID)?.provider ?? 'Visit',
-      date: recording.createdAt.slice(0, 10),
+      date: calendarDay(new Date(recording.createdAt)),
       uploadedAt: nowISO(),
       tags: ['visit memory'],
       status: 'ready',
@@ -63,7 +96,7 @@ export function createMemoryRecord(
     }),
     text,
     summary,
-    summaryModel: undefined,
+    summaryModel: generated ? recording.aiSummaryModel : undefined,
     sourceRecordingID: recording.id,
     isDemo: recording.isSample,
     pageTexts: undefined,
@@ -100,39 +133,15 @@ export function reconcileMemory(snapshot: AppSnapshot, id: string, corrected?: R
       values.reduce((total, text) => total + text.length, 0) > 200_000
     )
       throw new Error('Keep segment text nonempty and under the transcript size limits.');
+    const changed = recording.segments.some((segment) => segment.text !== corrected[segment.id]);
     recording.segments.forEach((segment) => {
       segment.text = corrected[segment.id];
     });
+    if (changed) clearRecordingSummary(recording);
     if (!existing) return;
   }
   const memory = createMemoryRecord(recording, snapshot, !!corrected);
   const index = snapshot.records.findIndex((record) => record.id === memory.id);
   if (index < 0) snapshot.records.push(memory);
   else snapshot.records[index] = memory;
-}
-
-// MARK: - Local simulation validation and idempotent appointment confirmation.
-export function validateBooking(request: BookingRequest): void {
-  if (!request.clinic.trim() || request.phone.replace(/\D/g, '').length < 10 || !request.reason.trim())
-    throw new Error('Enter a clinic, complete phone number, and visit reason.');
-  if (
-    !Number.isFinite(Date.parse(request.earliest)) ||
-    !Number.isFinite(Date.parse(request.latest)) ||
-    Date.parse(request.earliest) > Date.parse(request.latest) ||
-    !validZone(request.timeZone)
-  )
-    throw new Error('Check the booking date range and time zone.');
-}
-export function confirmBooking(id: string, snapshot: AppSnapshot): void {
-  const request = snapshot.bookings.find((item) => item.id === id);
-  if (!request) throw new Error('Booking not found.');
-  if (request.confirmedVisitID) return;
-  const visit = snapshot.visits.find((item) => item.id === request.visitID);
-  if (request.isLive || request.status !== 'proposed' || !visit)
-    throw new Error('This simulated booking is not ready to confirm.');
-  visit.date = request.earliest;
-  visit.clinic = request.clinic;
-  visit.timeZone = request.timeZone;
-  request.status = 'confirmed';
-  request.confirmedVisitID = visit.id;
 }

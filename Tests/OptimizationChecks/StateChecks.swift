@@ -81,8 +81,7 @@ enum ServerFailure: LocalizedError {
     static var onStatus: (() async throws -> Void)?
     static var result = ProviderStatus(
         gemini: .init(configured: true, model: "synthetic"),
-        transcription: .init(configured: false, model: "synthetic"),
-        booking: .init(configured: false, model: "synthetic"), liveCallsEnabled: false)
+        transcription: .init(configured: false, model: "synthetic"))
     init(url: String, token: String) throws {}
     func status() async throws -> ProviderStatus {
         try await Self.onStatus?()

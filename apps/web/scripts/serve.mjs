@@ -79,8 +79,6 @@ function apiRoute(pathname) {
   if (pathname === '/v1/ai/summarize') return { POST: 256 * 1024 };
   if (pathname === '/v1/ai/prepare') return { POST: 1024 * 1024 };
   if (pathname === '/v1/audio/transcribe') return { POST: 16 * 1024 * 1024 };
-  if (pathname === '/v1/booking/call') return { POST: 32 * 1024 };
-  if (/^\/v1\/booking\/call\/[A-Za-z0-9_-]{1,80}$/u.test(pathname)) return { GET: 0 };
   if (/^\/v1\/attachments\/[A-Za-z0-9_-]{1,80}$/u.test(pathname))
     return { GET: 0, PUT: 16 * 1024 * 1024, DELETE: 0 };
   return null;
