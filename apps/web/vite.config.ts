@@ -20,6 +20,7 @@ if (
   throw new Error('REVA_API_ORIGIN must be a loopback HTTP origin for the Swift server.');
 }
 export default defineConfig({
+  define: { 'import.meta.env.VITE_REVA_VERCEL': JSON.stringify(String(process.env.VERCEL === '1')) },
   plugins: [react()],
   server: {
     host: '127.0.0.1',

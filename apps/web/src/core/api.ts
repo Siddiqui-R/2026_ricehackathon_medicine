@@ -203,10 +203,16 @@ export async function boundedBytes(response: Response, limit: number): Promise<U
 export class RevaAPI {
   private readonly token: string;
   private readonly fetcher: typeof fetch;
-  constructor(token: string, fetcher: typeof fetch = globalThis.fetch.bind(globalThis)) {
+  private readonly chunkedTransfers: boolean;
+  constructor(
+    token: string,
+    fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
+    chunkedTransfers = import.meta.env.VITE_REVA_VERCEL === 'true',
+  ) {
     if (!token.trim() || /[\r\n]/.test(token)) throw new Error('Enter a nonempty workspace token.');
     this.token = token;
     this.fetcher = fetcher;
+    this.chunkedTransfers = chunkedTransfers;
   }
   private async send(
     path: string,
@@ -309,16 +315,67 @@ export class RevaAPI {
   }
 
   // MARK: - Original bytes use the same SHA256 filename IDs as the native client.
+  // Vercel requests are bounded; staging chunks keeps the existing 16 MiB original limit.
+  private async stageLargeBlob(blob: Blob): Promise<string | undefined> {
+    if (!this.chunkedTransfers || blob.size <= 3 * 1024 * 1024) return undefined;
+    const id = crypto.randomUUID();
+    for (let offset = 0; offset < blob.size; offset += 3 * 1024 * 1024) {
+      await this.send(
+        `/v1/transfers/${id}?offset=${offset}&total=${blob.size}`,
+        'PUT',
+        blob.slice(offset, offset + 3 * 1024 * 1024),
+        { 'Content-Type': 'application/octet-stream' },
+      );
+    }
+    return id;
+  }
   async uploadAttachment(filename: string, blob: Blob): Promise<void> {
     if (!safeFilename(filename) || !blob.size || blob.size > MAX_ATTACHMENT_BYTES)
       throw new Error('Choose a safe original filename and a nonempty file no larger than 16 MiB.');
-    await this.send(`/v1/attachments/${await attachmentID(filename)}`, 'PUT', blob, {
+    const upload = await this.stageLargeBlob(blob);
+    await this.send(`/v1/attachments/${await attachmentID(filename)}`, 'PUT', upload ? undefined : blob, {
+      ...(upload ? { 'X-Reva-Upload': upload } : {}),
       'Content-Type': uploadContentType(blob.type),
       'X-Filename': attachmentMetadataName(filename),
     });
   }
   async attachment(filename: string): Promise<Blob> {
     if (!safeFilename(filename)) throw new Error('Invalid original filename.');
+    if (this.chunkedTransfers) {
+      const path = `/v1/attachments/${await attachmentID(filename)}`;
+      const chunks: Uint8Array<ArrayBuffer>[] = [];
+      let etag = '';
+      let offset = 0,
+        total = 0,
+        type = 'application/octet-stream';
+      do {
+        const response = await this.send(
+          path,
+          'GET',
+          undefined,
+          { Range: `bytes=${offset}-${offset + 3 * 1024 * 1024 - 1}`, ...(etag ? { 'If-Match': etag } : {}) },
+          3 * 1024 * 1024,
+        );
+        const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') ?? '');
+        if (
+          !range ||
+          Number(range[1]) !== offset ||
+          Number(range[2]) - offset + 1 !== response.bytes.length ||
+          Number(range[3]) > MAX_ATTACHMENT_BYTES ||
+          (total && Number(range[3]) !== total)
+        )
+          throw new Error('Original download changed or returned an invalid byte range.');
+        total = Number(range[3]);
+        const nextTag = response.headers.get('ETag');
+        if (!nextTag || (etag && nextTag !== etag))
+          throw new Error('Original changed during download. Please retry.');
+        etag = nextTag;
+        offset += response.bytes.length;
+        chunks.push(response.bytes);
+        type = response.headers.get('Content-Type') || type;
+      } while (offset < total);
+      return new Blob(chunks, { type });
+    }
     const { bytes, headers } = await this.send(
       `/v1/attachments/${await attachmentID(filename)}`,
       'GET',
@@ -378,11 +435,16 @@ export class RevaAPI {
   async transcribe(filename: string, audio: Blob): Promise<AudioTranscription> {
     if (!safeFilename(filename) || !audio.size || audio.size > MAX_ATTACHMENT_BYTES)
       throw new Error('Saved audio must be nonempty and no larger than 16 MiB.');
+    const upload = await this.stageLargeBlob(audio);
     const { bytes } = await this.send(
       '/v1/audio/transcribe',
       'POST',
-      audio,
-      { 'Content-Type': audio.type.split(';')[0], 'X-Filename': attachmentMetadataName(filename) },
+      upload ? undefined : audio,
+      {
+        'Content-Type': audio.type.split(';')[0],
+        'X-Filename': attachmentMetadataName(filename),
+        ...(upload ? { 'X-Reva-Upload': upload } : {}),
+      },
       MAX_SNAPSHOT_BYTES,
       110_000,
     );
