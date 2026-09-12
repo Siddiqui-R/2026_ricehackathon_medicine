@@ -7,3 +7,5 @@ A concurrent Windows repair was published as [`36c055d`](https://github.com/Sidd
 The merge retains both commit ancestries, consolidates duplicate implementations and preserves the independent improvements identified during comparison. No history is force-pushed or replaced.
 
 The later [handoff at checkpoint b8d326a](https://github.com/Siddiqui-R/2026_ricehackathon_medicine/blob/b8d326a2855b79bc4c2d9a76af0bb0b4e0c58f12/docs/audit-repair-checklist.md) is also retained in the merged history. Refer to that existing document for its separate setup review.
+
+For the subsequent service setup, see the [ElevenLabs setup checklist](elevenlabs-setup.md), [agent prompt](elevenlabs-agent-prompt.md), and [seven passing synthetic tests](elevenlabs-agent-tests.md). The key and scheduling agent are configured locally; Twilio connection, backend prerequisites and an explicitly reviewed live call remain unfinished. All credentials stay outside Git.
