@@ -54,6 +54,7 @@ export interface SourceReference {
   recordID: string;
   page: number;
   excerpt: string;
+  excerptOmitted?: boolean;
   sourceVersion?: number | null;
 }
 export interface ReportSection {
