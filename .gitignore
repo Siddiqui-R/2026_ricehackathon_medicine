@@ -20,7 +20,7 @@ __pycache__/
 *.pyc
 
 # Generated browser packages, OCR/demo copies, and verification output
-apps/web/node_modules/
+node_modules/
 apps/web/dist/
 apps/web/public/demo/
 apps/web/public/ocr/

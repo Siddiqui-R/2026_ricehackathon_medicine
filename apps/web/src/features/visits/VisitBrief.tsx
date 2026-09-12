@@ -9,6 +9,7 @@ import { useReva } from '../../core/RevaContext';
 import type { ReportSection, Visit } from '../../core/models';
 import { formatDate, reportIsStale } from '../../core/domain';
 import { Badge, Button, Card, EmptyState, Field, Modal } from '../../components/ui';
+import { applyBriefNotesValues } from './briefNotesEdits';
 
 // MARK: - Suppress only a body already displayed verbatim by its source quotations
 function sectionBodyRepeatsSourceQuotes(section: ReportSection): boolean {
@@ -204,10 +205,12 @@ export function VisitBrief({ visit }: { visit: Visit }) {
 }
 
 // MARK: - User questions and notes remain authoritative across regeneration
-function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => void }) {
+export function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => void }) {
   const { mutate } = useReva();
-  const [questions, setQuestions] = useState(visit.questions.join('\n'));
-  const [notes, setNotes] = useState(visit.notes);
+  // Props advance when preparation finishes; the conflict baseline must remain the opening form values.
+  const [baseline] = useState(() => ({ id: visit.id, questions: [...visit.questions], notes: visit.notes }));
+  const [questions, setQuestions] = useState(baseline.questions.join('\n'));
+  const [notes, setNotes] = useState(baseline.notes);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save(event: FormEvent) {
@@ -215,26 +218,23 @@ function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => voi
     setSaving(true);
     setError('');
     try {
-      await mutate((draft) => {
-        const latest = draft.visits.find((item) => item.id === visit.id);
-        if (!latest) throw new Error('This visit is no longer available.');
-        if (
-          latest.notes !== visit.notes ||
-          JSON.stringify(latest.questions) !== JSON.stringify(visit.questions)
-        )
-          throw new Error(
-            'Your questions or notes changed while this editor was open. Reopen it to review the latest version.',
-          );
-        latest.questions = questions
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean);
-        latest.notes = notes;
-        if (latest.report) {
-          latest.report.questions = latest.questions;
-          latest.report.notes = notes;
-        }
-      });
+      await mutate((draft) =>
+        applyBriefNotesValues(
+          draft,
+          baseline.id,
+          {
+            questions:
+              questions === baseline.questions.join('\n')
+                ? baseline.questions
+                : questions
+                    .split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean),
+            notes,
+          },
+          baseline,
+        ),
+      );
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Your notes could not be saved.');

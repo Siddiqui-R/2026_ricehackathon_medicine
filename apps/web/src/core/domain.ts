@@ -3,6 +3,7 @@
 // Outputs: Deterministic source selections and asynchronous SHA256-stamped reports.
 // Side effects: Generates UUIDs/timestamps and uses browser Web Crypto; no HTTP or persistence.
 import type { MedicalRecord, Visit, VisitReport } from './models';
+import { sourceLines, sourcePassage, sourceText, passageNotice } from './sourceExcerpt';
 export { validateSnapshot, safeFilename } from './validation';
 export { makeSymptomRecord, validateSymptomEntry } from './symptoms';
 export { createMemoryRecord, reconcileMemory, validateBooking, confirmBooking } from './mutations';
@@ -19,13 +20,15 @@ export function validZone(zone: string): boolean {
   }
 }
 export function formatDate(text: string, withTime = false, zone?: string): string {
-  const value = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T12:00:00Z` : text);
+  // Hiding the clock must not move an instant to its UTC calendar day.
+  const calendarDay = /^\d{4}-\d{2}-\d{2}$/.test(text);
+  const value = new Date(calendarDay ? `${text}T12:00:00Z` : text);
   if (!Number.isFinite(value.getTime())) return 'Invalid date';
   const options: Intl.DateTimeFormatOptions = {
     dateStyle: 'medium',
     ...(withTime ? { timeStyle: 'short' as const } : {}),
   };
-  options.timeZone = !withTime ? 'UTC' : zone && validZone(zone) ? zone : undefined;
+  options.timeZone = calendarDay ? 'UTC' : zone && validZone(zone) ? zone : undefined;
   return new Intl.DateTimeFormat(undefined, options).format(value);
 }
 export function durationLabel(seconds: number): string {
@@ -43,22 +46,13 @@ export function prefixCharacters(text: string, limit: number): string {
 
 // MARK: - Faithful excerpts without fixture wrapper metadata.
 function contentLines(text: string): string[] {
-  const lines = text
-    .split(/\r\n|[\n\r\v\f\u0085\u2028\u2029]/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  let start = 0;
-  lines.slice(0, 10).forEach((line, index) => {
-    if (line.startsWith('Source date:') || line.startsWith('Week ending:')) start = index + 1;
-  });
-  let end = lines.length;
-  lines.forEach((line, index) => {
-    if (line.startsWith('Invented for Reva software demonstration.')) end = index;
-  });
-  return start < end ? lines.slice(start, end) : lines;
+  return sourceLines(text).map((line) => line.text);
 }
-export function localExcerpt(text: string): string {
-  return prefixCharacters(contentLines(text).slice(0, 24).join('\n'), 1800);
+export function localExcerpt(text: string, isDemo = false): string {
+  return sourcePassage(sourceText(text, isDemo)).text;
+}
+export function excerptNotice(text: string, isDemo = false): string | undefined {
+  return passageNotice(sourcePassage(sourceText(text, isDemo)));
 }
 const words = (text: string): Set<string> =>
   new Set(
@@ -80,7 +74,15 @@ export async function reportSignature(visit: Visit, records: MedicalRecord[]): P
   if (!Number.isFinite(seconds))
     throw new Error('The visit date is invalid. Correct it before preparing a brief.');
   const epoch = Number.isInteger(seconds) ? `${seconds}.0` : String(seconds);
-  const inputs = [visit.type, visit.concern, visit.goal, epoch, [...visit.pinnedRecordIDs].sort().join(',')];
+  // Existing briefs must be regenerated after source-preservation/relevance rules change.
+  const inputs = [
+    'source-rules-v2',
+    visit.type,
+    visit.concern,
+    visit.goal,
+    epoch,
+    [...visit.pinnedRecordIDs].sort().join(','),
+  ];
   for (const record of [...records].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     inputs.push(
       `${record.id}|${record.version}|${record.title}|${record.date}|${record.text}|${record.summary}|${record.tags.join(',')}|${record.status}`,
@@ -111,7 +113,7 @@ const groups = [
   ['lab', 'labs', 'blood', 'thyroid', 'electrolyte'],
 ];
 const stopWords = new Set(
-  'want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptom symptoms entry entries user recent next right left source record details together information recent ongoing routine explain planning plan'.split(
+  'want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptom symptoms entry entries user recent next right left source record details together information recent ongoing routine explain planning plan patient reported documents existing organize unresolved'.split(
     ' ',
   ),
 );
@@ -124,7 +126,9 @@ export function selectedRecords(visit: Visit, records: MedicalRecord[]): Medical
   return records
     .map((record) => {
       if (visit.pinnedRecordIDs.includes(record.id)) return { record, score: 1000 };
-      const index = words(`${record.title} ${record.tags.join(' ')} ${record.summary} ${record.text}`);
+      const index = words(
+        `${record.title} ${record.tags.join(' ')} ${record.summary} ${sourceText(record.text, record.isDemo)}`,
+      );
       const context = record.tags.some((tag) =>
         ['context', 'medications', 'allergies', 'medical-history', 'medical history'].includes(
           tag.toLowerCase(),
@@ -142,10 +146,10 @@ export function selectedRecords(visit: Visit, records: MedicalRecord[]): Medical
 }
 
 // MARK: - Keep contiguous quotations and real page/version identities.
-function relevantExcerpt(text: string, focus: Set<string>): string {
-  const opening = localExcerpt(text),
+function relevantExcerpt(text: string, focus: Set<string>) {
+  const opening = sourcePassage(text),
     score = (value: string) => intersection(focus, words(value));
-  if (score(opening) > 0) return opening;
+  if (score(opening.text) > 0) return opening;
   const lines = contentLines(text);
   let best = -1,
     maximum = 0;
@@ -156,9 +160,7 @@ function relevantExcerpt(text: string, focus: Set<string>): string {
       best = index;
     }
   });
-  return best < 0
-    ? opening
-    : prefixCharacters(lines.slice(Math.max(0, best - 2), Math.max(0, best - 2) + 24).join('\n'), 1800);
+  return best < 0 ? opening : sourcePassage(text, Math.max(0, best - 2));
 }
 export async function generateReport(visit: Visit, records: MedicalRecord[]): Promise<VisitReport> {
   const selected = selectedRecords(visit, records);
@@ -171,7 +173,7 @@ export async function generateReport(visit: Visit, records: MedicalRecord[]): Pr
     let pageIndex = 0,
       maximum = -1;
     pages.forEach((page, index) => {
-      const content = contentLines(page).join(' ').toLowerCase();
+      const content = sourceText(page, record.isDemo).toLowerCase();
       let score = intersection(focus, words(content));
       if (focus.has('implant') || focus.has('hardware')) {
         if (content.includes('implant location:')) score += 20;
@@ -182,14 +184,17 @@ export async function generateReport(visit: Visit, records: MedicalRecord[]): Pr
         pageIndex = index;
       }
     });
-    const excerpt = relevantExcerpt(pages[pageIndex] ?? record.text, focus);
+    const passage = relevantExcerpt(sourceText(pages[pageIndex] ?? record.text, record.isDemo), focus);
+    const excerpt = passage.text;
     sections.push({
       id: uid(),
       title: record.title,
       body:
         (record.status === 'needsReview'
           ? 'Needs review: verify this extraction against the original.\n\n'
-          : '') + excerpt,
+          : '') +
+        (passageNotice(passage) ? passageNotice(passage) + '\n\n' : '') +
+        excerpt,
       sources: [
         {
           recordID: record.id,

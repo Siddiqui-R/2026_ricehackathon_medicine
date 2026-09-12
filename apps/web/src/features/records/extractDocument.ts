@@ -35,6 +35,19 @@ export function boundedText(text: string, maximum = MAX_TEXT_BYTES) {
 function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new DOMException('Extraction cancelled.', 'AbortError');
 }
+// Keep embedded wording intact and omit repeated OCR header lines when a page mixes text with a scan.
+function mergePageText(embedded: string, recognized: string): string {
+  if (!embedded) return recognized;
+  const normalized = (text: string) => text.trim().replace(/\s+/gu, ' ');
+  const existing = new Set(embedded.split('\n').map(normalized).filter(Boolean));
+  if (normalized(embedded) === normalized(recognized)) return embedded;
+  const additional = recognized
+    .split('\n')
+    .filter((line) => !existing.has(normalized(line)))
+    .join('\n')
+    .trim();
+  return additional ? `${embedded}\n${additional}` : embedded;
+}
 // Worker termination does not reject Tesseract's pending job promise, so race it explicitly.
 function localWork<T>(work: Promise<T>, signal: AbortSignal, milliseconds: number): Promise<T> {
   checkAbort(signal);
@@ -240,12 +253,22 @@ export async function extractDocument(
       appendPage(text.trim());
     } else if (type === 'application/pdf') {
       progress('Opening PDF on this device…');
-      const { getDocument, GlobalWorkerOptions } = await localWork(
+      const { getDocument, GlobalWorkerOptions, OPS } = await localWork(
         import('pdfjs-dist'),
         signal,
         remainingTime(30_000),
       );
       GlobalWorkerOptions.workerSrc = pdfWorkerURL;
+      // Any raster drawing can contain source words, even when an embedded header exceeds the text threshold.
+      const rasterOperators = new Set([
+        OPS.paintImageXObject,
+        OPS.paintImageXObjectRepeat,
+        OPS.paintInlineImageXObject,
+        OPS.paintInlineImageXObjectGroup,
+        OPS.paintImageMaskXObject,
+        OPS.paintImageMaskXObjectGroup,
+        OPS.paintImageMaskXObjectRepeat,
+      ]);
       checkAbort(signal);
       loading = getDocument({
         data: new Uint8Array(await localWork(file.arrayBuffer(), signal, remainingTime(30_000))),
@@ -273,8 +296,8 @@ export async function extractDocument(
         pageLabel = `Page ${number}: `;
         progress(`Reading PDF page ${number} of ${Math.min(pdf.numPages, MAX_PAGES)}…`);
         const page = await localWork(pdf.getPage(number), signal, remainingTime(15_000));
+        let text = '';
         try {
-          let text = '';
           try {
             const content = await localWork(page.getTextContent(), signal, remainingTime(15_000));
             text = content.items
@@ -282,11 +305,24 @@ export async function extractDocument(
               .join('')
               .trim();
           } catch {
+            checkAbort(signal);
             result.warnings.push(
               `Page ${number}: Embedded text could not be read; local image recognition was attempted.`,
             );
           }
-          if (text.replace(/\s/g, '').length < 35) {
+          let rasterContent = false;
+          try {
+            const operators = await localWork(page.getOperatorList(), signal, remainingTime(15_000));
+            rasterContent = operators.fnArray.some((operator) => rasterOperators.has(operator));
+          } catch {
+            checkAbort(signal);
+            rasterContent = true;
+            result.incomplete = true;
+            result.warnings.push(
+              `Page ${number}: Image coverage could not be checked. Compare the extracted text with the complete original.`,
+            );
+          }
+          if (text.replace(/\s/g, '').length < 35 || rasterContent) {
             const base = page.getViewport({ scale: 1 });
             const viewport = page.getViewport({
               scale: Math.min(2, MAX_CANVAS_SIDE / Math.max(base.width, base.height)),
@@ -299,28 +335,34 @@ export async function extractDocument(
               await localWork(rendering.promise, signal, remainingTime(30_000));
               rendering = undefined;
               const recognized = await readImage(canvas);
-              if (recognized) text = recognized;
+              if (recognized) text = mergePageText(text, recognized);
+              else if (rasterContent) {
+                result.incomplete = true;
+                result.warnings.push(
+                  `Page ${number}: Image content yielded no readable text. Embedded text was retained; check the original for missing words.`,
+                );
+              }
             } finally {
               canvas.width = 1;
               canvas.height = 1;
             }
           }
-          appendPage(text);
-          if (!text) {
-            result.incomplete = true;
-            result.warnings.push(`Page ${number}: No readable text was found.`);
-          }
         } catch (error) {
           rendering?.cancel();
           rendering = undefined;
           checkAbort(signal);
-          appendPage('');
           result.incomplete = true;
           result.warnings.push(
             `Page ${number}: ${error instanceof Error ? error.message : 'Text could not be extracted.'}`,
           );
         } finally {
           page.cleanup();
+        }
+        // A failed image read must retain the embedded header and its page position for manual review.
+        appendPage(text);
+        if (!text) {
+          result.incomplete = true;
+          result.warnings.push(`Page ${number}: No readable text was found.`);
         }
         if (textLimitReached) {
           if (number < pdf.numPages) {

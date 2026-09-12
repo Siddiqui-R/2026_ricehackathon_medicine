@@ -23,6 +23,9 @@ struct PatientProfile: Codable, Equatable {
 // MARK: - Versioned source record
 // Keep original provenance, extracted wording, summary origin and optional symptom structure together.
 struct MedicalRecord: Codable, Identifiable, Equatable {
+    // User-selectable document kinds; structured symptoms and recordings retain their own provenance.
+    static let configurableKinds = ["Notes", "Labs", "Imaging", "Procedure", "Scan"]
+
     var id: String = UUID().uuidString
     var title: String
     var kind: String
@@ -223,11 +226,13 @@ enum RevaDate {
         return f.string(from: date)
     }
     static func display(_ text: String, time: Bool = false, zone: String? = nil) -> String {
+        // A calendar date has no timezone. A timestamp still has a local day when its clock is hidden.
+        let calendarDay = text.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = time ? .short : .none
         f.timeZone =
-            time ? (zone.flatMap(TimeZone.init(identifier:)) ?? .current) : TimeZone(secondsFromGMT: 0)
+            calendarDay ? TimeZone(secondsFromGMT: 0) : (zone.flatMap(TimeZone.init(identifier:)) ?? .current)
         return f.string(from: parse(text))
     }
     static func duration(_ seconds: Double) -> String {

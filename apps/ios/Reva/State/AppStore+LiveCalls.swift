@@ -7,9 +7,11 @@ import Foundation
 
 // MARK: - Explicit outbound call
 // Save the stable request before sending; an uncertain outcome stays unknown for user review.
+
 extension AppStore {
     func placeLiveCall(_ request: BookingRequest) async {
         guard !isProviderBusy else { return }
+        let context = providerContext()
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
@@ -24,6 +26,10 @@ extension AppStore {
                     earliest: request.earliest, latest: request.latest, timeZone: request.timeZone,
                     preferences: request.preferences, patientName: snapshot?.profile.name ?? "", consent: true
                 ))
+            // Keep the submitted request ID/starting receipt when ownership changes. Poll again only
+            // after restoring its original server connection; never automatically dial a retry.
+            guard isCurrent(context) else { return }
+            try Task.checkCancellation()
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == request.id }) {
                     data.bookings[i].providerConversationID = result.conversationID
@@ -33,6 +39,7 @@ extension AppStore {
             notice =
                 "Call request accepted. Check status and review the outcome; Reva has not confirmed an appointment."
         } catch {
+            guard isCurrent(context) else { return }
             perform {
                 try mutate { data in
                     if let i = data.bookings.firstIndex(where: { $0.id == request.id }) {
@@ -47,10 +54,13 @@ extension AppStore {
     // Read the existing request status and transcript without starting another call.
     func refreshLiveCall(_ id: String) async {
         guard !isProviderBusy else { return }
+        let context = providerContext()
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
             let result = try await providerClient().callStatus(requestID: id)
+            guard isCurrent(context) else { return }
+            try Task.checkCancellation()
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == id }) {
                     data.bookings[i].providerConversationID = result.conversationID
@@ -58,6 +68,9 @@ extension AppStore {
                     data.bookings[i].providerTranscript = result.transcript
                 }
             }
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            guard isCurrent(context) else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 }

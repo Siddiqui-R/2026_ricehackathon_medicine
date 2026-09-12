@@ -33,7 +33,6 @@ struct ImportedDocument: Sendable {
         self.pageTexts = pageTexts
     }
 }
-
 // MARK: - Intake failures
 // Reject unreadable, unsupported or excessive input without inventing extracted text.
 enum DocumentImportError: LocalizedError {
@@ -62,7 +61,6 @@ enum DocumentImportError: LocalizedError {
         }
     }
 }
-
 /// One service instance serializes memory-intensive work away from the main actor.
 // MARK: - On-device extraction boundary
 // Bound bytes, page count, pixel count and text output before expensive operations.
@@ -230,15 +228,32 @@ actor DocumentImportService {
     }
 
     // MARK: - PDF page extraction
-    // Prefer embedded text, OCR weak pages, and keep one mapping slot per original page.
+    // Prioritize pages with little text for bounded OCR, retaining text and one slot per original page.
     private nonisolated func extractPDF(data: Data, filename: String) throws -> ImportedDocument {
         guard let document = PDFDocument(data: data) else { throw DocumentImportError.invalidPDF }
         guard !document.isLocked else { throw DocumentImportError.lockedPDF }
         guard document.pageCount > 0 else { throw DocumentImportError.invalidPDF }
         guard document.pageCount <= Self.maximumPages else { throw DocumentImportError.tooManyPages }
+        // Text length sets priority only; even a long fax header may omit the page's image content.
+        // Reserve OCR slots before processing in source order so late scanned pages are not crowded out.
+        var lowTextPages: [Int] = []
+        var otherPages: [Int] = []
+        for index in 0..<document.pageCount {
+            try Task.checkCancellation()
+            let embeddedCount: Int? = autoreleasepool {
+                guard let page = document.page(at: index) else { return nil }
+                return page.string?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0
+            }
+            guard let embeddedCount else { continue }
+            if embeddedCount < 20 {
+                lowTextPages.append(index)
+            } else {
+                otherPages.append(index)
+            }
+        }
+        let ocrPages = Set((lowTextPages + otherPages).prefix(Self.maximumOCRPages))
         var pageTexts: [String] = []
         var warnings: [String] = []
-        var ocrCount = 0
         var remaining = Self.maximumTextCharacters
         for index in 0..<document.pageCount {
             try Task.checkCancellation()
@@ -254,14 +269,12 @@ actor DocumentImportService {
                     return ""
                 }
                 let embedded = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if embedded.count >= 20 { return embedded }
-                guard ocrCount < Self.maximumOCRPages else {
+                guard ocrPages.contains(index) else {
                     warnings.append(
-                        "Page \(index + 1) needs OCR beyond the 10-page OCR limit. Review this page or import a smaller PDF."
+                        "Page \(index + 1) was not checked with OCR because of the 10-page OCR limit. Embedded text may omit image content. Review the original or import a smaller PDF."
                     )
                     return embedded
                 }
-                ocrCount += 1
                 if !warnings.contains(Self.ocrReviewWarning) { warnings.append(Self.ocrReviewWarning) }
                 guard let image = rasterize(page) else {
                     warnings.append(
@@ -272,10 +285,16 @@ actor DocumentImportService {
                 warnings.append(contentsOf: result.warnings.map { "Page \(index + 1): \($0)" })
                 if result.text.isEmpty {
                     warnings.append(
-                        "No readable text was found on page \(index + 1). Review the original and add any missing text."
+                        "OCR found no readable text on page \(index + 1). Any embedded text was retained; review the original and add missing text."
                     )
                 }
-                return result.text.count > embedded.count ? result.text : embedded
+                let merged = PDFPageText.merge(embedded: embedded, recognized: result.text)
+                if merged.needsOverlapReview {
+                    warnings.append(
+                        "Page \(index + 1) retains both embedded and OCR text, which may overlap. Review it against the original before saving."
+                    )
+                }
+                return merged.text
             }
             pageTexts.append(limitedText(pageText, remaining: &remaining, warnings: &warnings))
         }

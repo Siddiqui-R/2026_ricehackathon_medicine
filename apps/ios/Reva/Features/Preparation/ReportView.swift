@@ -52,8 +52,10 @@ struct ReportView: View {
                         Text("Questions to bring").font(.headline)
                         ForEach(Array(report.questions.enumerated()), id: \.offset) { index, question in
                             HStack(alignment: .top, spacing: 10) {
-                                Text("\(index + 1)").font(.caption.bold()).foregroundStyle(RevaTheme.accent)
-                                    .frame(width: 24, height: 24).background(RevaTheme.soft, in: Circle())
+                                Text("\(index + 1)").font(.caption.bold()).foregroundStyle(
+                                    RevaTheme.accentText
+                                )
+                                .frame(width: 24, height: 24).background(RevaTheme.soft, in: Circle())
                                 Text(question).font(.subheadline)
                             }
                         }
@@ -126,7 +128,6 @@ struct ReportView: View {
         }
     }
 }
-
 // MARK: - ExportDocument
 /// Identify a generated PDF sheet by its URL so presentation follows a completed export.
 struct ExportDocument: Identifiable {

@@ -11,7 +11,7 @@ import UIKit
 // Expose actionable permission, availability and original-file errors to the recording UI.
 enum DeviceAudioError: LocalizedError {
     case permissionDenied, unavailableInput, busy, invalidDirectory, startFailed, noRecording, emptyRecording,
-        invalidAudio
+        invalidAudio, finalizationFailed
 
     var errorDescription: String? {
         switch self {
@@ -23,12 +23,13 @@ enum DeviceAudioError: LocalizedError {
         case .invalidDirectory: return "The recording folder is unavailable. Please try saving again."
         case .startFailed: return "Recording could not start. Check microphone access and try again."
         case .noRecording: return "There is no recording to save. Start recording first."
-        case .emptyRecording: return "No usable audio was captured. Record a little longer and try again."
+        case .emptyRecording: return "No usable audio was captured. Discard it and start a new recording."
         case .invalidAudio: return "This audio file could not be played. It may be missing or damaged."
+        case .finalizationFailed:
+            return "This recording could not be finalized. Discard it and start a new recording."
         }
     }
 }
-
 /// Ownership prevents a paused or dismissed controller from deactivating another one's audio.
 // MARK: - Shared audio-session ownership
 // Only the current owner may deactivate the session; recording and playback coordinate this resource.
@@ -61,7 +62,6 @@ private final class DeviceAudioSession {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
-
 // MARK: - Microphone capture lifecycle
 // Own a unique draft and one-hour capture limit; background/interruption events pause rather than resume silently.
 @MainActor
@@ -72,6 +72,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var audioURL: URL?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var hasFinalizationFailure = false
 
     static let maximumDuration: TimeInterval = 60 * 60
     private var recorder: AVAudioRecorder?
@@ -108,6 +109,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     // MARK: - Capture start and permission
     // Track the pending start identity across permission awaits and retain only this recorder's draft.
     func start(directory: URL) async throws {
+        guard !hasFinalizationFailure else { throw DeviceAudioError.finalizationFailed }
         guard !isRecording, recorder == nil, startID == nil else { throw DeviceAudioError.busy }
         guard directory.isFileURL else { throw DeviceAudioError.invalidDirectory }
         let attempt = UUID()
@@ -174,6 +176,10 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     func resume() {
+        guard !hasFinalizationFailure else {
+            errorMessage = DeviceAudioError.finalizationFailed.localizedDescription
+            return
+        }
         guard isRecording, isPaused, let recorder else { return }
         guard !reachedEnd, elapsed < Self.maximumDuration else {
             errorMessage =
@@ -198,8 +204,9 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     // MARK: - Validate and hand off original audio
-    // Return a nonempty playable original file; mark it committed so cleanup does not delete saved audio.
+    // Hand off playable originals; failed validation stops capture and retains the draft until explicit discard.
     func finish() throws -> URL {
+        guard !hasFinalizationFailure else { throw DeviceAudioError.finalizationFailed }
         guard let recorder, let url = ownedDraftURL else { throw DeviceAudioError.noRecording }
         elapsed = max(elapsed, recorder.currentTime)
         recorder.delegate = nil
@@ -222,7 +229,13 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
             audioURL = url
             return url
         } catch {
-            errorMessage = "The recording could not be saved: \(error.localizedDescription)"
+            // stop() is terminal even if verification fails; resume and a second finish cannot recover it.
+            self.recorder = nil
+            isRecording = false
+            isPaused = false
+            hasFinalizationFailure = true
+            errorMessage =
+                "The recording could not be finalized: \(error.localizedDescription) Discard it and start a new recording."
             throw error
         }
     }
@@ -248,6 +261,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         isRecording = false
         isPaused = false
         reachedEnd = false
+        hasFinalizationFailure = false
         audioURL = nil
         DeviceAudioSession.shared.release(owner: sessionID)
     }
@@ -350,7 +364,6 @@ final class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 }
-
 // MARK: - Original audio playback
 // Load only valid local audio; coordinate session ownership and publish recording-relative position.
 @MainActor

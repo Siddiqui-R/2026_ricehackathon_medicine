@@ -108,12 +108,15 @@ export class RevaStore {
     this.writes = pending.catch(() => undefined);
     return pending;
   }
-  private async edit(change: (draft: AppSnapshot) => void | Promise<void>): Promise<void> {
+  private async edit(
+    change: (draft: AppSnapshot) => void | Promise<void>,
+    attachments?: ReadonlyMap<string, Blob>,
+  ): Promise<void> {
     try {
       await this.queue(async () => {
         const draft = structuredClone(this.requiredSnapshot());
         await change(draft);
-        this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision));
+        this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision, attachments));
       });
     } catch (error) {
       this.reportError(error);
@@ -200,8 +203,16 @@ export class RevaStore {
   };
 
   // MARK: - Source and visit editing retain exact user-authored questions, notes and versions.
-  saveRecord = (record: MedicalRecord, expectedVersion?: number): Promise<void> =>
-    this.edit((draft) => upsertRecord(draft, record, expectedVersion));
+  // Imported originals share the record's revision-checked transaction, so a failed save leaves no staging keys.
+  saveRecord = (record: MedicalRecord, expectedVersion?: number, original?: Blob): Promise<void> =>
+    this.edit(
+      (draft) => {
+        if (original && !record.sourceFilename)
+          throw new Error('An imported original must have a source filename before saving.');
+        upsertRecord(draft, record, expectedVersion);
+      },
+      original && record.sourceFilename ? new Map([[record.sourceFilename, original]]) : undefined,
+    );
   deleteRecord = (id: string): Promise<void> =>
     this.edit((draft) => {
       draft.records = draft.records.filter((record) => record.id !== id);
@@ -234,7 +245,11 @@ export class RevaStore {
         await this.edit((draft) => {
           const latest = draft.records.find((record) => record.id === id);
           if (!latest) throw new Error('This record is no longer available.');
-          upsertRecord(draft, { ...latest, summary: localExcerpt(latest.text), summaryModel: undefined });
+          upsertRecord(draft, {
+            ...latest,
+            summary: localExcerpt(latest.text, latest.isDemo),
+            summaryModel: undefined,
+          });
         });
         this.notify('Original-text excerpt saved.');
         return;
@@ -266,7 +281,12 @@ export class RevaStore {
         connected = this.state.connectedAI,
         api = connected ? this.apiFactory(this.state.token) : null;
       const signature = await reportSignature(original, snapshot.records);
-      const candidates = snapshot.records.filter((record) => record.text.trim());
+      // Repair legacy local previews only in the provider payload; retain saved sources and attributed summaries.
+      const candidates = snapshot.records
+        .filter((record) => record.text.trim())
+        .map((record) =>
+          !record.summaryModel && !record.isDemo ? { ...record, summary: localExcerpt(record.text) } : record,
+        );
       if (connected && !candidates.length)
         throw new Error(
           'Add readable sources before using connected preparation, or turn it off to prepare locally.',

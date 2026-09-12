@@ -6,8 +6,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Camera, Check, FileText, LoaderCircle, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { uid, nowISO, localExcerpt } from '../../core/domain';
-import { saveAttachment } from '../../core/repository';
+import { uid, nowISO, localExcerpt, excerptNotice } from '../../core/domain';
 import type { MedicalRecord } from '../../core/models';
 import { Badge, Button, Card, Field, Modal } from '../../components/ui';
 import {
@@ -112,7 +111,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
-  // MARK: - Save original bytes before publishing a reviewable record
+  // MARK: - Publish the original bytes and reviewable record in one durable transaction
   const save = async () => {
     if (!file || !extraction || reading || saving) return;
     if (!title.trim() || !date || textByteCount(text) > MAX_TEXT_BYTES) {
@@ -123,7 +122,6 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setError('');
     try {
       const filename = `${uid()}-${file.name.replace(/[^A-Za-z0-9 ._()-]/g, '_').slice(-120)}`;
-      await saveAttachment(filename, file);
       const type = sourceType(file);
       const record: MedicalRecord = {
         id: uid(),
@@ -144,7 +142,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         isDemo: false,
         version: 1,
       };
-      await saveRecord(record);
+      await saveRecord(record, undefined, file);
       notify('Record saved with its original file and a local excerpt.');
       if (connectedAI && text.trim()) void summarizeRecord(record.id).catch(reportError);
       onClose();
@@ -160,6 +158,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const previewExcerpt = localExcerpt(text);
+  const previewNotice = excerptNotice(text);
   return (
     <Modal title={file ? 'Review your document' : 'Add a record'} onClose={close} wide={Boolean(file)}>
       <div className="stack">
@@ -310,8 +310,11 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <details>
                     <summary>Preview the local excerpt</summary>
                     <p className="prose">
-                      {localExcerpt(text) || 'A readable excerpt will appear after text is added.'}
+                      {previewExcerpt ||
+                        previewNotice ||
+                        'A readable excerpt will appear after text is added.'}
                     </p>
+                    {previewExcerpt && previewNotice && <p className="muted small">{previewNotice}</p>}
                   </details>
                 </>
               )

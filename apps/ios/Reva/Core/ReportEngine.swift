@@ -10,23 +10,15 @@ import Foundation
 // Select from supplied sources; new report IDs/timestamps use domain defaults. No cloud model runs here.
 enum ReportEngine {
     // MARK: - Faithful local excerpts
-    // Keep bounded source wording and strip only known synthetic fixture wrapper lines.
-    static func localExcerpt(_ text: String) -> String {
-        String(contentLines(text).prefix(24).joined(separator: "\n").prefix(1800))
+    // Ordinary uploads keep their headers; fixture stripping requires explicit provenance.
+    static func localExcerpt(_ text: String, isDemo: Bool = false) -> String {
+        SourceExcerpt.passage(SourceExcerpt.sourceText(text, isDemo: isDemo)).text
+    }
+    static func excerptNotice(_ text: String, isDemo: Bool = false) -> String? {
+        SourceExcerpt.passage(SourceExcerpt.sourceText(text, isDemo: isDemo)).notice
     }
     private static func contentLines(_ text: String) -> [String] {
-        let lines = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        var start = 0
-        if let metadata = lines.prefix(10).lastIndex(where: {
-            $0.hasPrefix("Source date:") || $0.hasPrefix("Week ending:")
-        }) {
-            start = metadata + 1
-        }
-        let end =
-            lines.lastIndex(where: { $0.hasPrefix("Invented for Reva software demonstration.") })
-            ?? lines.count
-        return start < end ? Array(lines[start..<end]) : lines
+        SourceExcerpt.contentLines(text).map(String.init)
     }
     // MARK: - Evidence freshness
     // Hash visit intent and the full candidate pool so new or revised records invalidate saved briefs.
@@ -34,7 +26,8 @@ enum ReportEngine {
         // Includes the candidate pool, so a newly imported relevant document also makes a brief stale.
         let inputs =
             [
-                visit.type, visit.concern, visit.goal,
+                // A rule revision invalidates older briefs without changing original records.
+                "source-rules-v2", visit.type, visit.concern, visit.goal,
                 String(RevaDate.parse(visit.date).timeIntervalSince1970),
                 visit.pinnedRecordIDs.sorted().joined(separator: ","),
             ]
@@ -66,7 +59,7 @@ enum ReportEngine {
             ["lab", "labs", "blood", "thyroid", "electrolyte"],
         ]
         let stopWords = Set(
-            "want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptom symptoms entry entries user recent next right left source record details together information recent ongoing routine explain planning plan"
+            "want visit review follow followup help need past prior history medical about with this that from have what which would could should count bring report records question questions understand discuss since relevant concern clarify confirm care primary appointment safe safely timing time changes manage when before after including current symptom symptoms entry entries user recent next right left source record details together information recent ongoing routine explain planning plan patient reported documents existing organize unresolved"
                 .split(separator: " ").map { String($0) })
         let focusWords = Set(focus.split { !$0.isLetter }.map { String($0) })
         var terms = focusWords.filter { $0.count > 3 && !stopWords.contains($0) }
@@ -76,7 +69,7 @@ enum ReportEngine {
             if visit.pinnedRecordIDs.contains(record.id) { return (record, 1000) }
             let index =
                 (record.title + " " + record.tags.joined(separator: " ") + " " + record.summary + " "
-                + record.text).lowercased()
+                + SourceExcerpt.sourceText(record.text, isDemo: record.isDemo)).lowercased()
             let context = record.tags.contains {
                 ["context", "medications", "allergies", "medical-history", "medical history"].contains(
                     $0.lowercased())
@@ -100,7 +93,7 @@ enum ReportEngine {
                 (visit.concern + " " + visit.goal).lowercased().split { !$0.isLetter }.map { String($0) }
                     .filter { $0.count > 3 })
             func pageScore(_ text: String) -> Int {
-                let content = contentLines(text).joined(separator: " ").lowercased()
+                let content = SourceExcerpt.sourceText(text, isDemo: record.isDemo).lowercased()
                 let words = Set(content.split { !$0.isLetter }.map { String($0) })
                 var score = focusWords.intersection(words).count
                 if focusWords.contains("implant") || focusWords.contains("hardware") {
@@ -116,13 +109,16 @@ enum ReportEngine {
                     return left == right ? lhs.offset < rhs.offset : left < right
                 }?.offset ?? 0
             let pageText = pages.indices.contains(pageIndex) ? pages[pageIndex] : record.text
-            let excerpt = relevantExcerpt(pageText, focusWords: focusWords)
+            let passage = relevantExcerpt(
+                SourceExcerpt.sourceText(pageText, isDemo: record.isDemo), focusWords: focusWords)
+            let excerpt = passage.text
             let caveat =
                 record.needsReview ? "Needs review: verify this extraction against the original.\n\n" : ""
             let sourcePage = (record.pageTexts?.isEmpty == false) ? pageIndex + 1 : 0
             sections.append(
                 ReportSection(
-                    title: record.title, body: caveat + excerpt,
+                    title: record.title,
+                    body: caveat + (passage.notice.map { $0 + "\n\n" } ?? "") + excerpt,
                     sources: [
                         SourceReference(
                             recordID: record.id, page: sourcePage, excerpt: excerpt,
@@ -151,17 +147,17 @@ enum ReportEngine {
     /// look deeper in a long page instead of citing an unrelated introduction.
     // MARK: - Deep source passage selection
     // When the opening has no focus terms, choose a contiguous bounded passage near a deeper match.
-    private static func relevantExcerpt(_ text: String, focusWords: Set<String>) -> String {
-        let opening = localExcerpt(text)
+    private static func relevantExcerpt(_ text: String, focusWords: Set<String>) -> SourceExcerpt {
+        let opening = SourceExcerpt.passage(text)
         func score(_ value: String) -> Int {
             focusWords.intersection(Set(value.lowercased().split { !$0.isLetter }.map(String.init))).count
         }
-        guard score(opening) == 0 else { return opening }
+        guard score(opening.text) == 0 else { return opening }
         let lines = contentLines(text)
         guard let match = lines.indices.max(by: { score(lines[$0]) < score(lines[$1]) }),
             score(lines[match]) > 0
         else { return opening }
         let start = max(0, match - 2)
-        return String(lines.dropFirst(start).prefix(24).joined(separator: "\n").prefix(1800))
+        return SourceExcerpt.passage(text, startLine: start)
     }
 }

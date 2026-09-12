@@ -7,6 +7,7 @@ import Foundation
 
 // MARK: - Recording metadata persistence
 // Keep recording identity and its visit relationship in the main snapshot.
+
 extension AppStore {
     func save(_ recording: VisitRecording) throws {
         try mutate { data in
@@ -15,6 +16,16 @@ extension AppStore {
             } else {
                 data.recordings.append(recording)
             }
+        }
+    }
+    // MARK: - Separate visit notes
+    // Change only notes on the current recording; a transcript arriving during editing must survive.
+    func updateRecordingNotes(id: String, summary: String) throws {
+        try mutate { data in
+            guard let i = data.recordings.firstIndex(where: { $0.id == id }) else {
+                throw RevaError.invalid("This recording is no longer available. Close this editor.")
+            }
+            data.recordings[i].summary = summary
         }
     }
     // MARK: - Fictional transcript access

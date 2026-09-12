@@ -87,7 +87,7 @@ export function App() {
   const profile = store.snapshot.profile;
   const navTitle = navigation.find((item) => item.id === route.section)?.title ?? 'Settings';
 
-  // MARK: - Desktop navigation and phone tabs share the same active route and labels
+  // MARK: - Navigation names remain available when the tablet rail hides visible text
   return (
     <div className="app-shell">
       <a
@@ -111,6 +111,7 @@ export function App() {
               key={item.id}
               href={`#/${item.id}`}
               className={`nav-item ${route.section === item.id ? 'active' : ''}`}
+              aria-label={item.title}
               aria-current={route.section === item.id ? 'page' : undefined}
             >
               <item.icon size={20} />
@@ -119,7 +120,7 @@ export function App() {
             </a>
           ))}
         </nav>
-        <a href="#/records?add=symptom" className="sidebar-log">
+        <a href="#/records?add=symptom" className="sidebar-log" aria-label="Log a symptom">
           <Activity size={19} />
           <span>Log a symptom</span>
           <ArrowUpRight size={16} />
@@ -128,13 +129,18 @@ export function App() {
           <a
             className={`nav-item ${route.section === 'settings' ? 'active' : ''}`}
             href="#/settings"
+            aria-label="Settings & connections"
             aria-current={route.section === 'settings' ? 'page' : undefined}
           >
             <Settings size={19} />
             <span>Settings & connections</span>
           </a>
           <div className="sidebar-divider" />
-          <a href="#/profile" className="patient-link">
+          <a
+            href="#/profile"
+            className="patient-link"
+            aria-label={`${profile.name.replace(' (Synthetic)', '')} — medical profile`}
+          >
             <span className="avatar">{profile.initials}</span>
             <span>
               <strong>{profile.name.replace(' (Synthetic)', '')}</strong>

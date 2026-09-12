@@ -7,7 +7,7 @@ Side effects: None.
 
 ## Native evidence and state
 
-The browser retains native IDs, schema version, source versions, page text, citation excerpts, optional provider labels, recording IDs and transcript timestamps. Its report signature uses the exact native separators, full candidate pool, sorted IDs and epoch-second `.0` formatting. Tests compare all three demo visit hashes with values emitted by the actual Swift ReportEngine compiled against the same checked-in seed. Source selection and page assertions use the existing fixture acceptance file.
+The browser retains native IDs, schema version, source versions, page text, citation excerpts, optional provider labels, recording IDs and transcript timestamps. Its report signature uses the native `source-rules-v2` prefix, separators, full candidate pool, sorted IDs and epoch-second `.0` formatting. The prefix deliberately marks briefs created before the source-integrity repair as stale so they can be regenerated; it does not rewrite saved originals. The three current fixture hash vectors were independently computed with Python SHA256 using the shared serialization. Earlier unversioned hashes were compared with the actual Swift engine during the frozen audit. The Windows repair harness substitutes equality-only hashing for unavailable CryptoKit, so the new vectors still need a fresh native CryptoKit comparison on macOS. Source selection and page assertions use the existing fixture acceptance file.
 
 User questions and separate notes remain authoritative when a report is refreshed. Correcting a transcript changes words by segment ID, keeps timing/speakers/original audio, updates an existing linked memory and preserves its separate notes. A correction alone does not create a new memory.
 

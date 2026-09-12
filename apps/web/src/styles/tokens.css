@@ -114,9 +114,10 @@ hr {
   border-top: 1px solid var(--line);
   margin: 20px 0;
 }
+/* Selection uses the same light foreground role as deep-red buttons so source passages stay readable. */
 ::selection {
   background: var(--accent-text);
-  color: var(--ink);
+  color: var(--button-text);
 }
 
 /* MARK: - Text content helpers respect long filenames and original medical wording */

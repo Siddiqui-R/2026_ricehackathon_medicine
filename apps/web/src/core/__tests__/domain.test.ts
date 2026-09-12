@@ -16,14 +16,14 @@ import {
 import { confirmBooking, reconcileMemory, upsertRecord } from '../mutations.ts';
 import { sample, seed } from './fixtures.ts';
 
-// MARK: - Golden signatures were emitted by the actual Swift ReportEngine on this same seed.
+// MARK: - Versioned signature vectors independently calculated with Python hashlib from the shared serialization.
 describe('native evidence compatibility', () => {
-  it('matches every native fixture signature exactly', async () => {
+  it('matches the versioned cross-client signature vectors exactly', async () => {
     const data = seed(),
       expected = [
-        'b2437a79a5c1570e95aa2b950dcfab9c4902cae100e345b3a916e46416b67731',
-        '6b7fbb5244c4de15d80c6d54c91105501dc274a1e7598efe8d1c3dc9ccc9a163',
-        '5718d660263731137b3f7e55d3c7e3528c7b3d8848d9be12845b7bed25cda619',
+        '527ef9c5bd17610165587b1ee17ef5e78a6d5937922ece737eed0c7830855e11',
+        '296a24acd853c35b53a9864894170716ba93650899330020e4aabc6e43f9dcb3',
+        '9868130528caaa4118306c0c7c825c3ab6dad7d33a6e1857df1a97cb05cffde3',
       ];
     expect(await Promise.all(data.visits.map((visit) => reportSignature(visit, data.records)))).toEqual(
       expected,

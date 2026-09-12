@@ -7,28 +7,33 @@ import SwiftUI
 
 // MARK: - RecordEditorView
 /// Review and edit a saved document while preserving source provenance.
+
 struct RecordEditorView: View {
     // MARK: - Inputs and view state
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    private let original: MedicalRecord
+    @State private var original: MedicalRecord
     @State private var record: MedicalRecord
     @State private var reviewed = false
     // MARK: - Draft initialization
     init(record: MedicalRecord) {
-        original = record
+        // Retain the opening baseline when a parent refreshes with newer saved data.
+        _original = State(initialValue: record)
         _record = State(initialValue: record)
     }
-    // MARK: - Derived display and validation
-    private var textChanged: Bool { record.text != original.text }
-    private var textPresent: Bool { !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     // MARK: - Rendering and navigation
     var body: some View {
         RevaForm {
             Section("Record details") {
                 TextField("Title", text: $record.title)
                 TextField("Provider", text: $record.provider)
+                Picker("Record kind", selection: $record.kind) {
+                    ForEach(MedicalRecord.configurableKinds, id: \.self) { Text($0).tag($0) }
+                    if !MedicalRecord.configurableKinds.contains(original.kind) {
+                        Text(original.kind).tag(original.kind)
+                    }
+                }
                 DatePicker(
                     "Record date",
                     selection: Binding(
@@ -59,19 +64,9 @@ struct RecordEditorView: View {
     // MARK: - Save reviewed changes
     /// Preserve authored summaries and source pages unless the user changed the extracted text.
     private func save() {
-        var revised = record
-        // Fictional origin describes the source, not whether the user edited it.
-        revised.isDemo = original.isDemo
-        if textChanged {
-            revised.summary = ReportEngine.localExcerpt(record.text)
-            revised.summaryModel = nil
-            // A manual whole-document correction no longer claims the original page segmentation.
-            revised.pageTexts = nil
-            revised.status = reviewed && textPresent ? "ready" : "needsReview"
-        } else if reviewed, textPresent, original.status == "needsReview" {
-            // Explicit confirmation clears the review state; summary and pages stay; the source version advances.
-            revised.status = "ready"
+        if store.perform({ try store.saveRecordEdits(original: original, draft: record, reviewed: reviewed) })
+        {
+            dismiss()
         }
-        if store.perform({ try store.save(revised) }) { dismiss() }
     }
 }

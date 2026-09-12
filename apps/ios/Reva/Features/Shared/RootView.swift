@@ -7,6 +7,7 @@ import SwiftUI
 
 // MARK: - RootView
 /// Coordinate main tabs, first-run onboarding, and shared error presentation.
+
 struct RootView: View {
     // MARK: - Inputs and view state
 
@@ -15,6 +16,7 @@ struct RootView: View {
     @State private var welcome = false
     @State private var selectedTab: RevaTab = .summary
     @State private var recordsGeneration = 0
+    @State private var confirmReset = false
     // MARK: - Rendering and navigation
     var body: some View {
         Group {
@@ -24,7 +26,7 @@ struct RootView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Restore fictional demo") { store.perform { try store.resetDemo() } }.buttonStyle(
+                    Button("Restore fictional demo") { confirmReset = true }.buttonStyle(
                         .borderedProminent)
                 }
             } else {
@@ -47,6 +49,12 @@ struct RootView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Restore the fictional demo and replace your local changes?", isPresented: $confirmReset,
+            titleVisibility: .visible
+        ) {
+            Button("Restore demo", role: .destructive) { store.perform { try store.resetDemo() } }
+        }
         .alert(
             "Something needs attention",
             isPresented: Binding(
@@ -65,7 +73,6 @@ struct RootView: View {
         .onAppear { if !hasSeenWelcome { welcome = true } }
     }
 }
-
 // MARK: - RevaTab
 /// Keep tab-selection identities scoped to root navigation.
 private enum RevaTab: Hashable { case summary, records, visits, medicalProfile }

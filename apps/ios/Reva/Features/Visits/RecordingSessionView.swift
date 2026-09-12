@@ -1,7 +1,7 @@
 // Purpose: Capture visit audio after recording consent and save the completed recording.
 // Inputs: The Visit, user consent, AudioRecorder, and AppStore.
 // Outputs: Recording controls and a saved VisitRecording linked to its audio file.
-// Side effects: Requests microphone capture, writes audio, pauses on exit, and can discard unfinished capture.
+// Side effects: Captures audio, retries metadata saves, shares originals, and can discard unfinished capture.
 
 import SwiftUI
 
@@ -17,7 +17,9 @@ struct RecordingSessionView: View {
     @State private var agreed = false
     @State private var starting = false
     @State private var savedID: String?
+    @State private var saveDraft = RecordingSaveDraft()
     @State private var discard = false
+    @State private var restart = false
     // MARK: - Rendering and navigation
     var body: some View {
         Page {
@@ -36,10 +38,29 @@ struct RecordingSessionView: View {
                         .system(size: 48, weight: .medium, design: .rounded)
                     ).monospacedDigit().accessibilityLabel("Elapsed \(RevaDate.duration(recorder.elapsed))")
                     Text(
-                        recorder.isRecording
-                            ? recorder.isPaused ? "Paused" : "Recording on this device" : "Ready when you are"
+                        saveDraft.recording != nil
+                            ? "Audio finished — waiting to save"
+                            : recorder.hasFinalizationFailure
+                                ? "Recording could not be finalized"
+                                : recorder.isRecording
+                                    ? recorder.isPaused ? "Paused" : "Recording on this device"
+                                    : "Ready when you are"
                     ).font(.subheadline).foregroundStyle(.secondary)
-                    if recorder.isRecording {
+                    if saveDraft.recording != nil {
+                        Button("Retry saving recording") { finish() }.buttonStyle(PrimaryButtonStyle())
+                        if let audioURL = saveDraft.audioURL {
+                            ShareLink(item: audioURL) {
+                                Label("Save or share audio", systemImage: "square.and.arrow.up")
+                            }.buttonStyle(.bordered).controlSize(.large)
+                        }
+                        Text(
+                            "Your completed audio is kept on this device. Retry saving or share a copy before closing."
+                        )
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    } else if recorder.hasFinalizationFailure {
+                        Button("Discard & start again", role: .destructive) { restart = true }
+                            .buttonStyle(.bordered).controlSize(.large)
+                    } else if recorder.isRecording {
                         Button(recorder.isPaused ? "Resume recording" : "Pause recording") {
                             if recorder.isPaused { recorder.resume() } else { recorder.pause() }
                         }.buttonStyle(.bordered).controlSize(.large)
@@ -76,32 +97,61 @@ struct RecordingSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
-                        if recorder.isRecording || starting { discard = true } else { dismiss() }
+                        if recorder.isRecording || recorder.hasFinalizationFailure || starting
+                            || saveDraft.recording != nil
+                        {
+                            discard = true
+                        } else {
+                            dismiss()
+                        }
                     }
                 }
             }
-            .interactiveDismissDisabled(recorder.isRecording || starting)
+            .interactiveDismissDisabled(
+                recorder.isRecording || recorder.hasFinalizationFailure || starting
+                    || saveDraft.recording != nil
+            )
             .confirmationDialog(
-                "Discard this unfinished recording?", isPresented: $discard, titleVisibility: .visible
+                saveDraft.recording != nil
+                    ? "Leave without saving this recording?" : "Discard this unfinished recording?",
+                isPresented: $discard, titleVisibility: .visible
             ) {
-                Button("Discard recording", role: .destructive) {
-                    recorder.cancel()
-                    dismiss()
+                if saveDraft.recording != nil {
+                    Button("Leave without saving", role: .destructive) { dismiss() }
+                } else {
+                    Button("Discard recording", role: .destructive) {
+                        recorder.cancel()
+                        dismiss()
+                    }
                 }
+            } message: {
+                if saveDraft.recording != nil {
+                    Text(
+                        "Closing ends this save attempt. Use Save or share audio to keep an accessible copy before leaving."
+                    )
+                }
+            }
+            .confirmationDialog(
+                "Discard this failed recording and start again?", isPresented: $restart,
+                titleVisibility: .visible
+            ) {
+                Button("Discard recording", role: .destructive) { recorder.cancel() }
+            } message: {
+                Text("This recording cannot resume. Discarding returns you to the start controls.")
             }
             .navigationDestination(item: $savedID) { RecordingDetailView(id: $0) }
             .onDisappear { if recorder.isRecording { recorder.pause() } }
     }
     // MARK: - Finalize capture
-    /// Finish the audio file before adding its recording metadata to the visit history.
+    /// Finalize once; a failed metadata write keeps the original and stable recording available for retry.
     private func finish() {
         store.perform {
-            let url = try recorder.finish()
-            let recording = VisitRecording(
-                visitID: visit.id, title: visit.title + " · audio", duration: recorder.elapsed,
-                audioFilename: url.lastPathComponent)
-            try store.save(recording)
-            savedID = recording.id
+            savedID = try saveDraft.save(
+                visit: visit,
+                finishAudio: {
+                    let url = try recorder.finish()
+                    return (url, recorder.elapsed)
+                }, persist: { try store.save($0) })
         }
     }
 }

@@ -3,9 +3,10 @@
 // Outputs: Revision/status updates, replaced snapshot after a pull, or conflict/error state.
 // Side effects: HTTP and disk transfers; attachments and snapshot are separate commits.
 
+import Foundation
+
 // MARK: - Server identity selection
 // Changing URL/token resets known revisions so they are never reused across owner identities.
-import Foundation
 
 extension AppStore {
     func client(url: String, token: String) throws -> ServerClient {

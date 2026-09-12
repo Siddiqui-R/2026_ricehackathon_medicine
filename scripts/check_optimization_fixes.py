@@ -18,13 +18,14 @@ BUILD = ROOT / "build/optimization-checks"
 SOURCES = [
     "Core/Models.swift", "Core/SymptomEntry.swift", "Core/LocalRepository.swift",
     "Core/ProviderContracts.swift", "State/AppStore.swift",
+    "Core/ReportEngine.swift", "Core/SourceExcerpt.swift",
     "State/AppStore+Records.swift", "State/AppStore+Sync.swift",
     "State/AppStore+Providers.swift",
 ]
 
 
 # Chunk: Reuse the production audio helper rather than duplicating its MIME policy in doubles.
-def production_audio_helper():
+def production_audio_helper(build=BUILD):
     source = (ROOT / "apps/ios/Reva/Core/ServerClient.swift").read_text(encoding="utf-8")
     matches = re.findall(
         r"^    static func audioContentType\(filename: String\) -> String \{.*?^    \}",
@@ -34,7 +35,7 @@ def production_audio_helper():
         raise SystemExit(
             "Production audioContentType declaration changed; adapt this harness before running checks."
         )
-    target = BUILD / "ServerClient+AudioMetadata.swift"
+    target = build / "ServerClient+AudioMetadata.swift"
     target.write_text(
         "// Purpose: Compile the exact production audio MIME helper with each network double.\n"
         "// Inputs: Filename; outputs: production MIME mapping; side effects: none.\n"
@@ -46,7 +47,8 @@ def production_audio_helper():
 
 
 # Chunk: Resolve the platform compiler, then compile and run each unchanged production source suite.
-def main():
+def configure_compiler():
+    """Resolve Swift and the supported platform SDK without printing environment values."""
     compiler = shutil.which("swiftc")
     if not compiler and os.name == "nt":
         roots = [Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Swift",
@@ -74,29 +76,45 @@ def main():
         runtime = next(swift_root.glob("Runtimes/*/usr/bin"))
         os.environ["SDKROOT"] = str(sdk)
         os.environ["PATH"] = os.pathsep.join([str(Path(compiler).parent), str(runtime), os.environ["PATH"]])
-    BUILD.mkdir(parents=True, exist_ok=True)
-    audio_helper = production_audio_helper()
+    return compiler
+
+
+# Chunk: Compile each synthetic suite in isolation using unchanged production logic.
+def run_suite(compiler, suite, sources, include_audio_helper=True):
+    """Compile a named harness; Windows substitutes only unavailable platform imports."""
+    build = BUILD / suite
+    build.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for relative in sources:
+        source = ROOT / "apps/ios/Reva" / relative
+        content = source.read_text(encoding="utf-8")
+        if os.name == "nt":
+            content = content.replace("import Combine", "")
+            # Standalone Windows harnesses supply a documented equality-only hash double.
+            # This compiles source-selection/state behavior; cryptographic correctness is not tested.
+            content = content.replace("import CryptoKit", "")
+            if source.name == "ProviderClient.swift":
+                content = content.replace("import Foundation", "import Foundation\nimport FoundationNetworking")
+        target = build / source.name
+        target.write_text(content, encoding="utf-8")
+        paths.append(str(target))
+    if include_audio_helper:
+        paths.append(production_audio_helper(build))
+    executable = build / (suite + (".exe" if os.name == "nt" else ""))
+    subprocess.run([compiler, "-swift-version", "5", "-parse-as-library", *paths,
+                    str(ROOT / f"Tests/OptimizationChecks/{suite}.swift"), "-o", str(executable)], check=True)
+    subprocess.run([str(executable), str(ROOT / "demo/seed.json")], check=True)
+
+
+# Chunk: Preserve the original focused suite entry point for existing callers.
+def main():
+    compiler = configure_compiler()
     suites = [("StateChecks", SOURCES)]
     if (ROOT / "Tests/OptimizationChecks/ProviderChecks.swift").exists():
         suites.append(("ProviderChecks", ["Core/Models.swift", "Core/SymptomEntry.swift",
                                          "Core/ProviderContracts.swift", "Core/ProviderClient.swift"]))
     for suite, sources in suites:
-        paths = []
-        for relative in sources:
-            source = ROOT / "apps/ios/Reva" / relative
-            # Use production logic; Windows needs its FoundationNetworking import and a Combine double.
-            content = source.read_text(encoding="utf-8")
-            if os.name == "nt":
-                content = content.replace("import Combine", "")
-                if source.name == "ProviderClient.swift":
-                    content = content.replace("import Foundation", "import Foundation\nimport FoundationNetworking")
-            target = BUILD / source.name
-            target.write_text(content, encoding="utf-8")
-            paths.append(str(target))
-        executable = BUILD / (suite + (".exe" if os.name == "nt" else ""))
-        subprocess.run([compiler, "-swift-version", "5", "-parse-as-library", *paths, audio_helper,
-                        str(ROOT / f"Tests/OptimizationChecks/{suite}.swift"), "-o", str(executable)], check=True)
-        subprocess.run([str(executable), str(ROOT / "demo/seed.json")], check=True)
+        run_suite(compiler, suite, sources)
 
 
 if __name__ == "__main__":

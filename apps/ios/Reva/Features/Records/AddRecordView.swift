@@ -24,6 +24,7 @@ struct AddRecordView: View {
     @State private var working = false
     @State private var importError: String?
     @State private var title = ""
+    @State private var kind = "Notes"
     @State private var text = ""
     @State private var recordDate = Date()
     @State private var verified = false
@@ -47,6 +48,8 @@ struct AddRecordView: View {
                     TextField("Record title", text: $title).font(.headline)
                     TextEditor(text: $text).frame(minHeight: 240)
                     Button("Review note") {
+                        kind = "Notes"
+                        verified = false
                         imported = ImportedDocument(
                             filename: "note.txt", mimeType: "text/plain", data: Data(text.utf8), text: text,
                             warnings: [], pageCount: 1)
@@ -162,7 +165,7 @@ struct AddRecordView: View {
                                 UUID().uuidString + ".pdf")
                             try bytes.write(to: url)
                             defer { try? FileManager.default.removeItem(at: url) }
-                            setImported(try await importer.ingest(url: url))
+                            setImported(try await importer.ingest(url: url), scanned: true)
                         } catch { importError = error.localizedDescription }
                     }
                 }, onCancel: { scanner = false },
@@ -221,9 +224,10 @@ struct AddRecordView: View {
             importError = error.localizedDescription
         }
     }
-    /// Reset review confirmation whenever a newly extracted source replaces the draft.
-    private func setImported(_ item: ImportedDocument) {
+    /// Reset kind and review confirmation for each source; camera scans remain scans after PDF encoding.
+    private func setImported(_ item: ImportedDocument, scanned: Bool = false) {
         imported = item
+        kind = scanned || item.mimeType.hasPrefix("image/") ? "Scan" : "Notes"
         title = item.filename.replacingOccurrences(
             of: "." + (item.filename as NSString).pathExtension, with: ""
         ).replacingOccurrences(of: "-", with: " ")
@@ -237,6 +241,11 @@ struct AddRecordView: View {
             ModeBadge(text: "ON-DEVICE EXTRACTION")
             RevaCard {
                 TextField("Title", text: $title).font(.headline)
+                Picker("Record kind", selection: $kind) {
+                    ForEach(MedicalRecord.configurableKinds, id: \.self) { kind in
+                        Text(kind).tag(kind)
+                    }
+                }
                 DatePicker("Record date", selection: $recordDate, displayedComponents: .date).environment(
                     \.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
                 Text("Choose the date shown on your record.").font(.caption).foregroundStyle(.secondary)
@@ -265,7 +274,7 @@ struct AddRecordView: View {
                 let saved = store.perform {
                     _ = try store.repository.storeAttachment(item.data, filename: name)
                     let record = MedicalRecord(
-                        title: title, kind: item.mimeType.hasPrefix("image") ? "Scan" : "Notes",
+                        title: title, kind: kind,
                         provider: "Manually added", date: RevaDate.day(recordDate), text: text,
                         summary: ReportEngine.localExcerpt(text), sourceFilename: name,
                         mimeType: item.mimeType, pageCount: item.pageCount,
