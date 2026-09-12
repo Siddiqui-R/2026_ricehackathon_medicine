@@ -18,7 +18,17 @@ Implement and verify the native Swift hackathon prototype against [completion cr
 
 ## Checkpoints
 
-Record each meaningful commit with scope, verification, and follow-up below. Git commit history remains the authoritative edit history; this log explains why changes were made.
+Git history preserves each checkpoint; the entries below explain their purpose.
+
+| Commit | Checkpoint |
+| --- | --- |
+| `7725fc7` | Criteria, exact palette, stack/style planning and task list |
+| `eb2ec3a` | Native journeys, fictional sources, device adapters and Swift backend |
+| `7d0f585` | Reviewed source evidence, edit authority, metadata and transport fixes |
+| `d9ec87c` | Transcript provenance, long-document retrieval, date and PDF presentation fixes |
+| `8f52577` | Configurable provider APIs, three-person feature separation, user-corrected exact light palette |
+
+The final documentation/verification commit follows creation of the requested as-built stack visualization.
 
 ## Completion audit
 
@@ -70,3 +80,16 @@ The user's deadline changed at07:28CDT. docs/mvp-goal.md and /Users/tempadmin/go
 -35 root tests executed:34 local/mocked pass,1 explicitly gated live-server test skipped in default run.29 server local/mocked tests pass,1 live PostgreSQL test skipped. Real HTTP provider smoke verifies all six auth boundaries, exact disabled status and four503 unconfigured responses. No paid calls or keys used. Earlier actual native persistence-client/server test remains passed.
 - The user rejected derived dark colors during verification. Removed adaptive substitutions and dark selection; current MVP stays light with exact Ivory canvas, Sky surfaces, Teal actions and Ivory action text. All6 source colors remain exact in design/palette.json and Theme.swift. Earlier dark screenshot is historical and not the shipped design.
 - New launcher scripts/run_server.py safely reads a user-filled root.env without shell evaluation; current .env remains0bytes. Environment examples/documentation contain placeholders only.
+
+
+## Final MVP verification — September12,08:17CDT
+
+- Corrected palette visible in a fresh native launch; screenshot summary-exact-palette.png inspected. No adaptive dark colors remain in the shipped theme. Original palette.json unchanged.
+- Native localhost fixture integration verified service discovery, summary-model provenance, and structured preparation with two source links. The fixture labels every response mock-transport-only; no live AI ran. Native default-server check then showed providers unconfigured, and connected AI remained disabled.
+- Saved sample memory updated through its native action, persisted through relaunch, and “Open visit transcript” navigated back to the correct sample. Transcript correction fields/timestamps were inspected; the edit was canceled after a Computer coordinate-action failure. Actual correction persistence had17 passing isolated AppStore checks. No unobserved save is claimed.
+- Explicit Restore fictional demo confirmation returned to the original nausea/palpitations visit and known records. Relaunch retained the reset. The app was returned to localhost8080 and clean synthetic data after provider-fixture QA.
+- The remaining manual feedback scope includes physical capture/signing, live provider credentials/agent/number/database smoke checks, broader device/large-text visual polish and production operations. These are not represented as executed checks.
+
+## Final stack document and delivery
+
+Created docs/architecture.md after implementation and the bounded MVP verification, immediately before the final commit/push as requested. It diagrams native/client/server/Tiger/provider boundaries, document-to-brief, booking, recording/memory and three-person ownership. README links it. Final remote alignment is verified after push and reported in the delivery message; Git history supplies the final commit identity.

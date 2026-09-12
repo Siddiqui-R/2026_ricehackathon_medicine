@@ -1,85 +1,86 @@
 # Reva
 
-**Making every appointment count.** A native SwiftUI iPhone prototype for bringing medical records together, preparing a relevant visit brief, and keeping the details afterward. Built around Apple Health’s native hierarchy and the exact six-color palette in [design/palette.json](design/palette.json).
+**Making every appointment count.** A native SwiftUI iPhone MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [revised MVP goal](docs/mvp-goal.md) defines the current scope.
 
-## Run the iPhone app
+The app uses the user's exact [six-color palette](design/palette.json) in **light appearance only**: Ivory canvas, Sky cards, Teal actions and Ivory button text. Gold, Slate and Aqua remain unchanged accent tokens. Earlier dark-theme proposals are historical.
 
-Requires macOS with Xcode and an installed iOS simulator. Verified with Xcode26.4, Swift6.3 and iOS26.4; deployment target iOS18. No third-party client packages or provider keys are needed.
+## Run the app
+
+Verified toolchain: Xcode 26.4, Swift 6.3 and iOS 26.4 simulator; deployment target iOS 18. No third-party client packages or provider keys are needed for the local demo.
 
 1. Open `Reva.xcodeproj` in Xcode.
 2. Select the **Reva** scheme and an iPhone simulator, then Run.
-3. Choose **Explore Reva**. All seeded people and medical documents are fictional.
+3. Choose **Explore Reva**.
 
-The project is checked in. Regenerate it after adding Swift files or bundled resources:
+Regenerate the checked-in project after adding or moving sources/resources; do not manually edit its generated project file:
 
 ```sh
 python3 scripts/generate_project.py
-```
-
-A reproducible command-line build:
-
-```sh
 xcodebuild -project Reva.xcodeproj -scheme Reva \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build
 ```
 
-For a physical iPhone, choose your own development team/signing in Xcode. Camera scanning needs a real supported iPhone. Microphone permission and consent are required before recording. Recording pauses when Reva leaves the foreground; saved audio has playback, but live transcription is unconfigured.
+## Try the fictional demo
 
-## Try the demo
+Follow the [presentation walkthrough](demo/demo-script.md) using the [standalone synthetic documents](demo/README.md).
 
-[Presentation walkthrough](demo/demo-script.md) · [Standalone fictional records](demo/README.md) · [Full task list](docs/task-list.md)
+- Import a PDF, text file or image, review its extraction, and save the automatic local excerpt. Compare any uncertain extraction with its original.
+- Prepare the nausea/palpitations and orthopedic visits to see different relevant histories. The orthopedic implant evidence opens its original PDF on page 2.
+- Edit questions, pin records, correct a source, regenerate a stale brief, and export/share its formatted PDF.
+- Review a booking request and run the clearly labeled simulated outcome. Confirmation updates the existing local visit once.
+- Open the separate sample transcript, correct text or add notes, save a visit memory, and follow its source link. New microphone audio never receives an unrelated sample transcript.
 
-- **Summary:** open the upcoming nausea/palpitations visit and create its brief.
-- **Visits:** compare the orthopedic brief, including the historical implant inventory on page2. Open its source, pin additional records, and edit questions.
-- **Records:** search/filter, open an original, add a fictional sample or import a PDF/text/image, review its extraction and save. Edit a source and regenerate an out-of-date brief.
-- **Booking:** review a clinic/date window and run an explicitly simulated success, needs-input, or no-answer scenario. Confirming updates the existing local visit once.
-- **Visit memory:** open the separate fictional transcript, correct its text or edit separate notes, and save its memory to Records. Saved memories link back to their transcript. New microphone recordings never receive this sample transcript.
-- **Share:** export the current visit brief to a paginated PDF using the native preview/share control.
-- **Profile & settings:** choose appearance, inspect connection status, and explicitly restore the fictional demo.
+Profile & settings exposes server configuration and explicit demo reset. Local state survives relaunch. Deleted/reset items leave active history, while original files and one previous-state backup remain in app storage for recovery; uninstalling clears that sandbox. No real records are bundled or automatically imported.
 
-All active state persists locally across relaunch. Deleted/reset items leave the active history; their original bytes and one previous-state backup remain in app storage for recovery. Remove the app to clear that sandbox. No real patient data is bundled or automatically imported.
+## Configurable APIs
 
-## What works and what is deferred
+The Swift server and native entry points are implemented. **No live provider request or real call was made during this build; accounts and credentials remain manual setup.** Configuration flags report settings, not a successful credential probe.
 
-| Area | This prototype |
+| Feature | Implemented behavior |
 | --- | --- |
-| iPhone UI and local persistence | Functional SwiftUI screens and atomic local JSON/files |
-| Files/photo/camera intake | Native adapters, PDFKit text and Vision OCR; review errors/uncertainty explicitly |
-| Document memory | Automatic source-based **local excerpts**, or clearly labeled authored demo summaries |
-| Pre-visit preparation | Deterministic relevant-source selection, pins, page/version evidence, editable questions and PDF export |
-| Clinic booking | Local state-machine simulation; no call is placed |
-| Recording | Native audio capture adapter and playback; physical input/interruptions require device verification |
-| Transcription | Explicit bundled sample and manual notes; live speech service deferred |
-| Swift API | Runnable Vapor server, local durable store, real native-client integration tests |
-| Tiger Data PostgreSQL | Compiled PostgresNIO adapter, versioned SQL migration, JSONB domain snapshots and BYTEA sources; live database credentials/testing deferred |
-| Gemini / ElevenLabs / Twilio | Documented future provider connections; no keys, network jobs or paid resources activated |
-| MyChart / custom encryption / web app | Excluded from this prototype per scope; manual import and native iPhone first |
+| Gemini | Document summaries and visit preparation; configurable model, default `gemini-2.5-flash`. Selected IDs are validated; original-source citations come from local records. |
+| OpenAI Whisper | Saved-audio transcription using `whisper-1`, with recording-relative segment times and generic speaker labels; no diarization claim. |
+| ElevenLabs / Twilio | Outbound call through a configured ElevenLabs agent and imported Twilio number, followed by status/transcript polling. Durable intent/receipts prevent automatic duplicate attempts. A call's completion never confirms an appointment; the user reviews and confirms details manually. |
+| Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, simulated booking, recording/playback and sample memory work without provider setup. |
+| Tiger Data PostgreSQL | Compiled PostgresNIO adapter and versioned JSONB/BYTEA schema for domain snapshots and attachments. Live database setup/testing remains manual. |
 
-Text extraction is reviewable, not guaranteed perfect. Briefs quote source information and propose discussion questions; they do not diagnose or recommend treatment. The prototype is a fictional hackathon demonstration, with no production medical-data readiness claim.
-
-## Server and configuration
-
-See [server/README.md](server/README.md) for the actual HTTP contract, local run, auth/ownership, limits, PostgreSQL/Tiger setup and deferred checks. The phone never connects directly to PostgreSQL.
+From the repository root, start the local API:
 
 ```sh
-cd server
-swift build -j 6
-swift run --skip-build RevaAPI
+python3 scripts/run_server.py --build
 ```
 
-Local defaults: `http://127.0.0.1:8080`, public demo token `reva-local-demo-token`, loopback only. In the simulator, **Profile & settings → Developer server connection** offers explicit probe/push/pull. The local snapshot remains authoritative between these actions. Conflicts are visible and require choosing which snapshot to keep; no network failure silently swaps in demo data. Attachment transfers and snapshot commits are separate operations, so a failed sync can leave already-transferred files; this developer tool does not provide atomic file-plus-state rollback.
+The launcher reads optional dotenv values without shell evaluation; exported environment variables take precedence. The delivered root `.env` is **exactly empty and Git-ignored**. A fresh clone can create it with `touch .env`. Use the commented [root example](.env.example) and [server example](server/.env.example) for later manual setup; provider secrets stay on the server.
 
-The working folder’s root `.env` is intentionally **zero bytes** and ignored by Git. A fresh clone can create it with `touch .env`. [Root example](.env.example) and [server example](server/.env.example) contain documentation/placeholders only. The server reads exported environment variables; it does not automatically load dotenv files. The iOS app does not read server secrets or `.env`. No API configuration is needed to run the demo.
+Local defaults are `http://127.0.0.1:8080` and the public demo token `reva-local-demo-token`. Set the URL/token in the app's server settings. Paid providers additionally require a private configured token mapping; outbound calls require the live-call enable flag and explicit consent. See the [provider setup and routes](server/README.md#configurable-mvp-providers) and [MVP wire contract](docs/task-specs/mvp-api-contract.md).
 
-## Verification and history
+The phone stays locally authoritative between explicit server push/pull actions. The server provides owner-scoped revisions and conflict errors. Attachment transfers and snapshot commits are separate transactions, so a failed transfer may leave files already copied. Call receipts need persistent server storage even when snapshots use PostgreSQL. Details and limits are in the [server guide](server/README.md).
+
+See the [full-stack architecture and flow diagrams](docs/architecture.md) for the implemented client, server, database, provider boundaries, and data journeys.
+
+## Work in parallel
+
+The [three-person workflow](docs/team-workflow.md) assigns exact files, safe worktrees, shared-contract ownership and integration steps:
+
+| Area | Source |
+| --- | --- |
+| Records and preparation | [Features/Records](apps/ios/Reva/Features/Records), [Features/Preparation](apps/ios/Reva/Features/Preparation) |
+| Booking and visit memory | [Features/Visits](apps/ios/Reva/Features/Visits) |
+| Shared native contracts/state | [Core](apps/ios/Reva/Core), [State](apps/ios/Reva/State), [Features/Shared](apps/ios/Reva/Features/Shared) |
+| Device adapters / backend providers | [Device](apps/ios/Reva/Device), [server](server) |
+
+## Verification and limits
+
+Latest recorded checks: **34 local root tests passed, 1 gated test skipped; 29 server tests passed, 1 live PostgreSQL test skipped.** A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [corrected Summary screenshot](docs/verification/screenshots/summary-exact-palette.png). Explicit demo reset and relaunch restored the clean fictional fixture set.
 
 ```sh
 swift test -j 6
-(cd server && swift test -j 6)
+swift test --package-path server -j 6
 python3 scripts/test_client_server.py
+python3 scripts/check_provider_api.py
 ```
 
-Native device-adapter checks and instructions live in [their task spec](docs/task-specs/device-services.md). Live PostgreSQL tests are explicitly gated on a separately supplied disposable test database. [Completion criteria](docs/completion-criteria.md), [progress and edit history](docs/build-progress.md), [review decisions](docs/reviews/review-log.md), and [verification evidence](docs/verification/README.md) distinguish executed checks from manual setup.
+Build the server before running the two Python checks. [Progress](docs/build-progress.md), [verification evidence](docs/verification/README.md), and [review history](docs/reviews/review-log.md) distinguish executed checks from manual setup.
 
-Checkpoint commits preserve meaningful stages. `.worktrees/implementation-review` was used for Claude Desktop’s review and bounded source/provenance revision; it is intentionally Git-ignored. Compare checkpoints with `git log --oneline` and `git diff <commit>..<commit>`. Use a new branch/worktree for a revision and apply reviewed commits or patches; no destructive reset is needed.
+Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider accounts/keys/agent/number and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, web wrapping, custom encryption and additional production hardening are outside this MVP.
