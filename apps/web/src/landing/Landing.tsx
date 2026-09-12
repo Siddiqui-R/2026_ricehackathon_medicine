@@ -1,4 +1,4 @@
-// Purpose: Present the public landing at / with sign-up, log-in and demo entry points.
+// Purpose: Present the shared homepage hero with sign-up, log-in and demo entry points.
 // Inputs: Static copy, the shared brand mark and the stored session (if one is live).
 // Outputs: A minimal hero, a drawn pulse line, three capability labels and session-aware actions.
 // Side effects: Sets the document title; Log out revokes the session on the server and clears localStorage.

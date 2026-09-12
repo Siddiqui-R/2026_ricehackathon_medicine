@@ -68,6 +68,31 @@ private let preparationInput = GeminiPreparationRequest(
 // MARK: - Private configuration and authenticated capability discovery
 @Suite("Gemini providers — mocked HTTP only")
 struct GeminiProviderTests {
+    @Test func conciseBriefUsesFixedModelAndRejectsOverflow() async throws {
+        let requests = GeminiRequests()
+        let mock = GeminiHTTPTransport { request in
+            await requests.append(request)
+            return .init(status: 200, data: try providerEnvelope([
+                "overview": "Reason: Follow-up.", "questions": [], "selectedRecordIDs": []
+            ]))
+        }
+        let configuration = try ProviderConfiguration(
+            environment: ["GEMINI_API_KEY": fakeGeminiKey, "GEMINI_MODEL": "gemini-other-summary-model"],
+            paidAccessAllowed: true)
+        let result = try await GeminiService(configuration: configuration, transport: mock).prepare(preparationInput)
+        #expect(result.model == "gemini-3.8-flash")
+        let request = try #require(await requests.values.first)
+        #expect(request.url?.absoluteString.hasSuffix("models/gemini-3.8-flash:generateContent") == true)
+        let oversized = GeminiHTTPTransport { _ in
+            .init(status: 200, data: try providerEnvelope([
+                "overview": String(repeating: "word ", count: 181), "questions": [], "selectedRecordIDs": []
+            ]))
+        }
+        await #expect(throws: (any Error).self) {
+            try await GeminiService(configuration: configuration, transport: oversized).prepare(preparationInput)
+        }
+    }
+
     @Test func providerStatusIsAuthenticatedAndNeverContainsSecrets() async throws {
         let requests = GeminiRequests()
         let mock = GeminiHTTPTransport { request in
@@ -273,7 +298,7 @@ struct GeminiProviderTests {
                     let prepared = try response.content.decode(GeminiPreparationResponse.self)
                     #expect(prepared.selectedRecordIDs == ["synthetic-record"])
                     #expect(prepared.questions == ["What remains undocumented?"])
-                    #expect(prepared.model == "gemini-3.5-flash-lite")
+                    #expect(prepared.model == "gemini-3.8-flash")
                 })
         }
         #expect(await requests.values.count == 1)

@@ -44,12 +44,21 @@ async function inspectDuration(blob: Blob): Promise<number> {
 }
 
 // MARK: - Consent, capture preview, and explicit durable save
-export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: () => void }) {
+export function RecordingCapture({
+  visit,
+  onClose,
+  onSaved,
+}: {
+  visit?: Visit;
+  onClose: () => void;
+  onSaved?: (id: string) => void;
+}) {
+  const defaultTitle = visit ? `${visit.title} · recording` : 'Session recording';
   const { saveRecording, notify } = useReva();
   const capture = useVisitRecorder();
   const [id] = useState(uid);
   const [consent, setConsent] = useState(false);
-  const [title, setTitle] = useState(`${visit.title} · recording`);
+  const [title, setTitle] = useState(defaultTitle);
   const [notes, setNotes] = useState('');
   const [upload, setUpload] = useState<{ blob: Blob; duration: number; extension: string } | null>(null);
   const [reading, setReading] = useState(false);
@@ -94,8 +103,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
         throw new Error('Audio must be nonempty and no larger than 16 MiB.');
       const measured = await inspectDuration(file);
       setUpload({ blob: file, duration: measured, extension });
-      if (!title.trim() || title === `${visit.title} · recording`)
-        setTitle(file.name.replace(/\.[^.]+$/, ''));
+      if (!title.trim() || title === defaultTitle) setTitle(file.name.replace(/\.[^.]+$/, ''));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'This audio could not be opened.');
     } finally {
@@ -115,7 +123,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
       const filename = `reva-audio-${id}.${upload?.extension ?? audioExtension(original.type)}`;
       const recording: VisitRecording = {
         id,
-        visitID: visit.id,
+        visitID: visit?.id ?? '',
         title: title.trim(),
         createdAt: nowISO(),
         duration,
@@ -128,6 +136,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
       await saveRecording(recording, original);
       notify('Original audio saved. Add a transcript when your transcription service is configured.');
       onClose();
+      onSaved?.(id);
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -139,7 +148,7 @@ export function RecordingCapture({ visit, onClose }: { visit: Visit; onClose: ()
     }
   }
   return (
-    <Modal title="Record appointment" onClose={close}>
+    <Modal title="Record session" onClose={close}>
       <div className="stack">
         <p className="muted">
           Get your doctor’s consent and permission from everyone present before recording.

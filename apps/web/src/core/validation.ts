@@ -186,7 +186,7 @@ export function validateSnapshot(value: unknown): AppSnapshot {
       return segment;
     });
     unique(segments, `${path}.segments`);
-    if (!visitIDs.has(recording.visitID)) fail(`${path}.visitID`);
+    if (recording.visitID !== '' && !visitIDs.has(recording.visitID)) fail(`${path}.visitID`);
     return recording;
   });
   unique(recordings, 'recordings');

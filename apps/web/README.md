@@ -21,13 +21,15 @@ Open `http://127.0.0.1:5173`. `npm run assets` copies native fictional fixtures 
 
 | Path | What it shows |
 | --- | --- |
-| `/` | Public landing with **Sign up**, **Log in** and **View the demo**. With a live session the actions become **Open your workspace**, **View the demo** and **Log out**. |
+| `/` | Public `HomeLanding` homepage with **Sign up**, **Log in**, and **View the demo**, followed by the animated records, visit-preparation, and appointment-memory tour. Each section’s pieces move together, with motion limited to one section at a time. Live sessions retain **Open your workspace** and **Log out** actions. |
+| `/test` | Local-development-only copy of the animated landing for experiments. Its component and styles live in Git-ignored `src/test/`; fresh checkouts do not require them, and production builds exclude them. |
+| `/basic` | Local-development-only archive of the former minimal homepage. Its component and styles live in Git-ignored `src/basic/`; fresh checkouts do not require them, and production builds exclude them. |
 | `/signup` | Creates an account (`POST /v1/auth/signup`), stores the returned session and opens `/app`. |
 | `/login` | Logs an existing account in (`POST /v1/auth/login`). `/login?reason=session` shows a quiet "Your session ended" notice after a rejected session. |
 | `/app` | The signed-in workspace. It keeps the workspace's `#/…` hash routes and redirects to `/login` when no live session is stored. |
 | `/demo` | The fictional demo workspace with the public local token and manual push/pull. Older `/#/…` bookmarks are forwarded here. |
 
-`scripts/serve.mjs` serves every one of these paths as the single page, and `vercel.json` rewrites them the same way. Hash routes inside `/app` and `/demo` are handled by the client.
+`scripts/serve.mjs` serves the public paths as the single page, and `vercel.json` rewrites them the same way. `/test` and `/basic` are available only through the Vite development server when their local archives exist; the production wrapper and deployment return 404 for both. Hash routes inside `/app` and `/demo` are handled by the client.
 
 After `npm ci`, these checks work from a clean checkout; each command that needs generated fixtures prepares them automatically. To check and serve a built application, from `apps/web`:
 

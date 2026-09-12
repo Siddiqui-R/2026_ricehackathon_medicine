@@ -1,10 +1,19 @@
 // Purpose: Mount the public landing, the account forms, the signed-in workspace or the demo by URL path.
 // Inputs: The root element, the current pathname, the stored session and the IndexedDB-backed context.
-// Outputs: / landing, /login and /signup forms, /app account workspace, /demo workspace, and a render-error boundary.
+// Outputs: / product tour, /login and /signup forms, /app and /demo workspaces, and local-only /test and /basic.
 // Side effects: Loads style sheets; /demo opens the local demo on first use; /app opens the per-account database
 //               and redirects to /login when no live session is stored.
 
-import { Component, StrictMode, useEffect, useState, type ReactNode } from 'react';
+import {
+  Component,
+  lazy,
+  StrictMode,
+  Suspense,
+  useEffect,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import { RevaProvider } from './core/RevaContext';
 import { RevaStore } from './core/store';
@@ -14,7 +23,7 @@ import { accountDatabaseName } from './core/account';
 import { readSession } from './core/session';
 import { App } from './App';
 import { Brand } from './components/Brand';
-import { Landing } from './landing/Landing';
+import { HomeLanding } from './landing/HomeLanding';
 import { Login } from './landing/Login';
 import { Signup } from './landing/Signup';
 import './styles/tokens.css';
@@ -22,6 +31,17 @@ import './styles/layout.css';
 import './styles/components.css';
 import './styles/features.css';
 import './styles/landing.css';
+
+// MARK: - Ignored local archives are optional in development and absent from production bundles
+const localArchives = import.meta.env.DEV
+  ? import.meta.glob<{ default: ComponentType }>(['./basic/BasicLanding.tsx', './test/TestLanding.tsx'])
+  : {};
+function localArchive(path: string) {
+  const loadArchive = localArchives[path];
+  return import.meta.env.DEV && loadArchive ? lazy(loadArchive) : null;
+}
+const BasicArchive = localArchive('./basic/BasicLanding.tsx');
+const TestArchive = localArchive('./test/TestLanding.tsx');
 
 // MARK: - Path routes: the landing and account forms stay outside the workspace provider
 // The workspace keeps its hash routes under /demo and /app; older /#/… bookmarks are forwarded to /demo.
@@ -37,10 +57,32 @@ function Entry() {
         <App />
       </RevaProvider>
     );
+  if (path === '/') return <HomeLanding />;
+  const LocalArchive = path === '/basic' ? BasicArchive : path === '/test' ? TestArchive : null;
+  if (LocalArchive)
+    return (
+      <Suspense
+        fallback={
+          <main className="startup-state">
+            <p>Opening the saved page…</p>
+          </main>
+        }
+      >
+        <LocalArchive />
+      </Suspense>
+    );
   if (path === '/app') return <AccountEntry />;
   if (path === '/login') return <Login />;
   if (path === '/signup') return <Signup />;
-  return <Landing />;
+  return (
+    <main className="startup-state">
+      <Brand />
+      <h1>Page not found.</h1>
+      <a className="button button-primary" href="/">
+        Back to home
+      </a>
+    </main>
+  );
 }
 
 // MARK: - The account workspace binds one live session to its own database; no session means /login

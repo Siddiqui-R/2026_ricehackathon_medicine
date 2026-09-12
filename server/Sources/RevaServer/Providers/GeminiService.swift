@@ -46,44 +46,53 @@ struct GeminiService: Sendable {
                 "overview": .object(["type": .string("string")]),
                 "questions": .object([
                     "type": .string("array"), "items": .object(["type": .string("string")]),
-                    "maxItems": .integer(20),
+                    "maxItems": .integer(3),
                 ]),
                 "selectedRecordIDs": .object([
                     "type": .string("array"),
                     "items": .object([
                         "type": .string("string"), "enum": .array(candidateIDs.map(JSONValue.string)),
-                    ]), "maxItems": .integer(100),
+                    ]), "maxItems": .integer(6),
                 ]),
             ]),
             "required": .array(["overview", "questions", "selectedRecordIDs"].map(JSONValue.string)),
             "additionalProperties": .bool(false),
         ])
         let object = try await generate(
-            input: request, schema: schema,
+            input: request, schema: schema, model: "gemini-3.8-flash",
             task: """
-                Prepare a concise visit overview grounded only in the candidate documents and the patient's concern/goal.
-                Select candidate record IDs relevant to this visit, including older relevant history and active context.
-                Use original text rather than relying only on a summary. Preserve uncertainty and source dates/numbers.
-                Suggest up to 20 discussion questions, each no longer than 1000 UTF-8 bytes. Do not diagnose or recommend
-                treatment. Return only overview (nonempty, at most 12000 UTF-8 bytes), questions and selectedRecordIDs.
-                IDs must be unique and copied exactly from the candidates. Do not invent page numbers, quotes or citations;
-                the client constructs citations from the selected original records. If no candidate is relevant, select none.
+                Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
+                supplied records and patient concerns. Include only the history and prior results relevant to preparing
+                for that visit. Never describe the upcoming appointment as completed or invent its findings, decisions,
+                treatment or follow-up.
+                Return overview: at most 180 words and 2400 UTF-8 bytes, at most 12 lines, plain text. Use short paragraphs
+                with inline labels only when relevant: Reason, Relevant history, Medications, Allergies, Prior results.
+                Include only facts important to this visit. Preserve dates, doses, units, negations, conflicting evidence
+                and uncertainty; distinguish patient reports from documented findings and past from current treatment.
+                Empty lists mean not documented, not absent. No introduction, conclusion, repetition, filler, markdown,
+                generic advice, diagnosis or treatment recommendations. Condense patient questions without changing intent;
+                up to three questions, each at most 140 UTF-8 bytes. Suggest a question only if useful to the stated concern.
+                Select at most six relevant source IDs, unique and copied exactly from candidates. Do not invent citations,
+                quotations or page numbers. Do not repeat source excerpts. If no record is relevant, select none and use
+                the stated visit concern only.
                 """)
-        guard let overview = object["overview"] as? String, GeminiValidation.text(overview, maximum: 12_000),
-            let questions = object["questions"] as? [String], questions.count <= 20,
-            questions.allSatisfy({ GeminiValidation.text($0, maximum: 1000) }),
-            let selected = object["selectedRecordIDs"] as? [String], selected.count <= 100,
+        guard let overview = object["overview"] as? String, GeminiValidation.text(overview, maximum: 2400),
+            overview.split(whereSeparator: { $0.isWhitespace }).count <= 180,
+            overview.components(separatedBy: "\n").count <= 12,
+            let questions = object["questions"] as? [String], questions.count <= 3,
+            questions.allSatisfy({ GeminiValidation.text($0, maximum: 140) }),
+            let selected = object["selectedRecordIDs"] as? [String], selected.count <= 6,
             Set(selected).count == selected.count, Set(selected).isSubset(of: Set(candidateIDs)),
             Set(object.keys) == ["overview", "questions", "selectedRecordIDs"]
         else { throw invalidResponse() }
         return GeminiPreparationResponse(
             overview: overview, questions: questions, selectedRecordIDs: selected,
-            model: configuration.geminiModel)
+            model: "gemini-3.8-flash")
     }
 
     // MARK: - Separate untrusted source JSON from server instructions
     // Configuration gates run before the single external request. No client state is changed by this service.
-    private func generate<Input: Encodable>(input: Input, schema: JSONValue, task: String) async throws
+    private func generate<Input: Encodable>(input: Input, schema: JSONValue, model: String? = nil, task: String) async throws
         -> [String: Any]
     {
         guard configuration.paidAccessAllowed else {
@@ -119,7 +128,7 @@ struct GeminiService: Sendable {
         guard
             let url = URL(
                 string:
-                    "https://generativelanguage.googleapis.com/v1beta/models/\(configuration.geminiModel):generateContent"
+                    "https://generativelanguage.googleapis.com/v1beta/models/\(model ?? configuration.geminiModel):generateContent"
             )
         else {
             throw invalidResponse()
@@ -165,7 +174,7 @@ struct GeminiService: Sendable {
         Abort(
             .serviceUnavailable,
             reason:
-                "Gemini returned incomplete, blocked or invalid structured output. No AI result was saved; retry or use local preparation."
+                "Gemini returned incomplete, blocked or invalid structured output. No AI result was saved; retry."
         )
     }
 }

@@ -379,6 +379,13 @@ test(
       assert.ok(Number(head.headers['content-length']) > 0);
       for (const target of [
         '/account',
+        '/basic',
+        '/basic/',
+        '/basic?x=1',
+        '/test',
+        '/test/',
+        '/test?x=1',
+        '/test/missing',
         '/app/records',
         '/demo/records',
         '/private-settings.txt',

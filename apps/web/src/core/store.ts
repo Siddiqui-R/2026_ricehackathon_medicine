@@ -1,3 +1,11 @@
+import {
+  briefContextSignature,
+  briefVisit,
+  briefSources,
+  clinicalBrief,
+  type ClinicalBrief,
+  type VisitBriefInput,
+} from './visitBrief';
 // Purpose: Coordinate durable browser state, source-aware edits and deliberate connected actions.
 // Inputs: UI intents, an injectable repository/API factory, reviewed provider requests and, in account
 //         mode, the signed-in session (token, user) with injectable storage/redirect boundaries.
@@ -504,7 +512,7 @@ export class RevaStore {
     this.edit(
       (draft) => {
         if (!recording.audioFilename) throw new Error('The original audio filename is missing.');
-        if (!draft.visits.some((visit) => visit.id === recording.visitID))
+        if (recording.visitID && !draft.visits.some((visit) => visit.id === recording.visitID))
           throw new Error('This visit is no longer available.');
         if (draft.recordings.some((saved) => saved.id === recording.id))
           throw new Error('This recording was already saved. Close this dialog to review it.');
@@ -583,6 +591,26 @@ export class RevaStore {
       });
       this.notify('AI summary saved. Review it against the original source.');
     });
+
+  // Always call the server on request; this result is never written to the appointment log.
+  generateVisitBrief = async (input: VisitBriefInput): Promise<ClinicalBrief> => {
+    const identity = this.identity;
+    const snapshot = structuredClone(this.requiredSnapshot());
+    const visit = briefVisit(input),
+      sources = briefSources(snapshot);
+    try {
+      const result = await this.apiFactory(this.state.token).prepare(visit, sources);
+      this.assertIdentity(identity);
+      if (briefContextSignature(snapshot) !== briefContextSignature(this.requiredSnapshot()))
+        throw new Error(
+          'Your records or profile changed. Generate a new brief with the current information.',
+        );
+      return clinicalBrief(snapshot, visit, sources, result);
+    } catch (error) {
+      this.reportError(error);
+      throw error;
+    }
+  };
 
   // MARK: - Reports preserve source signatures and authoritative questions through asynchronous work.
   prepareVisit = (id: string): Promise<void> =>

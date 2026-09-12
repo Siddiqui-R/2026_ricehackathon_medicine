@@ -8,7 +8,6 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   Activity,
   ArrowUpRight,
-  CalendarDays,
   Check,
   ChevronRight,
   FileText,
@@ -37,7 +36,6 @@ import { VisitDetail } from './features/visits/VisitDetail';
 const navigation = [
   { id: 'summary', title: 'Overview', mobile: 'Overview', icon: LayoutDashboard },
   { id: 'records', title: 'Health records', mobile: 'Records', icon: FileText },
-  { id: 'visits', title: 'Appointments', mobile: 'Visits', icon: CalendarDays },
   { id: 'profile', title: 'Medical profile', mobile: 'Profile', icon: UserRound },
 ];
 function readRoute() {
@@ -61,7 +59,9 @@ export function App() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
   useEffect(() => {
-    const name = navigation.find((item) => item.id === route.section)?.title ?? 'Settings';
+    const name =
+      navigation.find((item) => item.id === route.section)?.title ??
+      (route.section === 'visits' ? 'Pre-visit brief' : 'Settings');
     document.title = `${name} · Reva`;
     content.current?.focus({ preventScroll: true });
   }, [route.hash]);
@@ -89,7 +89,9 @@ export function App() {
       </main>
     );
   const profile = store.snapshot.profile;
-  const navTitle = navigation.find((item) => item.id === route.section)?.title ?? 'Settings';
+  const navTitle =
+    navigation.find((item) => item.id === route.section)?.title ??
+    (route.section === 'visits' ? 'Pre-visit brief' : 'Settings');
   const account = store.mode === 'account';
   const demo = store.mode === 'demo' && profile.isDemo;
   // The store reports a failed revoke in the feedback banner; a successful one leaves this page.
@@ -263,7 +265,11 @@ export function App() {
           </footer>
         </main>
       </div>
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav
+        className="mobile-nav"
+        aria-label="Mobile navigation"
+        style={{ gridTemplateColumns: `repeat(${navigation.length}, minmax(0, 1fr))` }}
+      >
         {navigation.map((item) => (
           <a
             key={item.id}

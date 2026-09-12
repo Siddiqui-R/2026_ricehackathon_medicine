@@ -3,35 +3,37 @@
 // Outputs: Actionable appointment and record links with clearly labeled source state.
 // Side effects: Navigation only; preparation and edits happen on their dedicated screens.
 
+import { useState } from 'react';
 import {
   Activity,
   ArrowRight,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
   FilePlus2,
   FileText,
   HeartPulse,
-  MapPin,
+  Mic,
   Pill,
-  Plus,
   ShieldAlert,
-  Stethoscope,
 } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
-import { defaultTimeZone, displayTimeZone, formatDate } from '../core/domain';
+import { defaultTimeZone, formatDate } from '../core/domain';
 import { demoLabel } from '../core/presentation';
-import { Badge, Card } from '../components/ui';
+import { Card, Modal } from '../components/ui';
+import { VisitPreparation } from './visits/VisitPreparation';
+import { RecordingCapture } from './visits/RecordingCapture';
+import { RecordingDetail } from './visits/RecordingDetail';
 
 // MARK: - Dashboard projections never mutate the underlying clinical data
 export function Dashboard() {
   const { snapshot } = useReva();
+  const [prepare, setPrepare] = useState(false);
+  const [capture, setCapture] = useState(false);
+  const [recordingID, setRecordingID] = useState<string | null>(null);
   if (!snapshot) return null;
-  const { profile, records, visits } = snapshot;
-  const upcoming = visits
-    .filter((visit) => visit.status !== 'completed')
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const next = upcoming[0];
+  const { profile, records, recordings } = snapshot;
+  const recording = recordings.find((item) => item.id === recordingID);
+  const sessions = [...recordings].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const recent = [...records]
     .sort((a, b) => b.date.localeCompare(a.date) || b.uploadedAt.localeCompare(a.uploadedAt))
     .slice(0, 5);
@@ -59,6 +61,22 @@ export function Dashboard() {
           {today}
         </span>
       </div>
+      <div className="home-care-actions" aria-label="Visit actions">
+        <button onClick={() => setPrepare(true)}>
+          <CalendarDays size={26} />
+          <span>
+            <strong>Upcoming visit</strong>
+            <small>Run a pre-visit brief</small>
+          </span>
+        </button>
+        <button onClick={() => setCapture(true)}>
+          <Mic size={26} />
+          <span>
+            <strong>Record session</strong>
+            <small>Record, transcribe, summarize</small>
+          </span>
+        </button>
+      </div>
       <div className="quick-actions" aria-label="Quick actions">
         <a href="#/records?add=import">
           <span className="action-icon">
@@ -80,88 +98,39 @@ export function Dashboard() {
           </span>
           <ChevronRight size={18} />
         </a>
-        <a href="#/visits?add=visit">
-          <span className="action-icon soft">
-            <CalendarDays size={23} />
-          </span>
-          <span>
-            <strong>Add an appointment</strong>
-            <small>Start preparing for your visit</small>
-          </span>
-          <ChevronRight size={18} />
-        </a>
       </div>
 
       <div className="dashboard-grid">
         <div className="dashboard-primary">
-          <div className="section-heading">
-            <h2>Your next appointment</h2>
-            <a className="text-link" href="#/visits">
-              All appointments <ArrowRight size={15} />
-            </a>
-          </div>
-          {next ? (
-            <Card className="next-appointment">
-              <div className="appointment-top">
-                <Badge tone="accent">UPCOMING VISIT</Badge>
-                <span className="muted small">{next.type}</span>
+          {sessions.length > 0 && (
+            <>
+              <div className="section-heading">
+                <h2>Session recordings</h2>
               </div>
-              <div className="appointment-body">
-                <div className="date-tile">
-                  <span>
-                    {new Intl.DateTimeFormat('en-US', {
-                      month: 'short',
-                      timeZone: displayTimeZone(next.timeZone),
-                    }).format(new Date(next.date))}
-                  </span>
-                  <strong>
-                    {new Intl.DateTimeFormat('en-US', {
-                      day: 'numeric',
-                      timeZone: displayTimeZone(next.timeZone),
-                    }).format(new Date(next.date))}
-                  </strong>
+              <Card className="recent-records">
+                <div className="record-list">
+                  {sessions.map((session) => (
+                    <button
+                      className="record-row session-row"
+                      key={session.id}
+                      onClick={() => setRecordingID(session.id)}
+                    >
+                      <span className="record-icon">
+                        <Mic size={20} />
+                      </span>
+                      <span className="record-main">
+                        <strong>{demoLabel(session.title, session.isSample)}</strong>
+                        <span className="record-meta">
+                          {formatDate(session.createdAt)}
+                          {session.isSample ? ' · Sample' : ''}
+                        </span>
+                      </span>
+                      <ChevronRight size={17} />
+                    </button>
+                  ))}
                 </div>
-                <div className="appointment-info">
-                  <h3>
-                    <a href={`#/visits/${next.id}`}>{next.title}</a>
-                  </h3>
-                  <p>
-                    <Stethoscope size={15} />
-                    {demoLabel(next.provider, profile.isDemo) || 'Provider to be confirmed'}
-                  </p>
-                  <p>
-                    <MapPin size={15} />
-                    {demoLabel(next.clinic, profile.isDemo) || 'Location to be confirmed'}
-                  </p>
-                  <p className="appointment-time">{formatDate(next.date, true, next.timeZone)}</p>
-                </div>
-              </div>
-              <div className="appointment-focus">
-                <ClipboardList size={19} />
-                <div>
-                  <strong>A little preparation goes a long way</strong>
-                  <p>Bring your relevant history and the questions that matter to you.</p>
-                  <a className="button button-primary" href={`#/visits/${next.id}`}>
-                    Prepare for this visit <ArrowRight size={16} />
-                  </a>
-                </div>
-              </div>
-              <div className="appointment-footer">
-                <span className="small muted">{records.length} records available for preparation</span>
-              </div>
-            </Card>
-          ) : (
-            <Card>
-              <div className="empty-state">
-                <CalendarDays size={32} />
-                <h3>Your next visit starts here</h3>
-                <p>Add an appointment to bring your history and questions together.</p>
-                <a className="button button-primary" href="#/visits?add=visit">
-                  <Plus size={17} />
-                  Add appointment
-                </a>
-              </div>
-            </Card>
+              </Card>
+            </>
           )}
 
           <div className="section-heading records-heading">
@@ -251,6 +220,13 @@ export function Dashboard() {
           </Card>
         </div>
       </div>
+      {prepare && (
+        <Modal title="Upcoming visit" onClose={() => setPrepare(false)} wide>
+          <VisitPreparation />
+        </Modal>
+      )}
+      {capture && <RecordingCapture onClose={() => setCapture(false)} onSaved={setRecordingID} />}
+      {recording && <RecordingDetail recording={recording} onClose={() => setRecordingID(null)} />}
     </div>
   );
 }

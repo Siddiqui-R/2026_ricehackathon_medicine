@@ -10,6 +10,16 @@ import XCTest
 
 // MARK: - Appointment recording contract
 final class AppointmentRecordingTests: XCTestCase {
+    func testStandaloneRecordingDoesNotRequireAnAppointment() throws {
+        let profile = PatientProfile(id: "profile", name: "Fictional Patient", dateOfBirth: "1990-01-01", initials: "FP", allergies: [], medications: [], conditions: [], isDemo: true)
+        var snapshot = AppSnapshot(profile: profile, records: [], visits: [], recordings: [
+            VisitRecording(visitID: "", title: "Session", duration: 60, segments: [], summary: "")
+        ])
+        XCTAssertNoThrow(try snapshot.validate())
+        snapshot.recordings[0].visitID = "missing"
+        XCTAssertThrowsError(try snapshot.validate())
+    }
+
     func testLegacyRecordingDecodesWithoutAISummaryAndPreservesNotes() throws {
         let legacy = Data(
             #"{"id":"old-recording","visitID":"visit","title":"Appointment","createdAt":"2026-09-12T12:00:00Z","duration":60,"segments":[],"summary":"My own notes","isSample":false,"status":"saved"}"#

@@ -35,6 +35,7 @@ export function useReva() {
     saveVisit: store.saveVisit,
     summarizeRecord: store.summarizeRecord,
     prepareVisit: store.prepareVisit,
+    generateVisitBrief: store.generateVisitBrief,
     saveMemory: store.saveMemory,
     transcribeRecording: store.transcribeRecording,
     summarizeRecording: store.summarizeRecording,

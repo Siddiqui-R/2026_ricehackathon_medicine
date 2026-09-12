@@ -11,6 +11,7 @@ import { MemoryRepository, sample, transport } from '../../core/__tests__/fixtur
 import { RecordingCapture } from './RecordingCapture';
 import { RecordingDetail } from './RecordingDetail';
 import { VisitDetail } from './VisitDetail';
+import { Dashboard } from '../Dashboard';
 
 // MARK: - Prepared store and readable button extraction avoid executing any interactive effects
 async function ready() {
@@ -30,6 +31,19 @@ function button(markup: string, text: string): string {
 }
 
 describe('appointment recording interface', () => {
+  it('puts preparation and recording on home without a saved upcoming appointment list', async () => {
+    const store = await ready();
+    const html = renderToStaticMarkup(
+      <RevaProvider store={store}>
+        <Dashboard />
+      </RevaProvider>,
+    );
+    expect(button(html, 'Upcoming visit')).toBeDefined();
+    expect(button(html, 'Record session')).toBeDefined();
+    expect(html).toContain('Session recordings');
+    expect(html).not.toMatch(/Your next appointment|Add an appointment|All appointments/);
+  });
+
   it('requires doctor and everyone consent before starting, uploading or saving', async () => {
     const store = await ready();
     vi.stubGlobal('window', { isSecureContext: true });
@@ -38,7 +52,7 @@ describe('appointment recording interface', () => {
     try {
       const html = renderToStaticMarkup(
         <RevaProvider store={store}>
-          <RecordingCapture visit={store.getState().snapshot!.visits[0]} onClose={() => {}} />
+          <RecordingCapture onClose={() => {}} />
         </RevaProvider>,
       );
       expect(html).toContain(

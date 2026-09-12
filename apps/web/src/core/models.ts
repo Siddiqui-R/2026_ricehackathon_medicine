@@ -121,6 +121,7 @@ export interface TranscriptSegment {
 }
 export interface VisitRecording {
   id: string;
+  /** Empty for a standalone session; nonempty IDs must reference an existing visit. */
   visitID: string;
   title: string;
   createdAt: string;

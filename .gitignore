@@ -27,3 +27,10 @@ apps/web/public/ocr/
 apps/web/test-results/
 apps/web/playwright-report/
 *.tsbuildinfo
+
+# Local landing experiments and archives; never publish or commit them.
+/apps/web/src/basic/
+/apps/web/src/test/
+
+# Preserved numbered source snapshots, outside compiler and test discovery roots.
+/.local/source-snapshots/

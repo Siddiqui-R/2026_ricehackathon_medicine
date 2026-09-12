@@ -107,7 +107,7 @@ function readBody(incoming, maximum) {
   });
 }
 
-// MARK: - Only compiled assets, bundled fictional data and the five application routes are readable
+// MARK: - Only compiled assets, bundled fictional data and the five public application routes are readable
 const appRoutes = new Set(['/', '/demo', '/login', '/signup', '/app']);
 function appRoute(pathname) {
   return appRoutes.has(pathname.length > 1 ? pathname.replace(/\/+$/u, '') : pathname);
