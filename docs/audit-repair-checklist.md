@@ -83,6 +83,29 @@ node --test apps/web/scripts/serve.test.mjs
 - [ ] On macOS, run both Swift package suites and build the iOS project in Xcode. Recompare current hash vectors with real CryptoKit; Windows equality-only stand-ins do not verify cryptography.
 - [ ] Exercise native editor refresh/conflicts, startup recovery/reset, busy preparation, microphone finish/save retry/share, scanner kinds and actual PDFKit/Vision mixed-page OCR. Inspect exported PDF colors/layout.
 - [ ] Run current import → review → save → prepare → cite → edit → stale → regenerate → reload journeys across supported browsers, including real OCR and tablet keyboard/screen-reader access. jsdom does not perform real CSS layout or OCR.
-- [ ] Supply the separate Tiger database connection password, verify trusted TLS and run dedicated migration/persistence/concurrency checks. A website login is not the SQL password.
-- [ ] Configure/verify live providers and entitlements, then test transcription and an explicitly reviewed call. No paid requests were made during these checks.
+- [x] Save Tiger database credentials locally and verify TLS, authentication and a read-only `SELECT 1`. Completed September 12 with normal system trust and hostname verification; no database mutations or application-data reads. The transaction-pool connection reports the underlying `tsdb` database.
+- [x] Save the Google key locally and verify authenticated model listing, including the configured `gemini-3.8-flash`. This verifies key/catalog access, not generated-content quality or the running Reva integration.
+- [ ] Configure private `REVA_TOKENS` for the backend. It remains empty; PostgreSQL and paid providers cannot use the public demo token.
+- [ ] Initialize Reva's database schema and run dedicated migration/persistence/concurrency checks through the real Swift adapter. The read-only probe found no visible `reva_schema_migrations` table. The exact PostgresNIO startup parameters and pool behavior remain unverified.
+- [ ] Run/deploy the authenticated Swift backend with persistent storage for call receipts, then configure the browser's same-origin `/v1` and `/health` routing. Vercel's static browser build does not start the backend or deploy local `.env` secrets.
+- [ ] Configure and test transcription. The current implementation uses OpenAI Whisper; `OPENAI_API_KEY` is missing. ElevenLabs speech-to-text would require a separate adapter and verification, not just an environment-variable change.
+- [ ] Complete the ElevenLabs activation steps below, then test an explicitly reviewed call. No paid generation, phone call or account-permission change was made during this review.
 - [ ] Review later account/session/deployment work at a completed checkpoint and verify actual hosted routes. Audit suggestions and unverified candidates are not implied complete by these repairs.
+
+## ElevenLabs activation review — September 12
+
+The signed-in account has Agents entitlement suitable for a prototype. Reva already implements outbound requests, per-call consent, durable replay protection, transcript polling and manual appointment confirmation in both client flows and the Swift backend. A source comparison found no material mismatch with the current [outbound API](https://elevenlabs.io/docs/api-reference/integrations/twilio/outbound-call). This is compatibility evidence, not a successful live call.
+
+| Done | Required step | Current evidence / completion check |
+| --- | --- | --- |
+| [x] | Confirm account access to ElevenAgents | Agents subscription and configuration surfaces are available. Account billing and usage were not changed. |
+| [ ] | Give the server key appropriate ElevenAgents permissions | The existing enabled key has ElevenAgents set to **No Access**. Text-to-speech and speech-to-speech access alone cannot start/poll agent calls. Configure access for the required conversation operations and save the usable key as `ELEVENLABS_API_KEY` in backend secrets. The local value is currently empty. |
+| [ ] | Configure a Reva scheduling agent | No Reva agent ID is configured locally; the account's agent route opened template onboarding during review. Create or identify the intended agent, review its behavior, and set `ELEVENLABS_AGENT_ID`. |
+| [ ] | Match the scheduling prompt to Reva's request | Consume `request_id`, `clinic_name`, `patient_name`, `appointment_reason`, `earliest`, `latest`, `time_zone` and `preferences`. Request availability within the supplied constraints; leave final confirmation to the user's existing review flow. |
+| [ ] | Import an outbound-capable Twilio identity | Phone Numbers explicitly shows no numbers. Use a purchased Twilio number or a Twilio verified caller ID for outbound-only use, then set the returned `ELEVENLABS_PHONE_NUMBER_ID`. Twilio credentials belong in the ElevenLabs integration, not the browser bundle. See the [native integration guide](https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/native-integration). |
+| [ ] | Review recording/retention behavior | Reva supplies `call_recording_enabled:false`, which controls Twilio recording; it does not establish every ElevenLabs audio/transcript-retention setting. Verify agent settings before the live test. |
+| [ ] | Verify the complete call flow | With backend authentication/storage ready, enable `REVA_ENABLE_LIVE_CALLS` and use a specifically authorized test recipient. Verify dynamic variables, transcript/status, duplicate prevention, unknown outcomes and manual appointment confirmation. The flag remains false. |
+
+An in-browser voice conversation is a separate possible feature: the [ElevenLabs React SDK](https://elevenlabs.io/docs/eleven-agents/libraries/react) supports microphone conversations without a phone number. Reva currently has no such session UI or SDK integration. It would need a backend-issued short-lived token for a private agent, session/error cleanup, microphone tests and narrowly scoped CSP changes. It would not replace the phone connection needed to call clinics.
+
+The existing key also has Speech to Text set to No Access. Switching saved-recording transcription from Whisper to ElevenLabs therefore needs both provider permission and implementation work. Database and Google credentials remain only in ignored local files; this document contains no key values, passwords or account identifiers.
