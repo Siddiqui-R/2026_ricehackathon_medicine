@@ -1,0 +1,20 @@
+{
+  "id": "RVA-TRACK-NNN",
+  "status": "confirmed | candidate | rejected | WIP | evidence-gap | suggestion",
+  "severity": "P0 | P1 | P2 | P3",
+  "title": "",
+  "snapshot": "",
+  "requirementIDs": [],
+  "file": "relative path",
+  "line": 1,
+  "trigger": "",
+  "expected": "",
+  "actual": "",
+  "impact": "",
+  "evidence": "command/log or precise source proof",
+  "confidence": "high | medium | low",
+  "smallestFix": "",
+  "regressionCheck": "",
+  "validatorDisposition": "pending",
+  "ownerTrack": ""
+}
