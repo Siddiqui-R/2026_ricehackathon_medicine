@@ -1,10 +1,12 @@
+> For a concise current handoff, see the [project overview packet](project-overview-packet.md), including the actual worktree inventory and the feature branches that are only proposed.
+
 # Three-person MVP workflow
 
 Follow the [revised MVP goal](mvp-goal.md), [MVP API contract](task-specs/mvp-api-contract.md), and [snapshot contract](implementation-contract.md). The two-hour scope ends September 12, 2026 at 14:28 UTC. Preserve the working local demo while finishing configurable API paths; the earlier exhaustive task list does not add release requirements to this sprint.
 
 These are folder ownership boundaries inside the existing app target, not new Swift packages. `Features/Preparation/VisitsView.swift` intentionally still contains visit list/detail/editing and report views. Keep that file together during this deadline.
 
-The user reaffirmed the exact palette after reviewing a dark screenshot: the app now stays **light only**, with Ivory canvas/button text, Sky cards and Teal actions. Preserve all six original hex values in `Features/Shared/Theme.swift`; do not restore adaptive dark substitutions. The [style plan's current authority block](reva-style-plan.md) overrides its historical alternatives.
+The user reaffirmed the exact palette after reviewing a dark screenshot: the app now stays **light only**, with Sky canvas, Ivory cards/button text and Teal actions. Preserve all six original hex values in `Features/Shared/Theme.swift`; do not restore adaptive dark substitutions. The [style plan's current authority block](reva-style-plan.md) overrides its historical alternatives.
 
 ## Owners
 

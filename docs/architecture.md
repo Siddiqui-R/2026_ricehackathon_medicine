@@ -4,6 +4,8 @@
 
 Reva is a native SwiftUI iPhone app with a working local demo and a Swift server. Provider adapters are implemented and tested with mocks; their accounts/credentials and a live Tiger database remain manual setup. The app never needs provider keys to demonstrate the local patient journey. The [revised MVP goal](mvp-goal.md), [setup guide](../README.md), [API contract](task-specs/mvp-api-contract.md), and [verification evidence](verification/README.md) define the delivered scope.
 
+For a shareable teammate handoff, use the [seven-page project overview packet](../output/pdf/reva-project-overview-packet.pdf) or its [editable source](project-overview-packet.md). It adds the inspected worktree inventory, proposed ownership split, functionality matrix, and setup guide to the flows below.
+
 ## Full stack at a glance
 
 Blue nodes work locally. Gold nodes are implemented provider/database boundaries that need configuration. Dashed nodes are external accounts or infrastructure that have not been activated by this build.

@@ -2,7 +2,7 @@
 
 **Making every appointment count.** A native SwiftUI iPhone MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [revised MVP goal](docs/mvp-goal.md) defines the current scope.
 
-The app uses the user's exact [six-color palette](design/palette.json) in **light appearance only**: Ivory canvas, Sky cards, Teal actions and Ivory button text. Gold, Slate and Aqua remain unchanged accent tokens. Earlier dark-theme proposals are historical.
+The app uses the user's exact [six-color palette](design/palette.json) in **light appearance only**: Sky canvas, Ivory cards, Teal actions and Ivory button text. Gold, Slate and Aqua remain unchanged accent tokens. Earlier dark-theme proposals are historical.
 
 ## Run the app
 
@@ -59,6 +59,10 @@ The phone stays locally authoritative between explicit server push/pull actions.
 
 See the [full-stack architecture and flow diagrams](docs/architecture.md) for the implemented client, server, database, provider boundaries, and data journeys.
 
+## Project overview packet
+
+The [seven-page PDF packet](output/pdf/reva-project-overview-packet.pdf) covers existing worktrees, proposed team ownership, technologies, data flows, functionality, API setup, and verification. The [editable Markdown source](docs/project-overview-packet.md) records the same baseline. Rebuild both with `scripts/build_overview_packet.py` in a Python environment with ReportLab and the documented macOS fonts.
+
 ## Work in parallel
 
 The [three-person workflow](docs/team-workflow.md) assigns exact files, safe worktrees, shared-contract ownership and integration steps:
@@ -72,7 +76,7 @@ The [three-person workflow](docs/team-workflow.md) assigns exact files, safe wor
 
 ## Verification and limits
 
-Latest recorded checks: **34 local root tests passed, 1 gated test skipped; 29 server tests passed, 1 live PostgreSQL test skipped.** A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [corrected Summary screenshot](docs/verification/screenshots/summary-exact-palette.png). Explicit demo reset and relaunch restored the clean fictional fixture set.
+Latest native follow-up: **43 root tests passed, 1 gated test skipped.** The earlier backend checkpoint recorded **29 server tests passed, 1 live PostgreSQL test skipped**; these were separate runs. A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [current Medical profile screenshot](docs/verification/screenshots/medical-profile.png) and [follow-up checks](docs/verification/profile-symptoms.md). Explicit demo reset and relaunch restored the clean fictional fixture set.
 
 ```sh
 swift test -j 6

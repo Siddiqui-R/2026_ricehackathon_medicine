@@ -106,3 +106,12 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 
 - Checkpoint `ffcbf6c`: implemented medical profile, symptom logging, navigation, and palette roles. Final native build succeeded; 43 core tests passed with one live-server gate skipped. Native save/edit/filter/view-all/relaunch checks passed. Temporary QA data removed through the app.
 - Updated the as-built stack diagram immediately before the follow-up documentation commit and GitHub push.
+
+
+## Project overview packet September 12
+
+- Created `output/pdf/reva-project-overview-packet.pdf`, a seven-page teammate packet, with editable `docs/project-overview-packet.md` and a single-source ReportLab builder at `scripts/build_overview_packet.py`.
+- Inspected actual Git worktrees at baseline `d0af1df`: clean main; historical implementation-review with 2 modified files/2 untracked reports; historical final-review with 1 untracked report. Neither review branch has commits absent from main. Proposed three-person branches are clearly identified as not yet created. No worktree was altered.
+- Verified the technology/feature inventory against source and package locks. Distinguishes local behavior, configurable providers, manual setup, Medical profile quick-reference data, and symptom records that participate in preparation.
+- Corrected stale README/team-guide palette roles and README root test count; preserved earlier test-run chronology. No application code changed and no tests or paid integrations were rerun for this documentation task.
+- Rendered the PDF with Poppler and inspected all seven pages. Tables/diagrams fit, numbering is correct, and the final PDF contains no blank overflow page. QA renders remain ignored under output/qa.
