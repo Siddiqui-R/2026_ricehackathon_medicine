@@ -123,14 +123,14 @@ enum ReportPDFRenderer {
         title: String, subtitle: String, sections: [PDFSection], sources: [String]
     ) -> NSAttributedString {
         let text = NSMutableAttributedString(string: "")
-        append(title, font: .systemFont(ofSize: 25, weight: .bold), color: teal, spacingAfter: 9, to: text)
+        append(title, font: .systemFont(ofSize: 25, weight: .bold), color: heart, spacingAfter: 9, to: text)
         if !subtitle.isEmpty {
             append(subtitle, font: .systemFont(ofSize: 11), color: .darkGray, spacingAfter: 18, to: text)
         }
         for section in sections {
             if !section.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 append(
-                    section.title, font: .systemFont(ofSize: 14, weight: .semibold), color: teal,
+                    section.title, font: .systemFont(ofSize: 14, weight: .semibold), color: heart,
                     spacingBefore: 10, spacingAfter: 6, heading: true, to: text)
             }
             append(
@@ -138,7 +138,7 @@ enum ReportPDFRenderer {
                 font: .systemFont(ofSize: 11), color: .black, spacingAfter: 10, to: text)
         }
         append(
-            "Sources", font: .systemFont(ofSize: 14, weight: .semibold), color: teal,
+            "Sources", font: .systemFont(ofSize: 14, weight: .semibold), color: heart,
             spacingBefore: 12, spacingAfter: 6, heading: true, to: text)
         if sources.isEmpty {
             append(
@@ -178,7 +178,7 @@ enum ReportPDFRenderer {
         _ context: CGContext, pageNumber: Int, pageCount: Int, sourceCount: Int
     ) {
         let headerStyle: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 9, weight: .semibold), .foregroundColor: teal,
+            .font: UIFont.systemFont(ofSize: 9, weight: .semibold), .foregroundColor: heart,
         ]
         ("REVA  /  VISIT PREPARATION" as NSString).draw(
             in: CGRect(x: 44, y: 32, width: 524, height: 16), withAttributes: headerStyle)
@@ -205,8 +205,8 @@ enum ReportPDFRenderer {
             ])
     }
 
-    private static var teal: UIColor {
-        UIColor(red: 10 / 255.0, green: 91 / 255.0, blue: 108 / 255.0, alpha: 1)
+    private static var heart: UIColor {
+        UIColor(red: 184 / 255.0, green: 66 / 255.0, blue: 80 / 255.0, alpha: 1)
     }
 }
 
