@@ -1,12 +1,12 @@
-> The [project overview packet](project-overview-packet.md) preserves the `d0af1df` handoff baseline, including worktree history. The current source map and [coding standard](coding-standard.md) below include the subsequent code-organization revision.
+> The [project overview packet](project-overview-packet.md) preserves the `d0af1df` handoff baseline, including worktree history. This current source map includes later organization, browser-client, and heart-palette revisions. Use the [browser setup guide](../apps/web/README.md) for browser commands and limits.
 
 # Three-person MVP workflow
 
 Follow the [revised MVP goal](mvp-goal.md), [MVP API contract](task-specs/mvp-api-contract.md), and [snapshot contract](implementation-contract.md). The two-hour MVP was delivered on September 12, 2026; subsequent changes follow the user's manual feedback. Preserve the working local demo and configurable API paths; the earlier exhaustive task list does not add release requirements to follow-up work.
 
-These are folder ownership boundaries inside the existing app target. Screens and editors now have separate files, including visit list/detail/editing and report views. Each file has a responsibility contract and named logical sections; follow the [coding standard](coding-standard.md).
+These are folder ownership boundaries across the native app, browser app, and Swift server. The browser is a dedicated React/TypeScript interface sharing Swift JSON/API contracts; SwiftUI remains the iPhone interface. Screens, editors, and platform adapters have separate files. Each file has a responsibility contract and named logical sections; follow the [coding standard](coding-standard.md).
 
-The user reaffirmed the exact palette after reviewing a dark screenshot: the app now stays **light only**, with Sky canvas, Ivory cards/button text and Teal actions. Preserve all six original hex values in `Features/Shared/Theme.swift`; do not restore adaptive dark substitutions. The [style plan's current authority block](reva-style-plan.md) overrides its historical alternatives.
+Both interfaces stay **light only** with the current [heart palette](../design/palette.json): canvas `#FBF7F5`, white surfaces/button text `#FFFFFF`, actions `#B84250`, deep-red labels `#8C2F3B`, soft fills `#FAE6E5`, and decorative outlines `#DBCBC9`. Native `Features/Shared/Theme.swift` and browser `src/styles/tokens.css` own the roles. Earlier teal/Sky and reserved dark values are historical or future material, not active appearance options.
 
 ## Owners
 
@@ -14,17 +14,17 @@ Assign names to Persons 1–3 before branching. The current primary is integrati
 
 | Owner | Exclusive feature files | Supporting files and tests |
 | --- | --- | --- |
-| **Person 1 — records and preparation** | `apps/ios/Reva/Features/Records/**`, `Features/Preparation/**` | `State/AppStore+Records.swift`, `State/AppStore+Visits.swift`, `State/AppStore+Symptoms.swift`, `State/AppStore+AI.swift`; `Device/DocumentImportService.swift`, `Device/DocumentScanner.swift`, `Device/ReportPDFRenderer.swift`; new focused tests in `Tests/RevaCoreTests/RecordProviderTests.swift` |
-| **Person 2 — booking and visit memory** | `apps/ios/Reva/Features/Visits/**` (individual booking, live-call, recording and transcript screen/editor files) | `State/AppStore+Bookings.swift`, `State/AppStore+Recordings.swift`, `State/AppStore+LiveCalls.swift`, `State/AppStore+Transcription.swift`, `Device/AudioServices.swift`; new focused tests in `Tests/RevaCoreTests/VisitProviderTests.swift` |
+| **Person 1 — records, profile, native preparation** | Native `Features/Records/**`, `Features/Preparation/**`, `Features/Profile/**`; browser `apps/web/src/features/records/**`, `apps/web/src/features/profile/**` | Native `State/AppStore+Records.swift`, `+Visits.swift`, `+Symptoms.swift`, `+AI.swift`, `+Profile.swift`; `Device/DocumentImportService.swift`, `DocumentScanner.swift`, `ReportPDFRenderer.swift`; focused source/profile tests. Browser extraction and original-preview helpers stay in Records. |
+| **Person 2 — visits, booking, visit memory** | Native `Features/Visits/**`; browser `apps/web/src/features/visits/**`, including browser visit preparation/print | Native `State/AppStore+Bookings.swift`, `+Recordings.swift`, `+LiveCalls.swift`, `+Transcription.swift`, `Device/AudioServices.swift`; browser recorder/date/edit helpers and their colocated tests. |
 | **Person 3 — server and providers** | `server/**`, including provider routes/adapters, local/PostgreSQL stores, SQL, server tests and setup guide | `.env.example`, `server/.env.example`; provider-facing changes to the API contract, agreed with both client owners before implementation |
-| **Integration captain — shared files** | `apps/ios/Reva/Core/**`, `State/AppStore.swift`, `State/AppStore+Sync.swift`, `State/AppStore+Providers.swift`, `Features/Shared/**`, `RevaApp.swift`, `Info.plist` | Root `Package.swift`, existing shared Core tests (including `ProviderClientTests.swift`), `scripts/**`, `Reva.xcodeproj/**`, `demo/**`, bundled `Resources/**`, shared contracts, README and final delivery docs |
+| **Integration captain — shared files** | Native `Core/**`, `State/AppStore.swift`, `+Sync.swift`, `+Providers.swift`, `Features/Shared/**`, `RevaApp.swift`, `Info.plist`; browser `src/core/**`, `src/components/**`, `src/styles/**`, `App.tsx`, `main.tsx`, Dashboard and Settings | Root `Package.swift`, shared Core tests, `scripts/**`, generated Xcode project, fictional fixtures/resources, shared contracts and delivery docs; browser package/lock/config, `scripts/**`, core tests, and setup guide. |
 
-App-relative paths in the table start at `apps/ios/Reva/`. New test filenames are reserved ownership slots, not claims that those files already exist. `AppStore+Visits.swift` owns visit CRUD/preparation; booking mutations are in the separate `AppStore+Bookings.swift`. Do not concurrently edit different sections of the same file. `Core/ReportEngine.swift` and `Core/BookingEngine.swift` now hold separate pure engines. `Core/ProviderContracts.swift` contains shared provider wire values; `ProviderClient.swift` contains transport. Changes to these shared contracts still go through the captain.
+Native-relative paths start at `apps/ios/Reva/`; browser-relative shared paths start at `apps/web/`. Person 1 owns native visit CRUD/preparation in `AppStore+Visits.swift`; Person 2 owns browser preparation beside the rest of its Visits UI. Coordinate those behavior changes explicitly. Do not concurrently edit different sections of the same file. Native `Core/ReportEngine.swift`, `BookingEngine.swift`, and `ProviderContracts.swift` separate pure rules and wire values; browser `core/domain.ts`, `symptoms.ts`, `validation.ts`, `mutations.ts`, and `api.ts` mirror their applicable contracts. Shared changes go through the captain.
 
 ## Keep shared changes small
 
-1. Before changing a shared DTO, persistence field, endpoint or error shape, post the exact proposed signature/JSON, owner and affected callers. The captain updates `Models.swift`/`ProviderContracts.swift`; Person 3 updates the server contract and implementation. Keep persisted additions backward-decodable and preserve IDs, source versions and timestamps.
-2. Feature owners use the existing AppStore mutation boundary and provider entry points. Do not write snapshot files directly, duplicate transport DTOs, introduce a second state owner, or add provider secrets to views. Shared `AppStore+Providers.swift` owns client creation and service discovery; operation-specific `+AI`, `+Transcription` and `+LiveCalls` files have the feature owners above.
+1. Before changing a shared DTO, persistence field, endpoint or error shape, post the exact proposed signature/JSON, owner and affected callers. The captain updates native `Models.swift`/`ProviderContracts.swift` and browser core values/validation; Person 3 updates the server. Keep persisted additions backward-decodable and preserve IDs, source versions, page evidence, and timestamps. Review [browser compatibility](../apps/web/src/core/COMPATIBILITY.md) before changing report signatures or source ordering.
+2. Feature owners use AppStore on native and `useReva()`/the shared store in the browser. Do not write snapshots directly, duplicate DTOs, introduce a second state owner, or put provider secrets in views or browser environment variables. Native provider extensions own their operation; browser `core/store.ts` owns serialized mutations, conflict checks, and provider publication. Request an exact shared-store signature instead of editing another owner's file.
 3. Use exact local source text/page references for brief evidence. Provider-selected IDs must resolve to submitted candidates. AI overview/questions remain reviewable; a provider failure preserves the user's records, edits and audio.
 4. Booking demo and configured outbound calling remain distinguishable. A call status is not an appointment confirmation. Keep the API contract's consent, server enable flag and durable owner/request receipt behavior; do not automatically retry an uncertain call.
 5. Provider mocks use synthetic inputs and intercept outbound transport. Root `.env` stays empty and ignored. Account/agent/phone/database setup and credentialed smoke tests are manual; no paid request or real call is part of this development checklist. See the contract for exact provider behavior instead of assuming model capabilities or speaker diarization.
@@ -48,7 +48,7 @@ Use an existing matching worktree if already present; do not force branch/path r
 
 Commit only owned paths after `git diff --check` and reviewing `git diff`. Send the captain the branch/SHA, changed files, exact checks/results, setup needed, and any shared-file request. Do not reset another checkout, force-push shared history, or merge another person's unfinished branch into a feature branch. The captain merges reviewed branches one at a time with `git merge --no-ff <feature-branch>` from the integration branch; any conflict returns to the file owner for a deliberate resolution.
 
-The captain owns the simulator walkthrough. Contributors use isolated test data and build directories; simultaneous runs of the same app bundle can overwrite the demo state being inspected.
+The captain owns integrated simulator and browser walkthroughs. Contributors use isolated test data, build directories, browser profiles/origins, and unused ports; simultaneous runs of the same app bundle or browser origin can alter the demo being inspected. Browser revisions reject unseen competing writes, but that is not a substitute for isolated test workspaces.
 
 ## Integration checklist
 
@@ -68,6 +68,17 @@ xcodebuild -project Reva.xcodeproj -scheme Reva \
 ```
 
 - [ ] Brief simulator check: import/review → saved record → relevant brief/source/PDF; separate booking demo and provider setup state; sample transcript correction → saved memory/backlink; relaunch. Inspect new provider controls with missing configuration and mocked success/failure as available. Device input and live credentials remain separately reported.
+- [ ] For browser or shared-contract changes, run the browser checks from the repository root:
+
+```sh
+npm --prefix apps/web ci
+npm --prefix apps/web run typecheck
+npm --prefix apps/web test
+npm --prefix apps/web run format:check
+npm --prefix apps/web run build
+```
+
+- [ ] Browser check at desktop and narrow widths: search/review filter → intake/cancellation → source edit → symptom/profile → cited brief/page link/print → recording/transcript memory → reload. Check same-origin local-server configuration and explicit revision conflicts with fictional data. Browser permission/codec behavior, real device capture, and paid provider checks require their own reported evidence.
 - [ ] Confirm `.env` is zero bytes and ignored, no source artifacts/secrets entered the diff, and README/provider configuration matches the final code. Update the progress log with actual outcomes, not only test names.
 - [ ] Captain completes the as-built architecture document immediately before the final commit/push, updates links, pushes reviewed commits, and verifies remote HEAD. Do not reopen the superseded broad audit.
 
@@ -92,4 +103,4 @@ Existing evidence is in [build-progress.md](build-progress.md), [verification](v
 
 ## Profile and symptom follow-up ownership
 
-Records/preparation owns `Core/SymptomEntry.swift`, `Features/Records/SymptomEntryDetailsView.swift`, `Features/Records/SymptomEntryEditorView.swift`, and `State/AppStore+Symptoms.swift`. The integration captain owns the Medical profile feature (`Features/Profile/**`, `State/AppStore+Profile.swift`), root tab routing, Settings, and palette roles. Profile extension fields and `MedicalRecord.symptomEntry` are optional Codable properties; coordinate changes to `Core/Models.swift`. Symptoms use existing record storage, source versions, and preparation providers. The backend preserves these additional snapshot fields without a new endpoint. Profile edits are quick-reference data and do not automatically rewrite historical source documents or feed the current records-only preparation contract.
+Person 1 owns both native and browser symptom/profile screens and native profile/symptom mutations. The captain owns shared `Core/SymptomEntry.swift`, `Core/Models.swift`, browser core equivalents, root routing, Settings, and palette roles. Profile extension fields and `MedicalRecord.symptomEntry` are optional persisted properties. Symptoms use existing record storage, source versions, and preparation providers; the backend preserves these snapshot fields without a new endpoint. Profile edits are quick-reference data and do not rewrite historical source documents or feed the current records-only preparation contract.

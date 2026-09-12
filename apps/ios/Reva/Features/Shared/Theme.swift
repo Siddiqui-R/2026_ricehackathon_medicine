@@ -18,7 +18,8 @@ enum RevaTheme {
     static let canvas = blushIvory  // Page background.
     static let surface = white  // Outlined cards, tiles, and unselected chips.
     static let accent = heartRed  // Primary actions, selected navigation, the heart glyph, row icons.
-    static let accentText = deepRed  // Chip labels, mode badges, small red text; accent alone is only 4.45:1 on petal.
+    // Chip labels and small red text; accent alone is only 4.45:1 on petal.
+    static let accentText = deepRed
     static let soft = petal  // Chips, notices, circular icon fills.
     static let hairline = linen  // Card, tile, and chip outlines.
     static let buttonText = white  // Text on filled heart-red buttons.

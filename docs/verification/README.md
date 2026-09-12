@@ -1,4 +1,4 @@
-> **Latest follow-up:** [Medical profile and symptom log verification](profile-symptoms.md) records the current Sky-background/Ivory-card design and 43 passing core tests. Earlier screenshots below describe the initial MVP.
+> **Latest follow-up:** [Browser extension verification](web-client.md) records the responsive web client, current heart-red palette, and updated test counts. The native MVP evidence below is historical; older teal screenshots are not the current design.
 
 # Reva MVP verification evidence
 
@@ -31,7 +31,7 @@ Current scope is the [user's two-hour MVP revision](../mvp-goal.md). All applica
 - [Native PDF share](screenshots/pdf-share.png)
 - [Actual exported orthopedic brief](orthopedic-brief.pdf)
 
-Earlier `summary-dark.png` is retained as rejected design history, not the shipped palette. Other early screenshots may show earlier light neutral surfaces. Current appearance authority is the exact-palette image above.
+Earlier `summary-dark.png` is retained as rejected design history, not the shipped palette. Other early screenshots may show earlier light neutral surfaces. Current appearance authority is `design/palette.json`; these captures preserve the earlier MVP appearance.
 
 ## Repeat the essential checks
 

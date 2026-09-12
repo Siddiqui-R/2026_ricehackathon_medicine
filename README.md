@@ -1,8 +1,8 @@
 # Reva
 
-**Making every appointment count.** A native SwiftUI iPhone MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [revised MVP goal](docs/mvp-goal.md) defines the current scope.
+**Making every appointment count.** A SwiftUI iPhone and responsive React browser MVP for importing medical records, preparing cited visit briefs, and keeping visit memories. Start with a clearly fictional dataset; provider accounts are optional manual setup. The [revised MVP goal](docs/mvp-goal.md) defines the current scope.
 
-The app uses the user's exact [six-color palette](design/palette.json) in **light appearance only**: Sky canvas, Ivory cards, Teal actions and Ivory button text. Gold, Slate and Aqua remain unchanged accent tokens. Earlier dark-theme proposals are historical.
+Both clients follow the selected [heart-red palette](design/palette.json) in **light appearance only**: blush ivory `#FBF7F5`, white cards, heart red `#B84250`, deep red `#8C2F3B`, petal `#FAE6E5`, and linen `#DBCBC9`. The [earlier supplied palette](design/palette-supplied.json) is preserved as historical provenance.
 
 ## Run the app
 
@@ -21,6 +21,18 @@ xcodebuild -project Reva.xcodeproj -scheme Reva \
   -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build
 ```
 
+## Run in a browser
+
+The browser client has a desktop sidebar, searchable records, two-column care views, and mobile navigation. It shares the native snapshot/API contract through a dedicated React interface; SwiftUI is not compiled into the browser. See the [browser guide](apps/web/README.md) for local OCR, microphone support, storage, sync, and hosting details.
+
+```sh
+cd apps/web
+npm ci
+npm run dev
+```
+
+Open **http://127.0.0.1:5173**. For a built preview, run `npm run build` then `npm run serve` and open **http://127.0.0.1:4173**. Both proxy the same-origin API to the local Swift server on port 8080 by default. The fictional local demo works without that server.
+
 ## Try the fictional demo
 
 Follow the [presentation walkthrough](demo/demo-script.md) using the [standalone synthetic documents](demo/README.md).
@@ -35,7 +47,7 @@ The gear in Medical profile opens Settings for server configuration and explicit
 
 ## Configurable APIs
 
-The Swift server and native entry points are implemented. **No live provider request or real call was made during this build; accounts and credentials remain manual setup.** Configuration flags report settings, not a successful credential probe.
+The Swift server, native client, and browser entry points are implemented. **No live provider request or real call was made during this build; accounts and credentials remain manual setup.** Configuration flags report settings, not a successful credential probe.
 
 | Feature | Implemented behavior |
 | --- | --- |
@@ -71,12 +83,13 @@ The [three-person workflow](docs/team-workflow.md) assigns exact files, safe wor
 | --- | --- |
 | Records and preparation | [Features/Records](apps/ios/Reva/Features/Records), [Features/Preparation](apps/ios/Reva/Features/Preparation) |
 | Booking and visit memory | [Features/Visits](apps/ios/Reva/Features/Visits) |
+| Browser UI and state | [apps/web](apps/web), [browser wire compatibility](apps/web/src/core/COMPATIBILITY.md) |
 | Shared native contracts/state | [Core](apps/ios/Reva/Core), [State](apps/ios/Reva/State), [Features/Shared](apps/ios/Reva/Features/Shared) |
 | Device adapters / backend providers | [Device](apps/ios/Reva/Device), [server](server) |
 
 ## Verification and limits
 
-Latest code-organization verification: **43 root tests passed, 1 gated test skipped; 29 server tests passed, 1 live PostgreSQL test skipped.** Native compilation and the structure/formatting checks passed; see the [revision evidence](docs/verification/code-organization.md). A separate real URLSession/local Vapor test exercised state, attachment bytes, ownership and revisions. Native summary/preparation UI passed against a fixture API; provider transport tests use mocks. The exact light-palette update was verified in the running iPhone app; see the [current Medical profile screenshot](docs/verification/screenshots/medical-profile.png) and [follow-up checks](docs/verification/profile-symptoms.md). Explicit demo reset and relaunch restored the clean fictional fixture set.
+Latest browser-extension verification: **77 browser tests, 7 isolated HTTP-wrapper tests, 43 native tests, and 30 server tests passed**; one native real-server gate and one live PostgreSQL gate skipped. TypeScript/production build, native simulator compilation, formatting, and responsibility-block checks passed. See [browser verification and screenshots](docs/verification/web-client.md) for the tested responsive widths and local user journeys. Earlier [native verification](docs/verification/README.md) remains historical evidence; older teal screenshots do not show the current heart-red design.
 
 ```sh
 swift test -j 6
@@ -87,10 +100,10 @@ python3 scripts/check_provider_api.py
 
 Build the server before running the two Python checks. [Progress](docs/build-progress.md), [verification evidence](docs/verification/README.md), and [review history](docs/reviews/review-log.md) distinguish executed checks from manual setup.
 
-Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider accounts/keys/agent/number and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, web wrapping, custom encryption and additional production hardening are outside this MVP.
+Physical iPhone signing, camera/microphone input and hardware interruptions require device verification. Recording pauses outside the foreground. Provider accounts/keys/agent/number and a live Tiger database remain manual prerequisites. This is a synthetic hackathon prototype, not a production medical deployment; extraction and AI output need review. MyChart import, custom encryption and production deployment remain outside this MVP. The browser extension is implemented; live provider credentials, cross-browser hardware checks and production operations remain manual setup.
 
 ### Medical profile and symptom log
 
 Open **Medical profile** (or the Summary avatar) for persistent allergies, medications, conditions, surgeries/implants, and care notes. Its gear opens Settings. Use **Log symptoms** on Summary or the Records add menu to save a dated **User symptom entry**. Optional fields capture severity, duration, details, possible triggers, and what helped; entries can be edited, searched, and used as sources during visit preparation. **View all records** at the bottom of Recent records switches to the full Records tab.
 
-The light theme uses exact Sky `#E1ECEE` behind Ivory `#FAF4F4` cards. See the [follow-up verification](docs/verification/profile-symptoms.md).
+The current light theme uses the selected heart-red roles above. The [earlier profile and symptom verification](docs/verification/profile-symptoms.md) records the functionality at its prior palette checkpoint.
