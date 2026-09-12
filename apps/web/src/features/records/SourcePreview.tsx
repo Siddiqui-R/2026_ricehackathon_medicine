@@ -9,6 +9,7 @@ import { useReva } from '../../core/RevaContext';
 import type { MedicalRecord } from '../../core/models';
 import { Modal } from '../../components/ui';
 import { boundedText, MAX_TEXT_BYTES, textByteCount } from './extractDocument';
+import { PDFPreview } from './PDFPreview';
 
 // MARK: - Read originals with stale-load and URL lifetime protection
 export function SourcePreview({
@@ -22,6 +23,7 @@ export function SourcePreview({
 }) {
   const { getAttachment } = useReva();
   const [url, setURL] = useState('');
+  const [originalBlob, setOriginalBlob] = useState<Blob | null>(null);
   const [text, setText] = useState('');
   const [shortened, setShortened] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +32,7 @@ export function SourcePreview({
     let active = true;
     let objectURL = '';
     setURL('');
+    setOriginalBlob(null);
     setText('');
     setShortened(false);
     setError('');
@@ -41,6 +44,7 @@ export function SourcePreview({
         const blob = original.type ? original : original.slice(0, original.size, type);
         objectURL = URL.createObjectURL(blob);
         setURL(objectURL);
+        setOriginalBlob(blob);
         if (type.startsWith('text/')) {
           const contents = await blob.text();
           if (active) {
@@ -63,11 +67,7 @@ export function SourcePreview({
       <div className="stack">
         <div>
           <h3>{record.title}</h3>
-          <p className="small muted">
-            {type === 'application/pdf'
-              ? `Requested source page ${Math.max(1, Math.min(page, record.pageCount))} of ${record.pageCount}`
-              : 'Original bytes retained with this record'}
-          </p>
+          <p className="small muted">Original bytes retained with this record</p>
         </div>
         {error ? (
           <p className="inline-error" role="alert">
@@ -80,11 +80,7 @@ export function SourcePreview({
         ) : (
           <>
             {type === 'application/pdf' ? (
-              <iframe
-                className="source-preview"
-                title={`Original PDF: ${record.title}`}
-                src={`${url}#page=${Math.max(1, Math.min(page, record.pageCount))}`}
-              />
+              originalBlob && <PDFPreview key={url} blob={originalBlob} title={record.title} page={page} />
             ) : type.startsWith('image/') ? (
               <img className="source-preview-image" src={url} alt={`Original source: ${record.title}`} />
             ) : type.startsWith('text/') ? (

@@ -51,3 +51,18 @@ OCR correctly requires review: the deliberately obscured date in the fixtures wa
 This closes the earlier browser-upload/PDF/OCR coverage gap for these three fixtures. Camera capture, handwriting beyond the fixture, mobile devices and print export remain outside this verification.
 
 The separate scan-test account and its imported records were deleted after verification; the browser returned to the landing page. Only the report and screenshot are committed, not test credentials.
+
+## Follow-up: blocked original PDF preview
+
+The example account exposed a gap in the earlier scan check: original PDF bytes were saved correctly, but Chrome blocked the embedded PDF viewer. Successful extraction and attachment downloads did not establish that the visual PDF preview worked.
+
+Saved-record originals and the import comparison now use the existing PDF.js renderer directly, with previous/next controls and the actual PDF page count. Rendering uses a detached canvas, a 2,200-pixel maximum side, a 16 MB input limit and a 30-second deadline. Dismissal cancels pending work; failures offer the unchanged original download. The existing content security policy remains unchanged.
+
+- [x] Real image-only PDF renders nonblank source pixels in regression tests.
+- [x] Real two-page PDF opens page two and clamps out-of-range page requests.
+- [x] Malformed files and cancellation before/during byte loading fail safely.
+- [x] Chrome under the production security policy displays both procedure pages, including page-two implant inventory; previous/next controls work.
+- [x] Actual browser import of the image-only PDF produces 1,077 OCR characters and displays its original page in the comparison panel.
+- [x] All 244 browser tests, production build, formatting and source structure checks pass after integrating concurrent homepage/visit changes.
+
+These browser checks used the local production build. Deployment and the same example-account record must also be checked on the live site after publishing.
