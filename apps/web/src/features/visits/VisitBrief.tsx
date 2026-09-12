@@ -3,13 +3,13 @@
 // Outputs: Reviewable brief content, source navigation, and a guarded browser print document.
 // Side effects: Explicitly generates reports, saves edits through context, and opens browser printing.
 
-import { applyBriefNotes, type BriefNotesBaseline } from './briefNotesEdits';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Printer, RefreshCw, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import type { ReportSection, Visit } from '../../core/models';
 import { formatDate, reportIsStale } from '../../core/domain';
 import { Badge, Button, Card, EmptyState, Field, Modal } from '../../components/ui';
+import { applyBriefNotes, type BriefNotesBaseline } from './briefNotesEdits';
 
 // MARK: - Suppress only a body already displayed verbatim by its source quotations
 function sectionBodyRepeatsSourceQuotes(section: ReportSection): boolean {
@@ -20,6 +20,16 @@ function sectionBodyRepeatsSourceQuotes(section: ReportSection): boolean {
     section.sources.some((source) => normalized(source.excerpt) === body) ||
     normalized(section.sources.map((source) => source.excerpt).join('\n\n')) === body
   );
+}
+
+// Omission metadata is optional on older saved reports; their exact copied words are never annotated inline.
+function sourceExcerptNotice(source: { excerpt: string; excerptOmitted?: boolean }): string {
+  if (source.excerptOmitted === false) return '';
+  if (source.excerptOmitted == null)
+    return 'This older excerpt may have been shortened. Regenerate the brief and review the original.';
+  return source.excerpt
+    ? 'Selected passage; additional source text omitted. Open the original for full context.'
+    : 'No complete source line fits in this excerpt. Open the original for full context.';
 }
 
 // MARK: - Source freshness and explicit generation
@@ -148,10 +158,12 @@ export function VisitBrief({ visit }: { visit: Visit }) {
               {!sectionBodyRepeatsSourceQuotes(section) && <p className="prose">{section.body}</p>}
               {section.sources.map((source, index) => {
                 const record = snapshot?.records.find((item) => item.id === source.recordID);
+                const omissionNotice = sourceExcerptNotice(source);
                 return (
                   <blockquote className="source-quote" key={`${source.recordID}-${source.page}-${index}`}>
                     <p className="prose">{source.excerpt}</p>
                     <footer>
+                      {omissionNotice && <p className="muted">{omissionNotice}</p>}
                       <a
                         className="text-link"
                         href={`#/records/${encodeURIComponent(source.recordID)}${source.page > 0 ? `?page=${source.page}` : ''}`}
