@@ -1,108 +1,86 @@
 {
-  "name": "Reva — supplied Luxe & Modern palette",
+  "name": "Reva — heart red and ivory (comparison option M, softened)",
   "color_space": "sRGB",
-  "source_dimensions": [
-    447,
-    447
-  ],
-  "source_sha256": "2b6cd21e881a7377e1391e80325a84a0be845047eee9caa8f5dc63716690f05d",
-  "method": "Most frequent exact RGB pixel in each interior sample rectangle; no resampling.",
-  "colors": {
-    "ivory": {
-      "hex": "#FAF4F4",
-      "rgb": [
-        250,
-        244,
-        244
-      ],
-      "sample_box_xyxy": [
-        80,
-        150,
-        120,
-        190
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+  "selected": "2026-09-12",
+  "supersedes": "design/palette-supplied.json — the Ivory / Gold / Slate / Teal / Aqua / Sky swatches sampled from the user's image, kept for provenance.",
+  "method": "Chosen from rendered comparisons of pink and red options; the primary was softened from #C0273A to #B84250 at the user's request. Every text/background pairing was checked with WCAG 2.x relative-luminance contrast.",
+  "treatment": "Outlined: white cards with a hairline outline on a blush canvas; red reserved for actions, selected navigation, the heart glyph, and status chips; body copy neutral.",
+  "light": {
+    "canvas": {
+      "hex": "#FBF7F5",
+      "role": "Blush ivory app background"
     },
-    "gold": {
-      "hex": "#C8A07D",
-      "rgb": [
-        200,
-        160,
-        125
-      ],
-      "sample_box_xyxy": [
-        205,
-        150,
-        245,
-        190
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+    "surface": {
+      "hex": "#FFFFFF",
+      "role": "Cards and quick-action tiles"
     },
-    "slate": {
-      "hex": "#A2B7BC",
-      "rgb": [
-        162,
-        183,
-        188
-      ],
-      "sample_box_xyxy": [
-        330,
-        150,
-        370,
-        190
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+    "accent": {
+      "hex": "#B84250",
+      "role": "Heart red: primary actions, selected tab, heart glyph, row icons",
+      "contrast": {
+        "white_on_it": 5.34,
+        "on_canvas": 5.01,
+        "on_surface": 5.34
+      }
     },
-    "teal": {
-      "hex": "#0A5B6C",
-      "rgb": [
-        10,
-        91,
-        108
-      ],
-      "sample_box_xyxy": [
-        80,
-        280,
-        120,
-        320
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+    "accentText": {
+      "hex": "#8C2F3B",
+      "role": "Deep red for chip labels and small red text",
+      "contrast": {
+        "on_soft": 6.78,
+        "on_surface": 8.12,
+        "on_canvas": 7.63
+      }
     },
-    "aqua": {
-      "hex": "#6FABB6",
-      "rgb": [
-        111,
-        171,
-        182
-      ],
-      "sample_box_xyxy": [
-        205,
-        280,
-        245,
-        320
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+    "soft": {
+      "hex": "#FAE6E5",
+      "role": "Petal: status chips, notices, circular icon fills"
     },
-    "sky": {
-      "hex": "#E1ECEE",
-      "rgb": [
-        225,
-        236,
-        238
-      ],
-      "sample_box_xyxy": [
-        330,
-        280,
-        370,
-        320
-      ],
-      "matching_pixels": 1600,
-      "sampled_pixels": 1600
+    "hairline": {
+      "hex": "#DBCBC9",
+      "role": "Linen outline for cards, tiles, unselected filter chips; decorative only"
+    },
+    "buttonText": {
+      "hex": "#FFFFFF",
+      "role": "Text on filled heart-red buttons"
     }
-  }
+  },
+  "dark": {
+    "canvas": {
+      "hex": "#1E1516"
+    },
+    "surface": {
+      "hex": "#2A1D1F"
+    },
+    "accent": {
+      "hex": "#EE9098",
+      "contrast": {
+        "on_canvas": 7.73,
+        "on_surface": 7.02,
+        "button_text_on_it": 7.5
+      }
+    },
+    "accentText": {
+      "hex": "#F2A9AE",
+      "contrast": {
+        "on_soft": 7.4,
+        "on_surface": 8.55
+      }
+    },
+    "soft": {
+      "hex": "#3B2629"
+    },
+    "hairline": {
+      "hex": "#3E2E30"
+    },
+    "buttonText": {
+      "hex": "#2A1416"
+    }
+  },
+  "notes": [
+    "Pale rose #E8A0A6 from the comparison is not a token: the app has no pin or decorative glyph that needs it, and it fails as text (1.97:1).",
+    "Errors and destructive actions keep the system alert and role colours so brand red never doubles as an error signal.",
+    "A red cross symbol is a protected emblem and is not used; the health cue is the heart and the pulse line."
+  ],
+  "appearance": "Light only in the current app (RevaApp forces .light). The dark block is reserved for a future dark appearance and is not wired to any token yet."
 }

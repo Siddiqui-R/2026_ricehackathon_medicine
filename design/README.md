@@ -1,6 +1,10 @@
 # Selected palette
 
-`palette.json` is the exact sampled palette from the user's original 447 × 447 sRGB PNG. The six interior 40 × 40 pixel samples exclude swatch borders, shadows, text, and compression/edge artifacts. `scripts/extract_palette.py` reproduces the extraction and records the source SHA-256.
+**Current app palette (September 12, 2026, later selection):** `palette.json` holds the heart red and ivory palette the user chose from rendered pink/red comparisons (option M, primary softened to `#B84250`), with light roles, reserved dark roles, contrast figures, and the outlined card treatment. The supplied swatch palette described below is preserved unchanged in `palette-supplied.json` for provenance; `scripts/extract_palette.py` writes to that file.
+
+## Supplied swatch palette (superseded, retained)
+
+`palette-supplied.json` is the exact sampled palette from the user's original 447 × 447 sRGB PNG. The six interior 40 × 40 pixel samples exclude swatch borders, shadows, text, and compression/edge artifacts. `scripts/extract_palette.py` reproduces the extraction and records the source SHA-256.
 
 | Name | Exact source RGB | Hex | Reva role |
 | --- | --- | --- | --- |

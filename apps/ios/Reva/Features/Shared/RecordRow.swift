@@ -21,9 +21,7 @@ struct RecordRow: View {
                 Text("\(record.kind) · \(RevaDate.display(record.date))").font(.caption).foregroundStyle(
                     .secondary)
                 if record.needsReview {
-                    Label("Review extraction", systemImage: "exclamationmark.circle").font(
-                        .caption.weight(.medium)
-                    ).foregroundStyle(RevaTheme.accent)
+                    StatusChip(text: "Review extraction", symbol: "exclamationmark.circle")
                 }
             }
             Spacer(minLength: 0)

@@ -45,7 +45,7 @@ struct SummaryView: View {
                         Label(visit.type.uppercased(), systemImage: "calendar").font(.caption.weight(.bold))
                             .tracking(0.7).foregroundStyle(RevaTheme.accent)
                         Spacer()
-                        Text("UPCOMING").font(.caption2.bold()).foregroundStyle(.secondary)
+                        StatusChip(text: "Upcoming")
                     }
                     Text(visit.title).font(.title2.bold())
                     DetailLine(
@@ -89,7 +89,7 @@ struct SummaryView: View {
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(RevaTheme.accent)
-                }.padding(18).background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                }.padding(18).outlined()
             }.buttonStyle(.plain)
             if store.records.contains(where: \.needsReview) {
                 SectionHeading(title: "Needs your review")
@@ -135,7 +135,7 @@ struct SummaryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: showMedicalProfile) {
                     Text(store.snapshot?.profile.initials ?? "R").font(.caption.bold()).foregroundStyle(
-                        RevaTheme.accent
+                        RevaTheme.accentText
                     ).frame(width: 36, height: 36).background(RevaTheme.soft, in: Circle())
                 }.accessibilityLabel("Medical profile")
             }
@@ -149,7 +149,6 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 14) {
             Image(systemName: symbol).font(.title2).foregroundStyle(RevaTheme.accent)
             Text(title).font(.headline)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(
-            RevaTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).outlined()
     }
 }

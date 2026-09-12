@@ -45,6 +45,10 @@ struct RecordsView: View {
                             Text(item).font(.subheadline.weight(.medium)).padding(.horizontal, 15).padding(
                                 .vertical, 10
                             ).background(filter == item ? RevaTheme.accent : RevaTheme.surface, in: Capsule())
+                                .overlay(
+                                    Capsule().strokeBorder(
+                                        filter == item ? Color.clear : RevaTheme.hairline, lineWidth: 1)
+                                )
                                 .foregroundStyle(filter == item ? RevaTheme.buttonText : .primary)
                         }.accessibilityAddTraits(filter == item ? .isSelected : [])
                     }

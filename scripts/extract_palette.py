@@ -52,7 +52,7 @@ result = {
     "colors": colors,
 }
 # --- Write the authoritative palette artifact and human-readable counts ---
-output = Path(__file__).resolve().parents[1] / "design" / "palette.json"
+output = Path(__file__).resolve().parents[1] / "design" / "palette-supplied.json"  # The selected app palette lives in design/palette.json.
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
 print(output)

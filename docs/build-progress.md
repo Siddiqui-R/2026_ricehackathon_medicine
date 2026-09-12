@@ -124,3 +124,11 @@ Created docs/architecture.md after implementation and the bounded MVP verificati
 - Added a [project coding standard](coding-standard.md), a read-only structure check, and the current ownership map. The standard adapts clarity, bounded-work and explicit-boundary principles to Swift; it does not claim NASA certification.
 - Verification: native simulator build passed; 43 root tests and 29 backend tests passed, with one gate skipped in each suite. Strict formatting lint, 71-file structure check, 13 Python syntax checks and Git whitespace check passed. See [code-organization verification](verification/code-organization.md) for exact scope and comparison evidence.
 - Updated the current stack/source diagram before the documentation checkpoint and push. Historical review worktrees, fixtures, original palette, API configuration and the baseline overview PDF are preserved. No live API or new device/UI interaction was performed in this structural revision.
+
+
+## Browser extension and selected palette — September 12
+
+- User authorized a responsive browser client, with a desktop arrangement informed by MyChart, and explicitly confirmed that it should follow the newer heart-red palette.
+- Preserved Claude Desktop's user-selected native palette/treatment patch, verified it against the actual theme, and formatted its long comment. Current authority is `design/palette.json`: blush ivory `#FBF7F5`, white cards, heart red `#B84250`, deep red `#8C2F3B`, petal `#FAE6E5`, linen `#DBCBC9`. The original six supplied colors remain in `design/palette-supplied.json` as provenance.
+- Checkpoint `480bdae` adds WebM/Ogg upload/transcription MIME support across Swift server/native transport without changing original audio bytes. Root 43 tests passed (one explicit gate skipped), server 30 passed (one PostgreSQL gate skipped), and the native simulator build passed including the palette patch.
+- Browser implementation and production UI verification continue in a separate checkpoint; no paid providers or actual clinic calls used.

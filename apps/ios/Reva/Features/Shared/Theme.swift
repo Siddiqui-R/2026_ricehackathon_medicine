@@ -1,25 +1,27 @@
-// Purpose: Define the exact six-color palette and its semantic roles.
-// Inputs: User-supplied RGB hex values.
+// Purpose: Define the heart-red palette and its semantic roles.
+// Inputs: Hex values from design/palette.json, selected September 12, 2026.
 // Outputs: SwiftUI colors and UIKit/SwiftUI hex conversion initializers.
-// Side effects: None; colors use fixed values with no adaptive substitutions.
+// Side effects: None; colors use fixed light-appearance values with no adaptive substitutions.
 
 import SwiftUI
 
 // MARK: - RevaTheme
-/// Define the exact six-color palette and its semantic roles.
+/// Define the heart-red palette and its semantic roles.
 enum RevaTheme {
-    // MARK: - Exact palette values
-    // Exact six-color user palette, reaffirmed September12. No adaptive color substitutions.
-    static let ivory = Color(hex: 0xFAF4F4), gold = Color(hex: 0xC8A07D), slate = Color(hex: 0xA2B7BC)
-    static let teal = Color(hex: 0x0A5B6C), aqua = Color(hex: 0x6FABB6), sky = Color(hex: 0xE1ECEE)
+    // MARK: - Palette values
+    // Heart red and ivory, softened from comparison option M. Light appearance only; dark roles are reserved in palette.json.
+    static let blushIvory = Color(hex: 0xFBF7F5), heartRed = Color(hex: 0xB84250),
+        deepRed = Color(hex: 0x8C2F3B)
+    static let petal = Color(hex: 0xFAE6E5), linen = Color(hex: 0xDBCBC9), white = Color(hex: 0xFFFFFF)
     // MARK: - Semantic surface and action roles
-    // Opaque supplied Sky backdrop and warm Ivory cards, with no blended blue substitute.
-    static let canvas = sky
-    static let surface = ivory
-    static let accent = teal
-    static let soft = sky
-    static let buttonText = ivory
-
+    // Contrast-checked pairings: white on heartRed 5.3:1, heartRed on blushIvory 5.0:1, deepRed on petal 6.8:1.
+    static let canvas = blushIvory  // Page background.
+    static let surface = white  // Outlined cards, tiles, and unselected chips.
+    static let accent = heartRed  // Primary actions, selected navigation, the heart glyph, row icons.
+    static let accentText = deepRed  // Chip labels, mode badges, small red text; accent alone is only 4.45:1 on petal.
+    static let soft = petal  // Chips, notices, circular icon fills.
+    static let hairline = linen  // Card, tile, and chip outlines.
+    static let buttonText = white  // Text on filled heart-red buttons.
 }
 
 // MARK: - UIColor

@@ -14,17 +14,26 @@ struct PrimaryButtonStyle: ButtonStyle {
         )
         .foregroundStyle(RevaTheme.buttonText).background(
             RevaTheme.accent.opacity(configuration.isPressed ? 0.78 : 1),
-            in: RoundedRectangle(cornerRadius: 15))
+            in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
 // MARK: - RevaCard
-/// Wrap related content in the shared padded card surface.
+/// Wrap related content in the shared outlined card surface.
 struct RevaCard<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 16) { content }.frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20).background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+            .padding(18).outlined()
+    }
+}
+
+// MARK: - View.outlined
+/// Apply the outlined treatment: a white surface with a hairline border, so red stays reserved for actions and status.
+extension View {
+    func outlined(radius: CGFloat = 16) -> some View {
+        background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(RevaTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -42,9 +51,23 @@ struct SectionHeading: View {
 struct ModeBadge: View {
     var text = "FICTIONAL DEMO"
     var body: some View {
-        Text(text).font(.caption2.weight(.bold)).tracking(1).foregroundStyle(RevaTheme.accent).padding(
+        Text(text).font(.caption2.weight(.bold)).tracking(1).foregroundStyle(RevaTheme.accentText).padding(
             .horizontal, 9
         ).padding(.vertical, 6).background(RevaTheme.soft, in: Capsule())
+    }
+}
+
+// MARK: - StatusChip
+/// Show a short state such as "Brief ready" as a petal capsule with deep-red text.
+struct StatusChip: View {
+    let text: String
+    var symbol: String? = nil
+    var body: some View {
+        HStack(spacing: 4) {
+            if let symbol { Image(systemName: symbol) }
+            Text(text)
+        }.font(.caption.weight(.semibold)).foregroundStyle(RevaTheme.accentText).padding(.horizontal, 9)
+            .padding(.vertical, 5).background(RevaTheme.soft, in: Capsule())
     }
 }
 
@@ -53,8 +76,8 @@ struct ModeBadge: View {
 struct IconTile: View {
     let symbol: String
     var body: some View {
-        Image(systemName: symbol).font(.title3).foregroundStyle(RevaTheme.accent).frame(width: 44, height: 44)
-            .background(RevaTheme.soft, in: RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+        Image(systemName: symbol).font(.title3).foregroundStyle(RevaTheme.accent).frame(width: 42, height: 42)
+            .background(RevaTheme.soft, in: Circle()).accessibilityHidden(true)
     }
 }
 
@@ -88,7 +111,7 @@ struct StatusNotice: View {
 }
 
 // MARK: - Page
-/// Provide shared scroll behavior, page spacing, and the exact palette backdrop.
+/// Provide shared scroll behavior, page spacing, and the blush canvas backdrop.
 struct Page<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {

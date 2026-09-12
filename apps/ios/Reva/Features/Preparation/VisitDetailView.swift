@@ -106,8 +106,7 @@ struct VisitDetailView: View {
                                 HStack {
                                     Text(request.clinic)
                                     Spacer()
-                                    Text(BookingStatusView.label(request.status)).font(.caption)
-                                        .foregroundStyle(RevaTheme.accent)
+                                    StatusChip(text: BookingStatusView.label(request.status))
                                 }
                             }
                         }

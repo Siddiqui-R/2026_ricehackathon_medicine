@@ -39,13 +39,12 @@ struct VisitsView: View {
                         VisitRow(visit: visit)
                         Divider()
                         Text(visit.concern).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-                        Label(
-                            visit.report == nil
+                        StatusChip(
+                            text: visit.report == nil
                                 ? "Ready to prepare"
                                 : ReportEngine.isStale(visit, records: store.records)
                                     ? "Brief needs an update" : "Brief ready",
-                            systemImage: visit.report == nil ? "list.bullet.clipboard" : "doc.text"
-                        ).font(.caption.weight(.medium)).foregroundStyle(RevaTheme.accent)
+                            symbol: visit.report == nil ? "list.bullet.clipboard" : "doc.text")
                     }
                 }.buttonStyle(.plain)
             }
