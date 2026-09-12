@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { ChevronRight, NotebookPen, Search, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { formatDate } from '../../core/domain';
+import { demoLabel } from '../../core/presentation';
 import { Badge, Button, Card, EmptyState, PageHeading } from '../../components/ui';
 import { ImportDialog } from './ImportDialog';
 import { SymptomDialog } from './SymptomDialog';
@@ -134,11 +135,11 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
                 <RecordSymbol record={record} />
               </span>
               <div className="record-main">
-                <h3>{record.title}</h3>
+                <h3>{demoLabel(record.title, record.isDemo)}</h3>
                 <p className="record-meta">
                   {record.kind} · {formatDate(record.date)}
                 </p>
-                <p className="small muted">{record.provider}</p>
+                <p className="small muted">{demoLabel(record.provider, record.isDemo)}</p>
               </div>
               <div className="record-row-status">
                 {record.status === 'needsReview' && <Badge tone="review">Needs review</Badge>}

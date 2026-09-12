@@ -22,6 +22,8 @@ import { useReva } from './core/RevaContext';
 import { Brand } from './components/Brand';
 import { Button } from './components/ui';
 import { Dashboard } from './features/Dashboard';
+import { DemoSwitcher } from './features/demo/DemoSwitcher';
+import { demoLabel } from './core/presentation';
 import { SettingsPage } from './features/SettingsPage';
 import { RecordsPage } from './features/records/RecordsPage';
 import { RecordDetail } from './features/records/RecordDetail';
@@ -143,14 +145,19 @@ export function App() {
             <span>Settings & connections</span>
           </a>
           <div className="sidebar-divider" />
-          <a href="#/profile" className="patient-link">
+          <a
+            href="#/profile"
+            className="patient-link"
+            aria-label={`${demoLabel(profile.name, profile.isDemo)} — medical profile`}
+          >
             <span className="avatar">{profile.initials}</span>
             <span>
-              <strong>{profile.name.replace(' (Synthetic)', '')}</strong>
-              <small>{profile.isDemo ? 'Fictional demo profile' : 'Your medical profile'}</small>
+              <strong>{demoLabel(profile.name, profile.isDemo)}</strong>
+              <small>{profile.isDemo ? 'Demo profile' : 'Your medical profile'}</small>
             </span>
             <ChevronRight size={16} />
           </a>
+          {profile.isDemo && <DemoSwitcher disabled={store.busy} />}
         </div>
       </aside>
       <div className="workspace">
@@ -177,11 +184,12 @@ export function App() {
           <a
             href="#/settings"
             className="workspace-status"
-            aria-label={profile.isDemo ? 'Fictional demo settings' : 'Browser storage settings'}
+            aria-label={profile.isDemo ? 'Demo settings' : 'Browser storage settings'}
           >
             <ShieldCheck size={17} />
-            <span>{profile.isDemo ? 'Fictional demo' : 'Saved in this browser'}</span>
+            <span>{profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
           </a>
+          {profile.isDemo && <DemoSwitcher disabled={store.busy} className="mobile-demo-switch" />}
           <a href="#/settings" className="mobile-settings icon-button" aria-label="Settings">
             <Settings size={21} />
           </a>
@@ -219,11 +227,7 @@ export function App() {
             <span>
               reva<span aria-hidden="true"> · </span>Making every appointment count.
             </span>
-            <span>
-              {profile.isDemo
-                ? 'Demonstration with fictional health records'
-                : 'Your sources. Your questions. Your next step.'}
-            </span>
+            <span>{profile.isDemo ? 'Demo workspace' : 'Your sources. Your questions. Your next step.'}</span>
           </footer>
         </main>
       </div>

@@ -14,8 +14,11 @@ extension AppStore {
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
-            let result = try await providerClient().summarize(original)
+            var input = original
+            input.summary = ReportEngine.currentSummary(original)
+            let result = try await providerClient().summarize(input)
             guard context == providerContext else { return }
+            try Task.checkCancellation()
             guard var latest = record(id), latest.text == original.text, latest.version == original.version
             else {
                 throw RevaError.invalid(
@@ -51,6 +54,11 @@ extension AppStore {
         do {
             let candidates = sources.filter {
                 !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }.map { record in
+                // Use the same safe preview as source display without rewriting saved records.
+                var candidate = record
+                candidate.summary = ReportEngine.currentSummary(record)
+                return candidate
             }
             guard !candidates.isEmpty else {
                 throw RevaError.invalid(
@@ -59,6 +67,7 @@ extension AppStore {
             }
             let result = try await providerClient().prepare(original, records: candidates)
             guard context == providerContext else { return false }
+            try Task.checkCancellation()
             guard var latest = visit(id), signature == ReportEngine.signature(visit: latest, records: records)
             else {
                 throw RevaError.invalid(

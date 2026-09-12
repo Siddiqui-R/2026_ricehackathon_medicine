@@ -42,15 +42,37 @@ struct DocumentImportChecks {
             "PASS mixed PDF: raster dose/negation plus embedded header, original page mapping and review warnings"
         )
 
+        for (embedded, recognized) in [
+            ("Dose 5", "Dose 50"), ("Dose 50", "Dose 5"), ("Value 10", "Value 70"),
+        ] {
+            let merged = DocumentImportService.mergeRecognizedText(embedded: embedded, recognized: recognized)
+            let lines = merged.split(separator: "\n").map(String.init)
+            precondition(
+                lines.contains(embedded) && lines.contains(recognized),
+                "Distinct numeric lines must survive deduplication")
+        }
+        precondition(
+            DocumentImportService.mergeRecognizedText(embedded: "Dose 5", recognized: "Dose 5\nOther source")
+                == "Dose 5\nOther source")
+        print(
+            "PASS numeric source disagreement: complete-line deduplication retains differing values and prefixes"
+        )
+
         let bounded = directory.appendingPathComponent("ocr-bound.pdf")
-        try makePDF(at: bounded, rasterPages: 11, textOnlyLastPage: false)
+        try makePDF(at: bounded, rasterPages: 11, textOnlyLastPage: false, lateLowTextScan: true)
         let limited = try await importer.ingest(url: bounded)
         precondition(limited.pageTexts.count == 11)
-        precondition(limited.pageTexts[9].contains("100 mg"))
-        precondition(!limited.pageTexts[10].contains("100 mg"))
-        precondition(limited.pageTexts[10].contains("Received 2026-09-12"))
-        precondition(limited.warnings.contains { $0.contains("Page 11") && $0.contains("10-page OCR limit") })
-        print("PASS OCR cap: ten raster pages recognized, page 11 retains header and explicit review warning")
+        precondition(limited.pageTexts.filter { $0.contains("100 mg") }.count == 10)
+        precondition(limited.pageTexts[8].contains("100 mg"))
+        precondition(!limited.pageTexts[9].contains("100 mg"))
+        precondition(limited.pageTexts[9].contains("Received 2026-09-12"))
+        precondition(limited.pageTexts[10].contains("100 mg"), "Late low-text scan must retain its OCR slot")
+        precondition(limited.warnings.contains { $0.contains("Page 10") && $0.contains("10-page OCR limit") })
+        precondition(
+            !limited.warnings.contains { $0.contains("Page 11") && $0.contains("10-page OCR limit") })
+        print(
+            "PASS OCR priority/cap: late low-text page 11 recognized after ten graphical headers; page 10 retains header and review warning"
+        )
     }
 
     private static func drawLine(_ text: String, in context: CGContext, y: CGFloat, size: CGFloat = 26) {
@@ -65,7 +87,9 @@ struct DocumentImportChecks {
             context)
     }
 
-    private static func makePDF(at url: URL, rasterPages: Int, textOnlyLastPage: Bool) throws {
+    private static func makePDF(
+        at url: URL, rasterPages: Int, textOnlyLastPage: Bool, lateLowTextScan: Bool = false
+    ) throws {
         let bitmap = CGContext(
             data: nil, width: 1100, height: 1200, bitsPerComponent: 8, bytesPerRow: 4400,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -81,7 +105,10 @@ struct DocumentImportChecks {
         let context = CGContext(consumer: consumer, mediaBox: &media, nil)!
         for index in 0..<rasterPages {
             context.beginPDFPage(nil)
-            drawLine("Received 2026-09-12 14:03 Page \(index + 1) - Synthetic", in: context, y: 750, size: 14)
+            let header =
+                lateLowTextScan && index == rasterPages - 1
+                ? "Fax stamp" : "Received 2026-09-12 14:03 Page \(index + 1) - Synthetic"
+            drawLine(header, in: context, y: 750, size: 14)
             context.draw(image, in: CGRect(x: 31, y: 80, width: 550, height: 600))
             context.endPDFPage()
         }

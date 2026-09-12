@@ -63,18 +63,29 @@ enum ServerFailure: LocalizedError {
 @MainActor struct ProviderClient {
     static var duringRequest: (() async throws -> Void)?
     static var requestCount = 0
+    static var summaryInput: MedicalRecord?
+    static var preparationInput: [MedicalRecord] = []
+    static let capabilities = ProviderStatus(
+        gemini: .init(configured: true, model: "native-repair-double"),
+        transcription: .init(configured: false, model: "native-repair-double"),
+        booking: .init(configured: false, model: "native-repair-double"), liveCallsEnabled: false)
     init(url: String, token: String) throws {}
     private func wait() async throws {
         Self.requestCount += 1
         await Task.yield()
         try await Self.duringRequest?()
     }
-    func status() async throws -> ProviderStatus { fatalError("Discovery is covered by StateChecks") }
+    func status() async throws -> ProviderStatus {
+        try await wait()
+        return Self.capabilities
+    }
     func summarize(_ record: MedicalRecord) async throws -> AISummary {
+        Self.summaryInput = record
         try await wait()
         return AISummary(summary: "Current provider summary", model: "native-repair-double")
     }
     func prepare(_ visit: Visit, records: [MedicalRecord]) async throws -> AIPreparation {
+        Self.preparationInput = records
         try await wait()
         return AIPreparation(
             overview: "Current overview", questions: ["Provider question"], selectedRecordIDs: [],
@@ -103,12 +114,17 @@ enum ServerFailure: LocalizedError {
 // MARK: - Audited native regression checks
 @main struct NativeRepairChecks {
     @MainActor static func main() async throws {
+        let previousURL = UserDefaults.standard.object(forKey: "serverURL")
+        defer { UserDefaults.standard.set(previousURL, forKey: "serverURL") }
         let fixture = try JSONDecoder().decode(
             AppSnapshot.self, from: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])))
         let scratch = URL(fileURLWithPath: CommandLine.arguments[2])
         try checkStartupAndOrdering(fixture, root: scratch)
         try await checkProviders(fixture, root: scratch)
+        try await checkProviderInputs(fixture, root: scratch)
+        try await checkProviderCancellation(fixture, root: scratch)
         try await checkEditorMerges(fixture, root: scratch)
+        try checkEditorConflicts(fixture, root: scratch)
         try checkRecordingPersistence(fixture, root: scratch)
         print("ALL NATIVE REPAIR STATE CHECKS PASSED")
     }
@@ -183,7 +199,7 @@ enum ServerFailure: LocalizedError {
 
     // MARK: - Provider success/error invalidation matrix
     @MainActor static func checkProviders(_ fixture: AppSnapshot, root: URL) async throws {
-        let operations = ["summary", "prepare", "transcribe", "start", "poll"]
+        let operations = ["summary", "prepare", "transcribe", "start", "poll", "discovery"]
         let boundaries = ["token", "url", "away-and-back", "replace", "pull", "reset"]
         for operation in operations {
             for boundary in boundaries {
@@ -237,6 +253,7 @@ enum ServerFailure: LocalizedError {
                         store.notice == "Current workspace notice"
                             && store.errorMessage == "Current workspace error")
                     precondition(!store.isProviderBusy)
+                    if operation == "discovery" { precondition(store.providerStatus == nil) }
                     if operation == "start", ["token", "url", "away-and-back"].contains(boundary) {
                         precondition(
                             store.booking("shared-request")?.status == "starting",
@@ -278,6 +295,7 @@ enum ServerFailure: LocalizedError {
                 precondition(store.visit(source.visits[0].id)?.report?.notes == "New brief notes")
             case "transcribe":
                 precondition(store.recording("shared-recording")?.segments == [ProviderClient.segment])
+            case "discovery": precondition(store.providerStatus == ProviderClient.capabilities)
             default:
                 precondition(
                     store.booking("shared-request")?.providerConversationID == "current-conversation")
@@ -285,7 +303,7 @@ enum ServerFailure: LocalizedError {
         }
         ProviderClient.duringRequest = nil
         print(
-            "PASS RVA-10-001: 60 stale success/error cases across 5 provider operations and 6 boundaries; unrelated edits survive normal publication"
+            "PASS RVA-10-001: 72 stale success/error cases across 6 provider operations and 6 boundaries; unrelated edits survive normal publication"
         )
         let store = try makeStore(fixture, root: root)
         store.useConnectedAI = true
@@ -307,8 +325,95 @@ enum ServerFailure: LocalizedError {
         case "prepare": _ = await store.generatePreferredReport(source.visits[0].id)
         case "transcribe": await store.transcribeRecording("shared-recording")
         case "start": await store.placeLiveCall(request(source))
+        case "discovery": await store.checkProviders()
         default: await store.refreshLiveCall("shared-request")
         }
+    }
+
+    // MARK: - Current source previews at the transport boundary
+    @MainActor static func checkProviderInputs(_ fixture: AppSnapshot, root: URL) async throws {
+        let completeLine = "Keep this complete source line."
+        let sourceText = completeLine + "\n" + String(repeating: "x", count: 1800) + " 12 mg daily"
+        var local = fixture.records[0]
+        local.id = "input-local"
+        local.isDemo = false
+        local.text = sourceText
+        local.summary = String(sourceText.prefix(1800))
+        local.summaryModel = nil
+        var legacyDemo = local
+        legacyDemo.id = "input-legacy-demo"
+        legacyDemo.isDemo = true
+        legacyDemo.text = """
+            SYNTHETIC DEMO - FICTIONAL MEDICAL RECORD
+            Source date: 2026-09-12
+            \(sourceText)
+            Invented for Reva software demonstration. Not a real patient record or medical advice.
+            """
+        var authoredDemo = legacyDemo
+        authoredDemo.id = "input-authored-demo"
+        authoredDemo.summary = "Authored fictional overview"
+        var attributed = local
+        attributed.id = "input-attributed"
+        attributed.summary = "Previously reviewed provider overview"
+        attributed.summaryModel = "previous-model"
+        let examples = [local, legacyDemo, authoredDemo, attributed]
+        let expected = [completeLine, completeLine, authoredDemo.summary, attributed.summary]
+        var source = fixture
+        source.records.append(contentsOf: examples)
+        let store = try makeStore(source, root: root)
+        store.useConnectedAI = true
+        ProviderClient.duringRequest = nil
+        let prepared = await store.generatePreferredReport(source.visits[0].id)
+        precondition(prepared && store.snapshot?.records == source.records)
+        for (record, summary) in zip(examples, expected) {
+            var input = record
+            input.summary = summary
+            precondition(ProviderClient.preparationInput.first { $0.id == record.id } == input)
+            ProviderClient.duringRequest = {
+                precondition(
+                    store.record(record.id) == record, "Preparing transport input rewrote saved source")
+            }
+            await store.summarizeWithAI(record.id)
+            precondition(ProviderClient.summaryInput == input)
+            precondition(store.record(record.id)?.summaryModel == "native-repair-double")
+            precondition(store.record(record.id)?.text == record.text)
+        }
+        ProviderClient.duringRequest = nil
+        print(
+            "PASS provider inputs: summary and preparation refresh legacy local previews, preserve authored/model summaries and exact source text without rewriting saved inputs"
+        )
+    }
+
+    // MARK: - Canceled requests must not publish a returned result
+    @MainActor static func checkProviderCancellation(_ fixture: AppSnapshot, root: URL) async throws {
+        for operation in ["summary", "prepare", "transcribe", "start", "poll", "discovery"] {
+            var source = fixture
+            source.bookings = [request(fixture)]
+            source.recordings = [
+                VisitRecording(
+                    id: "shared-recording", visitID: fixture.visits[0].id, title: "Synthetic audio",
+                    duration: 2, audioFilename: "cancel.m4a")
+            ]
+            let store = try makeStore(source, root: root)
+            _ = try store.repository.storeAttachment(Data("Synthetic audio".utf8), filename: "cancel.m4a")
+            store.useConnectedAI = true
+            ProviderClient.duringRequest = { withUnsafeCurrentTask { $0?.cancel() } }
+            // Cancel the operation task, not this harness task. The double still returns a valid result.
+            let submittedSource = source
+            await Task { @MainActor in await run(operation, store: store, source: submittedSource) }.value
+            var expected = source
+            if operation == "start" {
+                expected.bookings[0].status = "unknown"
+            }
+            precondition(store.snapshot == expected, "Canceled \(operation) published a returned result")
+            precondition(store.providerStatus == nil && store.notice == nil && !store.isProviderBusy)
+            precondition(store.errorMessage != nil)
+        }
+        ProviderClient.duringRequest = nil
+        precondition(!Task.isCancelled)
+        print(
+            "PASS provider cancellation: all 6 operations discard valid late results; submitted call identity remains recoverable"
+        )
     }
 
     // MARK: - Field-specific editor preservation
@@ -369,6 +474,81 @@ enum ServerFailure: LocalizedError {
         )
     }
 
+    // MARK: - Competing and converged edits share the production merge boundary
+    @MainActor static func checkEditorConflicts(_ fixture: AppSnapshot, root: URL) throws {
+        let edits: [(WritableKeyPath<MedicalRecord, String>, String, String)] = [
+            (\.title, "Draft title", "Current title"),
+            (\.provider, "Draft provider", "Current provider"),
+            (\.date, "2026-09-13", "2026-09-14"),
+            (\.kind, "Imaging", "Procedure"),
+            (\.text, "Draft source words", "Current source words"),
+            (\.notes, "Draft notes", "Current notes"),
+        ]
+        for (field, draftValue, currentValue) in edits {
+            let store = try makeStore(fixture, root: root)
+            let original = store.records[0]
+            var draft = original
+            draft[keyPath: field] = draftValue
+            // Include another valid edit to prove rejection does not publish a partial merge.
+            if field != \.title {
+                draft.title = "Other draft title"
+            } else {
+                draft.notes = "Other draft notes"
+            }
+            var current = original
+            current[keyPath: field] = currentValue
+            try store.save(current)
+            let before = store.snapshot
+            do {
+                try store.saveRecordEdits(draft, original: original, reviewed: false)
+                preconditionFailure("Competing editor field was overwritten")
+            } catch {}
+            precondition(store.snapshot == before)
+
+            // Two edits reaching the same value are compatible, including a source whose new summary arrived later.
+            current[keyPath: field] = draftValue
+            if field == \.text {
+                current.summary = "New provider summary for converged text"
+                current.summaryModel = "converged-model"
+                current.pageTexts = [draftValue]
+            }
+            try store.save(current)
+            let converged = store.record(original.id)!
+            var matching = original
+            matching[keyPath: field] = draftValue
+            try store.saveRecordEdits(matching, original: original, reviewed: false)
+            precondition(
+                store.record(original.id) == converged, "Converged edit changed newer fields/version")
+        }
+        let store = try makeStore(fixture, root: root)
+        let original = store.records[0]
+        for invalid in ["identity", "title"] {
+            var draft = original
+            if invalid == "identity" { draft.id = "different-record" } else { draft.title = " \n " }
+            let before = store.snapshot
+            do {
+                try store.saveRecordEdits(draft, original: original, reviewed: false)
+                preconditionFailure("Invalid editor identity/title accepted")
+            } catch {}
+            precondition(store.snapshot == before)
+        }
+        for field: WritableKeyPath<MedicalRecord, String> in [\.kind, \.provider] {
+            let before = store.record(original.id)!
+            var draft = before
+            draft[keyPath: field] = field == \.kind ? "Imaging" : "Changed clinician"
+            let signature = ReportEngine.signature(visit: fixture.visits[0], records: store.records)
+            try store.saveRecordEdits(draft, original: before, reviewed: false)
+            var expected = draft
+            expected.version = before.version + 1
+            precondition(store.record(original.id) == expected)
+            precondition(
+                signature != ReportEngine.signature(visit: fixture.visits[0], records: store.records))
+        }
+        print(
+            "PASS editor conflicts: 6 competing fields reject atomically; 6 converged fields preserve newer data/version; identity/title validation and kind/provider versioning hold"
+        )
+    }
+
     // MARK: - Finalized audio metadata failure and retry
     @MainActor static func checkRecordingPersistence(_ fixture: AppSnapshot, root: URL) throws {
         let store = try makeStore(fixture, root: root)
@@ -378,18 +558,21 @@ enum ServerFailure: LocalizedError {
             visitID: fixture.visits[0].id, title: "Finalized recording", duration: 2,
             audioFilename: url.lastPathComponent)
         var draft = RecordingSaveDraft()
-        draft.retain(pending)
+        draft.retain(pending, audioURL: url)
         let backup = store.repository.directory.appendingPathComponent("state.backup.json")
         try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: false)
-        do {
-            _ = try draft.save(to: store)
-            preconditionFailure("Synthetic failed save unexpectedly succeeded")
-        } catch {}
-        precondition(store.recording(pending.id) == nil && draft.recording == pending)
-        precondition((try? Data(contentsOf: url)) == bytes)
+        for _ in 0..<2 {
+            do {
+                _ = try draft.save(to: store)
+                preconditionFailure("Synthetic failed save unexpectedly succeeded")
+            } catch {}
+            precondition(
+                store.recording(pending.id) == nil && draft.recording == pending && draft.audioURL == url)
+            precondition((try? Data(contentsOf: draft.audioURL!)) == bytes)
+        }
         try FileManager.default.removeItem(at: backup)
         let savedID = try draft.save(to: store)
-        precondition(savedID == pending.id && draft.recording == nil)
+        precondition(savedID == pending.id && draft.recording == nil && draft.audioURL == nil)
         try store.save(pending)
         precondition(
             store.recordings.filter { $0.id == pending.id }.count == 1

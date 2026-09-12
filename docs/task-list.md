@@ -337,6 +337,6 @@ The original completion criteria remain binding in [completion-criteria.md](comp
 
 **Current status:** setup/palette/planning checkpoint exists. The native preflight build was started before the latest instruction; its live execution handle must be polled rather than restarted. No full interface or backend completion is claimed. Resume only after this list and its goals-file mirror have been written.
 
-## Queued browser feedback — September 12, 2026
+## Completed browser feedback — September 12, 2026
 
-The five requested copy, demo-label, preparation-action, profile-subtitle and demo-person-switcher changes are tracked in [UI follow-ups](ui-todo.md). They remain pending while the audit repairs are delivered.
+The five requested copy, demo-label, preparation-action, profile-subtitle and demo-person-switcher changes are tracked in [UI follow-ups](ui-todo.md). They are implemented alongside the audit repairs.

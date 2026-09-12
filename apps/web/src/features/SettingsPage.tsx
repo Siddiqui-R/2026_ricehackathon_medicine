@@ -122,14 +122,14 @@ export function SettingsPage() {
             </div>
           </Card>
           <Card className="settings-card">
-            <h2>Fictional demo</h2>
+            <h2>Demo</h2>
             <p className="muted">
               Restore the original demonstration records in this browser. This replaces active local changes;
               it does not change the server or your iPhone.
             </p>
             <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm('reset')}>
               <RotateCcw size={16} />
-              Restore fictional demo
+              Restore demo
             </Button>
           </Card>
         </div>
@@ -203,13 +203,13 @@ export function SettingsPage() {
       </div>
       {confirm && (
         <Modal
-          title={confirm === 'pull' ? 'Replace this browser’s copy?' : 'Restore the fictional demo?'}
+          title={confirm === 'pull' ? 'Replace this browser’s copy?' : 'Restore the demo?'}
           onClose={() => !working && setConfirm(null)}
         >
           <p>
             {confirm === 'pull'
               ? 'Your active browser records, appointments, and medical profile will be replaced by the server copy. Unsynced local edits will leave the active snapshot.'
-              : 'Your active local edits will be replaced with the original fictional data. Other devices and the server are unchanged.'}
+              : 'Your active local edits will be replaced with the original demo data. Other devices and the server are unchanged.'}
           </p>
           <div className="form-actions">
             <Button variant="secondary" disabled={working} onClick={() => setConfirm(null)}>

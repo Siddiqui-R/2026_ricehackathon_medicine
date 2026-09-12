@@ -6,6 +6,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Phone, RefreshCw } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { demoLabel } from '../../core/presentation';
 import type { BookingRequest, Visit } from '../../core/models';
 import { formatDate, nowISO, uid, validateBooking, confirmBooking } from '../../core/domain';
 import { Badge, Button, Card, Field, Modal } from '../../components/ui';
@@ -60,7 +61,7 @@ export function BookingPanel({ visit }: { visit: Visit }) {
             <strong>{bookingStatus(request.status)}</strong>
           </div>
           <div>
-            <strong>{request.clinic}</strong>
+            <strong>{demoLabel(request.clinic, snapshot?.profile.isDemo)}</strong>
             <p className="small muted">
               {request.phone} · {formatDate(request.earliest, true, request.timeZone)}
             </p>
@@ -270,11 +271,11 @@ function BookingEditor({
           <h3>Review every detail</h3>
           <dl className="review-details">
             <dt>Clinic</dt>
-            <dd>{review.clinic}</dd>
+            <dd>{demoLabel(review.clinic, snapshot?.profile.isDemo)}</dd>
             <dt>Phone</dt>
             <dd>{review.phone}</dd>
             <dt>Patient</dt>
-            <dd>{reviewedPatient}</dd>
+            <dd>{demoLabel(reviewedPatient, snapshot?.profile.isDemo)}</dd>
             <dt>Reason</dt>
             <dd className="prose">{review.reason}</dd>
             <dt>Allowed window</dt>
@@ -346,13 +347,13 @@ function BookingEditor({
           <p className="muted">
             {mode === 'live'
               ? 'You will review and authorize the call before anything is sent.'
-              : 'Explore the booking flow with a fictional outcome. This never contacts a clinic.'}
+              : 'Explore the booking flow with a sample outcome. This never contacts a clinic.'}
           </p>
           <Field label="Clinic">
             <input
               required
               maxLength={180}
-              value={clinic}
+              value={demoLabel(clinic, snapshot?.profile.isDemo)}
               onChange={(event) => setClinic(event.target.value)}
             />
           </Field>

@@ -315,6 +315,7 @@ export async function extractDocument(
             rasterOrUnknown = operations.fnArray.some((operation) => imageOperations.has(operation));
           } catch {
             checkAbort(signal);
+            result.incomplete = true;
             result.warnings.push(
               `Page ${number}: Graphic content could not be inspected; review the original for missing text.`,
             );

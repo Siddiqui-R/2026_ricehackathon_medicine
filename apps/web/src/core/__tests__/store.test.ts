@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIPreparation, AISummary, AudioTranscription, BookingRequest } from '../models.ts';
 import { APIError } from '../api.ts';
-import { RevaStore } from '../store.ts';
+import { RevaStore, type APITransport } from '../store.ts';
 import { deferred, MemoryRepository, sample, seed, transport } from './fixtures.ts';
 
 // MARK: - Setup initializes real store coordination over controllable boundaries.
@@ -89,6 +89,52 @@ describe('local state publication', () => {
 
 // MARK: - Connected results cannot overwrite sources or the user's question/notes authority.
 describe('provider result publication', () => {
+  it('sends safe current local excerpts without replacing attributed summaries or saved sources', async () => {
+    const prepare = vi.fn<APITransport['prepare']>().mockResolvedValue({
+        overview: 'Fictional overview',
+        questions: [],
+        selectedRecordIDs: [],
+        model: 'mock-gemini',
+      }),
+      { store } = await ready(transport({ prepare }));
+    await store.mutate((draft) => {
+      Object.assign(draft.records[0], {
+        isDemo: false,
+        summaryModel: undefined,
+        text: `Complete source dose: 12.5 mg.\n${'Long following source wording '.repeat(100)}`,
+        summary: 'Old clipped source dose: 12.',
+      });
+      Object.assign(draft.records[1], {
+        isDemo: false,
+        summaryModel: 'mock-summary-model',
+        summary: 'Attributed overview.',
+      });
+      Object.assign(draft.records[2], {
+        isDemo: true,
+        summaryModel: undefined,
+        summary: 'Authored fictional overview.',
+      });
+      const legacyDemoText = `${'x'.repeat(1792)}dose: 100 mg`;
+      Object.assign(draft.records[3], {
+        isDemo: true,
+        summaryModel: undefined,
+        text: legacyDemoText,
+        summary: legacyDemoText.slice(0, 1800),
+      });
+    });
+    const savedRecords = structuredClone(store.getState().snapshot!.records);
+    await store.checkServer();
+    store.setConnectedAI(true);
+    await store.prepareVisit(store.getState().snapshot!.visits[0].id);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    const candidates = prepare.mock.calls[0][1];
+    expect(candidates[0].summary).toBe('Complete source dose: 12.5 mg.');
+    expect(candidates[1].summary).toBe('Attributed overview.');
+    expect(candidates[2].summary).toBe('Authored fictional overview.');
+    expect(candidates[3].summary).toBe('');
+    expect(candidates.map((record) => record.text)).toEqual(savedRecords.map((record) => record.text));
+    expect(store.getState().snapshot!.records).toEqual(savedRecords);
+  });
   it('discards a delayed summary after the source has been edited', async () => {
     const response = deferred<AISummary>(),
       summarize = vi.fn(() => response.promise);

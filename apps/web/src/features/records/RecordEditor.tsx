@@ -5,6 +5,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useReva } from '../../core/RevaContext';
+import { demoDescription, demoLabel } from '../../core/presentation';
 import { localExcerpt } from '../../core/domain';
 import type { MedicalRecord } from '../../core/models';
 import { Button, Field, Modal } from '../../components/ui';
@@ -84,7 +85,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
             <Field label="Record title">
               <input
                 required
-                value={draft.title}
+                value={demoLabel(draft.title, draft.isDemo)}
                 onChange={(event) => update('title', event.target.value)}
                 maxLength={240}
               />
@@ -100,7 +101,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
             <div className="field-full">
               <Field label="Clinic or provider">
                 <input
-                  value={draft.provider}
+                  value={demoLabel(draft.provider, draft.isDemo)}
                   onChange={(event) => update('provider', event.target.value)}
                   maxLength={240}
                 />
@@ -125,7 +126,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
           <Field label="Your notes · optional">
             <textarea
               rows={3}
-              value={draft.notes}
+              value={demoDescription(draft.notes, draft.isDemo)}
               onChange={(event) => update('notes', event.target.value)}
               maxLength={20000}
             />

@@ -5,6 +5,7 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useReva } from '../../core/RevaContext';
+import { demoLabel } from '../../core/presentation';
 import type { Visit } from '../../core/models';
 import { uid } from '../../core/domain';
 import { Button, Field, Modal } from '../../components/ui';
@@ -82,7 +83,7 @@ export function VisitEditor({ visit, onClose }: { visit?: Visit; onClose: () => 
             <input
               required
               maxLength={180}
-              value={form.title}
+              value={demoLabel(form.title, snapshot?.profile.isDemo)}
               onChange={(event) => change('title', event.target.value)}
               placeholder="e.g. Follow-up about nausea"
             />
@@ -100,7 +101,7 @@ export function VisitEditor({ visit, onClose }: { visit?: Visit; onClose: () => 
             <input
               required
               maxLength={180}
-              value={form.provider}
+              value={demoLabel(form.provider, snapshot?.profile.isDemo)}
               onChange={(event) => change('provider', event.target.value)}
               placeholder="Clinician or care team"
             />
@@ -108,7 +109,7 @@ export function VisitEditor({ visit, onClose }: { visit?: Visit; onClose: () => 
           <Field label="Clinic">
             <input
               maxLength={180}
-              value={form.clinic}
+              value={demoLabel(form.clinic, snapshot?.profile.isDemo)}
               onChange={(event) => change('clinic', event.target.value)}
             />
           </Field>
@@ -179,7 +180,7 @@ export function VisitEditor({ visit, onClose }: { visit?: Visit; onClose: () => 
                   }
                 />
                 <span>
-                  {record.title}
+                  {demoLabel(record.title, record.isDemo)}
                   <span className="record-meta">
                     {record.kind} · {record.date}
                   </span>

@@ -27,18 +27,18 @@ extension AppStore {
     func checkProviders() async {
         let requestID = UUID()
         providerDiscoveryID = requestID
-        let connection = connectionGeneration
+        let context = providerContext
         let url = connectionURL
         let token = connectionToken
         do {
             let status = try await ProviderClient(url: url, token: token).status()
-            guard connection == connectionGeneration, requestID == providerDiscoveryID else { return }
+            guard context == providerContext, requestID == providerDiscoveryID else { return }
             try Task.checkCancellation()
             providerStatus = status
             UserDefaults.standard.set(url, forKey: "serverURL")
             notice = "Service configuration checked. Only configured connections can be used."
         } catch {
-            guard connection == connectionGeneration, requestID == providerDiscoveryID else { return }
+            guard context == providerContext, requestID == providerDiscoveryID else { return }
             providerStatus = nil
             errorMessage = error.localizedDescription
         }

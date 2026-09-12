@@ -23,6 +23,8 @@ struct PatientProfile: Codable, Equatable {
 // MARK: - Versioned source record
 // Keep original provenance, extracted wording, summary origin and optional symptom structure together.
 struct MedicalRecord: Codable, Identifiable, Equatable {
+    static let configurableKinds = ["Notes", "Labs", "Imaging", "Procedure", "Scan"]
+
     var id: String = UUID().uuidString
     var title: String
     var kind: String

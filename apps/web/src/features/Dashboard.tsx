@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
 import { formatDate } from '../core/domain';
+import { demoLabel } from '../core/presentation';
 import { Badge, Card } from '../components/ui';
 
 // MARK: - Dashboard projections never mutate the underlying clinical data
@@ -50,7 +51,7 @@ export function Dashboard() {
             Hello, {firstName}
             <span className="greeting-dot">.</span>
           </h1>
-          <p>A clearer picture. A more prepared you.</p>
+          <p>Making every appointment meaningful</p>
         </div>
         <span className="today">
           <CalendarDays size={16} />
@@ -123,11 +124,11 @@ export function Dashboard() {
                   </h3>
                   <p>
                     <Stethoscope size={15} />
-                    {next.provider || 'Provider to be confirmed'}
+                    {demoLabel(next.provider, profile.isDemo) || 'Provider to be confirmed'}
                   </p>
                   <p>
                     <MapPin size={15} />
-                    {next.clinic || 'Location to be confirmed'}
+                    {demoLabel(next.clinic, profile.isDemo) || 'Location to be confirmed'}
                   </p>
                   <p className="appointment-time">{formatDate(next.date, true, next.timeZone)}</p>
                 </div>
@@ -137,13 +138,13 @@ export function Dashboard() {
                 <div>
                   <strong>A little preparation goes a long way</strong>
                   <p>Bring your relevant history and the questions that matter to you.</p>
+                  <a className="button button-primary" href={`#/visits/${next.id}`}>
+                    Prepare for this visit <ArrowRight size={16} />
+                  </a>
                 </div>
               </div>
               <div className="appointment-footer">
                 <span className="small muted">{records.length} records available for preparation</span>
-                <a className="button button-primary" href={`#/visits/${next.id}`}>
-                  Prepare for this visit <ArrowRight size={16} />
-                </a>
               </div>
             </Card>
           ) : (
@@ -182,7 +183,7 @@ export function Dashboard() {
                       )}
                     </span>
                     <span className="record-main">
-                      <strong>{record.title}</strong>
+                      <strong>{demoLabel(record.title, record.isDemo)}</strong>
                       <span className="record-meta">
                         {record.kind}
                         <span aria-hidden="true"> · </span>
@@ -217,7 +218,7 @@ export function Dashboard() {
             <div className="glance-heading">
               <span className="avatar avatar-large">{profile.initials}</span>
               <div>
-                <h3>{profile.name.replace(' (Synthetic)', '')}</h3>
+                <h3>{demoLabel(profile.name, profile.isDemo)}</h3>
                 <p className="muted small">Your medical profile</p>
               </div>
             </div>
@@ -227,7 +228,7 @@ export function Dashboard() {
                 Allergies <span>{profile.allergies.length}</span>
               </h4>
               {profile.allergies.length ? (
-                profile.allergies.map((value) => <p key={value}>{value}</p>)
+                profile.allergies.map((value) => <p key={value}>{demoLabel(value, profile.isDemo)}</p>)
               ) : (
                 <p className="muted">None recorded</p>
               )}
@@ -238,7 +239,7 @@ export function Dashboard() {
                 Medications <span>{profile.medications.length}</span>
               </h4>
               {profile.medications.slice(0, 2).map((value) => (
-                <p key={value}>{value}</p>
+                <p key={value}>{demoLabel(value, profile.isDemo)}</p>
               ))}
               {!profile.medications.length && <p className="muted">None recorded</p>}
             </div>

@@ -145,15 +145,18 @@ extension AppStore {
 // Keep the same metadata and audio reference across failed writes; only a successful save clears the draft.
 @MainActor struct RecordingSaveDraft {
     private(set) var recording: VisitRecording?
+    private(set) var audioURL: URL?
 
-    mutating func retain(_ recording: VisitRecording) {
+    mutating func retain(_ recording: VisitRecording, audioURL: URL) {
         self.recording = recording
+        self.audioURL = audioURL
     }
 
     mutating func save(to store: AppStore) throws -> String {
         guard let recording else { throw RevaError.invalid("There is no finished recording to save.") }
         try store.save(recording)
         self.recording = nil
+        audioURL = nil
         return recording.id
     }
 }

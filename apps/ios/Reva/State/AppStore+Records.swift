@@ -16,9 +16,10 @@ extension AppStore {
             }
             let current = data.records[i]
             var revised = record
-            // Only changes a brief can quote or select on advance the source version; notes and provider edits keep it.
+            // Only changes a brief can quote or select on advance the source version; notes-only edits keep it.
             let affectsBriefs =
                 revised.title != current.title || revised.date != current.date || revised.text != current.text
+                || revised.kind != current.kind || revised.provider != current.provider
                 || revised.tags != current.tags || revised.summary != current.summary
                 || revised.status != current.status
             revised.version = affectsBriefs ? current.version + 1 : current.version
@@ -28,29 +29,39 @@ extension AppStore {
     // MARK: - Reviewed editor merge
     // Apply only edited fields to the latest source so a background summary or newer metadata survives.
     func saveRecordEdits(_ draft: MedicalRecord, original: MedicalRecord, reviewed: Bool) throws {
-        guard var latest = record(original.id) else {
+        guard original.id == draft.id else { throw RevaError.invalid("The record identity changed.") }
+        guard let current = record(original.id) else {
             throw RevaError.invalid("This record is no longer available.")
         }
-        let textChanged = draft.text != original.text
-        if textChanged || reviewed {
-            guard latest.text == original.text else {
+        var latest = current
+        let fields: [WritableKeyPath<MedicalRecord, String>] = [
+            \.title, \.provider, \.date, \.kind, \.text, \.notes,
+        ]
+        for field in fields where draft[keyPath: field] != original[keyPath: field] {
+            guard
+                current[keyPath: field] == original[keyPath: field]
+                    || current[keyPath: field] == draft[keyPath: field]
+            else {
                 throw RevaError.invalid(
-                    "The source text changed while this editor was open. Reopen the record to review the current text."
+                    "A field you edited changed while this editor was open. Your saved data was kept. Reopen the record and apply your edit to the latest version."
                 )
             }
+            latest[keyPath: field] = draft[keyPath: field]
         }
-        if draft.title != original.title { latest.title = draft.title }
-        if draft.provider != original.provider { latest.provider = draft.provider }
-        if draft.date != original.date { latest.date = draft.date }
-        if draft.notes != original.notes { latest.notes = draft.notes }
-        let textPresent = !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if textChanged {
-            latest.text = draft.text
-            latest.summary = ReportEngine.localExcerpt(draft.text, isDemo: latest.isDemo)
+        guard !latest.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw RevaError.invalid("Enter a record title.")
+        }
+        let textPresent = !latest.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if latest.text != current.text {
+            latest.summary = ReportEngine.localExcerpt(latest.text, isDemo: latest.isDemo)
             latest.summaryModel = nil
             latest.pageTexts = nil
             latest.status = reviewed && textPresent ? "ready" : "needsReview"
-        } else if reviewed, textPresent, latest.status == "needsReview" {
+        } else if reviewed, textPresent {
+            guard current.text == draft.text else {
+                throw RevaError.invalid(
+                    "The source text changed. Reopen the record before marking it reviewed.")
+            }
             latest.status = "ready"
         }
         try save(latest)

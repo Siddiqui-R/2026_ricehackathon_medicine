@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { CalendarDays, ChevronRight, Plus } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { formatDate } from '../../core/domain';
+import { demoLabel } from '../../core/presentation';
 import { Badge, Button, Card, EmptyState, PageHeading } from '../../components/ui';
 import { VisitEditor } from './VisitEditor';
 
@@ -76,8 +77,8 @@ export function VisitsPage() {
                   <h2>{visit.title}</h2>
                   <p className="muted">{formatDate(visit.date, true, visit.timeZone)}</p>
                   <p>
-                    {visit.provider}
-                    {visit.clinic ? ` · ${visit.clinic}` : ''}
+                    {demoLabel(visit.provider, snapshot?.profile.isDemo)}
+                    {visit.clinic ? ` · ${demoLabel(visit.clinic, snapshot?.profile.isDemo)}` : ''}
                   </p>
                 </div>
                 <p className="visit-concern">{visit.concern}</p>

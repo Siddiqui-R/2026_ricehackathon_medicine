@@ -6,10 +6,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Printer, RefreshCw, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { demoDescription, demoLabel } from '../../core/presentation';
 import type { ReportSection, Visit } from '../../core/models';
 import { formatDate, reportIsStale } from '../../core/domain';
 import { Badge, Button, Card, EmptyState, Field, Modal } from '../../components/ui';
-import { applyBriefNotes, type BriefNotesBaseline } from './briefNotesEdits';
+import { applyBriefNotes, briefNotesValues, type BriefNotesBaseline } from './briefNotesEdits';
 
 // MARK: - Suppress only a body already displayed verbatim by its source quotations
 function sectionBodyRepeatsSourceQuotes(section: ReportSection): boolean {
@@ -140,7 +141,8 @@ export function VisitBrief({ visit }: { visit: Visit }) {
             <p>REVA · PRE-VISIT BRIEF</p>
             <h2>{visit.title}</h2>
             <p>
-              {formatDate(visit.date, true, visit.timeZone)} · {visit.provider}
+              {formatDate(visit.date, true, visit.timeZone)} ·{' '}
+              {demoLabel(visit.provider, snapshot?.profile.isDemo)}
             </p>
             <p>Concern: {visit.concern}</p>
             {visit.goal && <p>Visit goal: {visit.goal}</p>}
@@ -169,7 +171,9 @@ export function VisitBrief({ visit }: { visit: Visit }) {
                         href={`#/records/${encodeURIComponent(source.recordID)}${source.page > 0 ? `?page=${source.page}` : ''}`}
                       >
                         <FileText size={14} />
-                        {record?.title ?? 'Source no longer available'} ·{' '}
+                        {record
+                          ? demoLabel(record.title, record.isDemo)
+                          : 'Source no longer available'} ·{' '}
                         {source.page > 0 ? `page ${source.page}` : 'record text'}
                         {source.sourceVersion ? ` · version ${source.sourceVersion}` : ''}
                       </a>
@@ -198,7 +202,9 @@ export function VisitBrief({ visit }: { visit: Visit }) {
           </section>
           <section className="report-section">
             <h3>My notes</h3>
-            <p className="prose">{visit.notes || 'No personal notes added.'}</p>
+            <p className="prose">
+              {demoDescription(visit.notes, snapshot?.profile.isDemo) || 'No personal notes added.'}
+            </p>
           </section>
           <p className="muted small report-footer">
             Prepared to help you discuss your history with your clinician. Review the original sources and any
@@ -218,7 +224,7 @@ export function VisitBrief({ visit }: { visit: Visit }) {
 
 // MARK: - User questions and notes remain authoritative across regeneration
 function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => void }) {
-  const { mutate } = useReva();
+  const { mutate, snapshot } = useReva();
   const [baseline] = useState<BriefNotesBaseline>(() => ({
     id: visit.id,
     questions: [...visit.questions],
@@ -233,15 +239,7 @@ function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => voi
     setSaving(true);
     setError('');
     try {
-      await mutate((draft) =>
-        applyBriefNotes(draft, baseline, {
-          questions: questions
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean),
-          notes,
-        }),
-      );
+      await mutate((draft) => applyBriefNotes(draft, baseline, briefNotesValues(baseline, questions, notes)));
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Your notes could not be saved.');
@@ -267,7 +265,7 @@ function BriefNotesEditor({ visit, onClose }: { visit: Visit; onClose: () => voi
           <textarea
             rows={5}
             maxLength={20000}
-            value={notes}
+            value={demoDescription(notes, snapshot?.profile.isDemo)}
             onChange={(event) => setNotes(event.target.value)}
           />
         </Field>

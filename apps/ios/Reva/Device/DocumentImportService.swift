@@ -236,9 +236,29 @@ actor DocumentImportService {
         guard !document.isLocked else { throw DocumentImportError.lockedPDF }
         guard document.pageCount > 0 else { throw DocumentImportError.invalidPDF }
         guard document.pageCount <= Self.maximumPages else { throw DocumentImportError.tooManyPages }
+        // Reserve OCR for weak pages before other raster candidates, even when the weak page
+        // comes after many graphical headers. Ordinary embedded-text pages consume no OCR slots.
+        var lowTextPages: [Int] = []
+        var otherCandidates: [Int] = []
+        var rasterPages = Set<Int>()
+        for index in 0..<document.pageCount {
+            try Task.checkCancellation()
+            let candidate: (count: Int, raster: Bool)? = autoreleasepool {
+                guard let page = document.page(at: index) else { return nil }
+                let count = page.string?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0
+                return (count, Self.hasRasterOrUninspectedContent(page))
+            }
+            guard let candidate else { continue }
+            if candidate.raster { rasterPages.insert(index) }
+            if candidate.count < 20 {
+                lowTextPages.append(index)
+            } else if candidate.raster {
+                otherCandidates.append(index)
+            }
+        }
+        let ocrPages = Set((lowTextPages + otherCandidates).prefix(Self.maximumOCRPages))
         var pageTexts: [String] = []
         var warnings: [String] = []
-        var ocrCount = 0
         var remaining = Self.maximumTextCharacters
         for index in 0..<document.pageCount {
             try Task.checkCancellation()
@@ -254,15 +274,14 @@ actor DocumentImportService {
                     return ""
                 }
                 let embedded = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let mayContainRasterText = Self.hasRasterOrUninspectedContent(page)
+                let mayContainRasterText = rasterPages.contains(index)
                 if embedded.count >= 20 && !mayContainRasterText { return embedded }
-                guard ocrCount < Self.maximumOCRPages else {
+                guard ocrPages.contains(index) else {
                     warnings.append(
                         "Page \(index + 1) needs OCR beyond the 10-page OCR limit. Review this page or import a smaller PDF."
                     )
                     return embedded
                 }
-                ocrCount += 1
                 if !warnings.contains(Self.ocrReviewWarning) { warnings.append(Self.ocrReviewWarning) }
                 guard let image = rasterize(page) else {
                     warnings.append(
@@ -335,7 +354,7 @@ actor DocumentImportService {
         return requiresOCR || !scanned
     }
 
-    private nonisolated static func mergeRecognizedText(embedded: String, recognized: String) -> String {
+    nonisolated static func mergeRecognizedText(embedded: String, recognized: String) -> String {
         if embedded.isEmpty { return recognized }
         let known = Set(
             embedded.components(separatedBy: .newlines).map {

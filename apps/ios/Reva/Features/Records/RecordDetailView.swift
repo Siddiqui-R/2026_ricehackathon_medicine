@@ -157,8 +157,7 @@ struct RecordDetailView: View {
     // MARK: - Summary provenance
     /// A fictional record keeps its origin badge after a text correction, but its authored demo summary is replaced by a local excerpt; label what is shown.
     private func displayedSummary(_ record: MedicalRecord) -> String {
-        record.summaryModel != nil || hasAuthoredSummary(record)
-            ? record.summary : ReportEngine.localExcerpt(record.text, isDemo: record.isDemo)
+        ReportEngine.currentSummary(record)
     }
     private func hasAuthoredSummary(_ record: MedicalRecord) -> Bool {
         ReportEngine.hasAuthoredDemoSummary(record)

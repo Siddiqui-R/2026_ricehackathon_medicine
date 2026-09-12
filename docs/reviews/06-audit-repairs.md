@@ -38,7 +38,7 @@ All **23 confirmed findings (14 P2, 9 P3)** have code repairs. The [per-finding 
 - [Extraction evidence](evidence/extraction-audit-repairs.md): exact source passages, omission metadata, demo-wrapper boundaries, relevance/date logic, mixed PDFs, scan classification and palette.
 - [Browser evidence](evidence/browser-audit-repairs.md): atomic record/original commits, concurrent brief editing, tablet accessible names, selection contrast and deployment/build configuration.
 
-No dependency upgrade, new paid service, broad backend rewrite or account release is included. Older report citations without omission metadata now request regeneration. Existing source signatures remain unchanged.
+No dependency upgrade, new paid service, broad backend rewrite or account release is included. Older report citations without omission metadata request regeneration. The consolidated `source-rules-v2` signature also invalidates briefs generated with the old selection rules, including those with no citations; both clients use the same verified vectors.
 
 ## Combined verification
 
@@ -111,4 +111,18 @@ Before integration, a local backup captured the newest **59 tracked edits and 24
 
 Main was fast-forwarded to repair checkpoint `9eeba19`, then the exact stash was applied. Overlaps are reconciled explicitly, preserving newer user intent while retaining the audited data-integrity repairs. The duplicate untracked `apps/web/vercel.json` is removed in favor of the root configuration; its prior contents remain backed up. Restored feature work stays uncommitted and is not silently included in the repair release.
 
-The new annotated browser requests are queued in [UI follow-ups](../ui-todo.md), linked from the project task list. They are pending, rather than implemented as part of this repair pass.
+The five annotated browser requests were subsequently authorized for immediate implementation and are completed in [UI follow-ups](../ui-todo.md): slogan, display-label cleanup, preparation action placement, profile subtitle and isolated demo-person switching.
+
+## Concurrent remote checkpoint
+
+Before pushing, the remote was found at `36c055d`, an independent Windows implementation of the same audit repairs published during this batch. Three owners compared that commit against the native/browser implementation already verified here. Both histories are retained, with one implementation per responsibility.
+
+The comparison identified useful additions to carry forward: preserving an untouched questions array exactly, naming the tablet avatar link, regenerating unsafe legacy local summaries before AI input, granular native editor conflict/convergence checks and kind editing, sharing finalized audio when persistence cannot recover, prioritizing low-text OCR candidates, explicit incomplete coverage when browser PDF inspection fails, and invalidating older selection rules consistently across clients. Windows LF rules, dependency-directory ignores, the junction-based confinement fixture and the equality-only hash double for Windows state checks are also retained.
+
+The consolidated implementation keeps the stricter fixture-footer/append preservation, omission metadata, legacy demo-summary classification, precise stopped-recorder guidance, real PDFKit/Vision regression and real rendered-browser checks developed in this batch. Duplicate excerpt/audio helper types and a second browser DOM test framework are not introduced. The [Windows checkpoint reference](../audit-repair-checklist.md) preserves its original evidence and test totals without presenting them as new results for this tree.
+
+## Final focused gate
+
+After consolidation, native regressions passed 72 stale-response cases, six cancellation paths, safe provider-input policies, field conflicts/convergence, and repeated audio-save failure retention. Source/fixture checks passed with real Swift `source-rules-v2` vectors; the real PDFKit/Vision fixture verified late-scan priority, numeric disagreements and the OCR cap. The consolidated iOS Simulator build passed. Browser production build passed with 1,928 modules. Existing browser checks passed apart from an initial new demo fixture page-count error; correcting its metadata made both targeted demo isolation/navigation tests pass.
+
+Computer UI checks confirmed the exact slogan, cleaned profile/clinician labels, the action inside `.appointment-focus`, the removed profile subtitle, and switching Jordan → Maya → Alex. Actual measured widths of 774 and 390 pixels matched document scroll widths, with accessible switching on the compact rail and phone header. The temporary tab was closed, viewport reset and preview stopped. Demo database tests verified that switching/reopening and resetting one person retain other people's edits and original attachments. No further broad audit was run.

@@ -18,6 +18,7 @@ extension AppStore {
         do {
             let result = try await providerClient().transcribe(bytes: Data(contentsOf: url), filename: name)
             guard context == providerContext else { return }
+            try Task.checkCancellation()
             guard var latest = recording(id), latest.audioFilename == original.audioFilename,
                 latest.segments == original.segments
             else {

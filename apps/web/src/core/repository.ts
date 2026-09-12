@@ -3,6 +3,7 @@
 // Outputs: Restored state, preserved originals or explicit corruption/quota/concurrent-tab errors.
 // Side effects: IndexedDB transactions and same-origin reads of explicitly bundled demo assets.
 import type { AppSnapshot } from './models.ts';
+import { demoDatabaseName, demoSnapshot, selectedDemoPerson, type DemoPersonID } from './demoProfiles';
 import { safeFilename, validateSnapshot } from './validation.ts';
 import { boundedBytes, MAX_ATTACHMENT_BYTES, MAX_SNAPSHOT_BYTES } from './api.ts';
 
@@ -284,7 +285,19 @@ export class IndexedDBRepository implements SnapshotRepository {
 }
 
 // MARK: - Feature imports share a single lazy repository; credentials never enter its stores.
-export const repository = new IndexedDBRepository();
+export class DemoRepository extends IndexedDBRepository {
+  constructor(
+    private readonly person: DemoPersonID = selectedDemoPerson(),
+    factory: IDBFactory | undefined = globalThis.indexedDB,
+    fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
+  ) {
+    super(demoDatabaseName(person), factory, fetcher);
+  }
+  override async seed(): Promise<AppSnapshot> {
+    return validateSnapshot(demoSnapshot(await super.seed(), this.person));
+  }
+}
+export const repository = new DemoRepository();
 export const saveAttachment = (filename: string, blob: Blob): Promise<void> =>
   repository.saveAttachment(filename, blob);
 export const getAttachment = (filename: string): Promise<Blob> => repository.getAttachment(filename);

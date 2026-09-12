@@ -100,6 +100,12 @@ export function localExcerptDetails(text: string, isDemo = false): SourceExcerpt
 export function localExcerpt(text: string, isDemo = false): string {
   return localExcerptDetails(text, isDemo).text;
 }
+// Share the display/preparation policy without rewriting persisted source or provider summaries.
+export function currentSummary(record: MedicalRecord): string {
+  return record.summaryModel != null || hasAuthoredDemoSummary(record)
+    ? record.summary
+    : localExcerpt(record.text, record.isDemo);
+}
 // Recognize old generated summaries only for provenance; their unsafe cuts are never displayed.
 export function hasAuthoredDemoSummary(record: MedicalRecord): boolean {
   if (!record.isDemo || record.summary === localExcerpt(record.text, true)) return false;
@@ -141,7 +147,15 @@ export async function reportSignature(visit: Visit, records: MedicalRecord[]): P
   if (!Number.isFinite(seconds))
     throw new Error('The visit date is invalid. Correct it before preparing a brief.');
   const epoch = Number.isInteger(seconds) ? `${seconds}.0` : String(seconds);
-  const inputs = [visit.type, visit.concern, visit.goal, epoch, [...visit.pinnedRecordIDs].sort().join(',')];
+  // The rule revision invalidates old selections independently of citation omission metadata.
+  const inputs = [
+    'source-rules-v2',
+    visit.type,
+    visit.concern,
+    visit.goal,
+    epoch,
+    [...visit.pinnedRecordIDs].sort().join(','),
+  ];
   for (const record of [...records].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     inputs.push(
       `${record.id}|${record.version}|${record.title}|${record.date}|${record.text}|${record.summary}|${record.tags.join(',')}|${record.status}`,

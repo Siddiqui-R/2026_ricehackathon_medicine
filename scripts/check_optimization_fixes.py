@@ -88,6 +88,8 @@ def main():
             content = source.read_text(encoding="utf-8")
             if os.name == "nt":
                 content = content.replace("import Combine", "")
+                # Windows state assertions use an equality-only hash double, not cryptographic verification.
+                content = content.replace("import CryptoKit", "")
                 if source.name == "ProviderClient.swift":
                     content = content.replace("import Foundation", "import Foundation\nimport FoundationNetworking")
             target = BUILD / source.name

@@ -179,6 +179,17 @@
 .appointment-focus strong {
   font-size: 11px;
 }
+.appointment-focus > svg {
+  flex-shrink: 0;
+}
+.appointment-focus > div {
+  min-width: 0;
+}
+.appointment-focus .button {
+  margin-top: 12px;
+  font-size: 11px;
+  padding: 10px 13px;
+}
 .appointment-focus p {
   font-size: 10px;
   color: var(--muted);
@@ -195,10 +206,6 @@
 }
 .appointment-footer .small {
   font-size: 10px;
-}
-.appointment-footer .button {
-  font-size: 11px;
-  padding: 10px 13px;
 }
 .records-heading {
   margin-top: 28px;
@@ -1011,7 +1018,7 @@ audio {
     padding: 16px 18px;
     gap: 13px;
   }
-  .appointment-footer .button {
+  .appointment-focus .button {
     width: 100%;
   }
   .record-row {

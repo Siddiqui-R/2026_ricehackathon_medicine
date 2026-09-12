@@ -5,6 +5,13 @@
 
 import Foundation
 
+#if !canImport(CryptoKit)
+    // Equality-only signature double for Windows state checks; cryptography is verified by native tests.
+    enum SHA256 {
+        static func hash(data: Data) -> [UInt8] { Array(data) }
+    }
+#endif
+
 #if canImport(Combine)
     import Combine
 #else

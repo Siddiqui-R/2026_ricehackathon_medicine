@@ -26,6 +26,12 @@ struct RecordEditorView: View {
             Section("Record details") {
                 TextField("Title", text: $record.title)
                 TextField("Provider", text: $record.provider)
+                Picker("Record kind", selection: $record.kind) {
+                    ForEach(MedicalRecord.configurableKinds, id: \.self) { Text($0).tag($0) }
+                    if !MedicalRecord.configurableKinds.contains(original.kind) {
+                        Text(original.kind).tag(original.kind)
+                    }
+                }
                 DatePicker(
                     "Record date",
                     selection: Binding(

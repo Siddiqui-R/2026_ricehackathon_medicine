@@ -523,3 +523,83 @@
 .profile-avatar {
   color: var(--accent-text);
 }
+
+/* MARK: - Demo selection stays close to the avatar and remains named on compact rails */
+.demo-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.demo-switch:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.demo-switch:hover {
+  background: var(--canvas);
+}
+.demo-people {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.demo-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.demo-person > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.demo-person strong,
+.demo-person small {
+  display: block;
+}
+.demo-person small {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.demo-person[aria-pressed='true'] {
+  border-color: var(--accent-text);
+  background: var(--soft);
+  cursor: default;
+}
+.mobile-demo-switch {
+  display: none;
+}
+@media (min-width: 761px) and (max-width: 979px) {
+  .demo-switch-label {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .mobile-demo-switch {
+    display: inline-flex;
+  }
+  .mobile-demo-switch .demo-switch-label {
+    display: none;
+  }
+}
+@media print {
+  .demo-switch {
+    display: none;
+  }
+}

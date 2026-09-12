@@ -137,7 +137,20 @@ test(
       writeFile(path.join(temporary, 'dist', 'assets', '.hidden.txt'), 'synthetic hidden fixture'),
       writeFile(path.join(temporary, 'outside.txt'), 'synthetic outside fixture'),
     ]);
-    await symlink(path.join(temporary, 'outside.txt'), path.join(temporary, 'dist', 'assets', 'escape.js'));
+    // A Windows directory junction exercises the same realpath escape without a symlink privilege.
+    // Both fixtures stay inside this test's temporary directory, outside its public dist directory.
+    const escapeTarget = process.platform === 'win32' ? '/assets/escape/private.js' : '/assets/escape.js';
+    if (process.platform === 'win32') {
+      await mkdir(path.join(temporary, 'outside'));
+      await writeFile(path.join(temporary, 'outside', 'private.js'), 'synthetic outside fixture');
+      await symlink(
+        path.join(temporary, 'outside'),
+        path.join(temporary, 'dist', 'assets', 'escape'),
+        'junction',
+      );
+    } else {
+      await symlink(path.join(temporary, 'outside.txt'), path.join(temporary, 'dist', 'assets', 'escape.js'));
+    }
     child = spawn(process.execPath, [path.join(temporary, 'scripts', 'serve.mjs')], {
       cwd: temporary,
       env: {
@@ -342,7 +355,7 @@ test(
         '/private-settings.txt',
         '/assets/.hidden.txt',
         '/assets/app.js.map',
-        '/assets/escape.js',
+        escapeTarget,
         '/assets',
         '/demo/missing.pdf',
         '/scripts/serve.mjs',

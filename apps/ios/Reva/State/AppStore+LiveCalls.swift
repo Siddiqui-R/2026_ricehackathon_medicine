@@ -26,6 +26,7 @@ extension AppStore {
                     preferences: request.preferences, patientName: snapshot?.profile.name ?? "", consent: true
                 ))
             guard context == providerContext else { return }
+            try Task.checkCancellation()
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == request.id }) {
                     data.bookings[i].providerConversationID = result.conversationID
@@ -56,6 +57,7 @@ extension AppStore {
         do {
             let result = try await providerClient().callStatus(requestID: id)
             guard context == providerContext else { return }
+            try Task.checkCancellation()
             try mutate { data in
                 if let i = data.bookings.firstIndex(where: { $0.id == id }) {
                     data.bookings[i].providerConversationID = result.conversationID

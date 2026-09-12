@@ -1,11 +1,12 @@
 // Purpose: Organize original visit recordings and provide clearly separated fictional sample access.
 // Inputs: A visit and its saved recordings from Reva context.
-// Outputs: Recording capture/detail dialogs and a sample tied only to its original fictional visit.
+// Outputs: Recording capture/detail dialogs and a sample tied only to its original sample visit.
 // Side effects: Explicit sample access reads bundled JSON and persists it through context; no microphone starts here.
 
 import { useState } from 'react';
 import { ChevronRight, Mic, Play } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { demoLabel } from '../../core/presentation';
 import type { Visit, VisitRecording } from '../../core/models';
 import { durationLabel, formatDate, uid } from '../../core/domain';
 import { Badge, Button, Card } from '../../components/ui';
@@ -29,7 +30,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
     setSampleBusy(true);
     try {
       const response = await fetch('/demo/sample-transcript.json');
-      if (!response.ok) throw new Error('The fictional sample could not be loaded.');
+      if (!response.ok) throw new Error('The sample could not be loaded.');
       const value = (await response.json()) as VisitRecording;
       if (
         value.isSample !== true ||
@@ -38,7 +39,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
         !snapshot?.visits.some((item) => item.id === value.visitID)
       )
         throw new Error(
-          'The original fictional visit is unavailable. Restore the demo in Settings to explore it.',
+          'The original sample visit is unavailable. Restore the demo in Settings to explore it.',
         );
       const existing = snapshot.recordings.find((item) => item.isSample && item.visitID === value.visitID);
       let recordingID = existing?.id ?? uid();
@@ -81,13 +82,13 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
                 <Play size={18} />
               </span>
               <span className="record-main">
-                <strong>{recording.title}</strong>
+                <strong>{demoLabel(recording.title, recording.isSample)}</strong>
                 <span className="record-meta">
                   {formatDate(recording.createdAt)} · {durationLabel(recording.duration)}
                 </span>
                 <Badge tone={recording.isSample ? 'review' : 'neutral'}>
                   {recording.isSample
-                    ? 'Fictional sample · no audio'
+                    ? 'Sample · no audio'
                     : recording.segments.length
                       ? 'Transcript available'
                       : 'Original audio saved'}
@@ -103,10 +104,10 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
         </p>
       )}
       <details className="sample-access">
-        <summary>Explore a fictional sample</summary>
+        <summary>Explore a sample</summary>
         <p className="small muted">
-          This sample has no matching audio and belongs to the fictional September 8 visit. It will never be
-          used as a transcript for your recordings.
+          This sample has no matching audio and belongs to the September 8 demo visit. It will never be used
+          as a transcript for your recordings.
         </p>
         <Button
           variant="secondary"
@@ -115,7 +116,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
           }}
           disabled={sampleBusy}
         >
-          {sampleBusy ? 'Opening…' : 'Open fictional sample'}
+          {sampleBusy ? 'Opening…' : 'Open sample'}
         </Button>
       </details>
       {capturing && <RecordingCapture visit={visit} onClose={() => setCapturing(false)} />}

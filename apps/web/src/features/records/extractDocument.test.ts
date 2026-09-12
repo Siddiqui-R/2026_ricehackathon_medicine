@@ -8,7 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
 
 // MARK: - Real PDF parsing with a controlled recognition boundary
-const state = vi.hoisted(() => ({ pages: 0, failOCR: false, recognize: vi.fn(), terminate: vi.fn() }));
+const state = vi.hoisted(() => ({
+  pages: 0,
+  failOCR: false,
+  failInspection: false,
+  recognize: vi.fn(),
+  terminate: vi.fn(),
+}));
 vi.mock('pdfjs-dist', async () => {
   const actual = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const require = createRequire(import.meta.url);
@@ -22,7 +28,14 @@ vi.mock('pdfjs-dist', async () => {
         destroy: () => task.destroy(),
         promise: task.promise.then((pdf) => ({
           numPages: state.pages || pdf.numPages,
-          getPage: (number: number) => pdf.getPage(state.pages ? 1 : number),
+          getPage: async (number: number) => {
+            const page = await pdf.getPage(state.pages ? 1 : number);
+            if (state.failInspection && number === 1)
+              page.getOperatorList = async () => {
+                throw new Error('Synthetic inspection failure');
+              };
+            return page;
+          },
         })),
       };
     },
@@ -36,6 +49,7 @@ import { extractDocument } from './extractDocument';
 beforeEach(() => {
   state.pages = 0;
   state.failOCR = false;
+  state.failInspection = false;
   state.recognize.mockReset().mockImplementation(async (canvas: ReturnType<typeof createCanvas>) => {
     expect(canvas.width).toBeGreaterThan(600);
     expect(canvas.height).toBeGreaterThan(700);
@@ -79,6 +93,15 @@ describe('mixed PDF extraction', () => {
     expect(result.usedOCR).toBe(true);
     expect(result.warnings.join(' ')).toContain('review the complete original page');
     expect(result.warnings.join(' ')).toContain('OCR');
+  });
+  it('marks failed image inspection incomplete while retaining embedded and OCR source text', async () => {
+    state.failInspection = true;
+    const result = await extractDocument(await mixedPDF(), new AbortController().signal, () => {});
+    expect(result.incomplete).toBe(true);
+    expect(result.pageTexts[0]).toContain('Received 2026-09-12');
+    expect(result.pageTexts[0]).toContain('100 mg');
+    expect(state.recognize).toHaveBeenCalledTimes(1);
+    expect(result.warnings.join(' ')).toContain('Graphic content could not be inspected');
   });
   it('retains embedded source wording with explicit review when OCR fails', async () => {
     state.failOCR = true;

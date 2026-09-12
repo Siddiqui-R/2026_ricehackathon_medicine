@@ -26,7 +26,7 @@ These are the commit IDs on the integration branch, as observed with `git log`:
 - `e54cbdd` — camera origin, import preview notices and approved PDF palette.
 - `865c372` — required named sections for focused browser regression tests.
 
-No report-signature algorithm or signature golden was changed. Existing reports with unknown excerpt-boundary metadata are intentionally considered stale, while newly generated source references carry explicit metadata. Sections without source references do not trigger that legacy-source check.
+At the initial integrated checkpoint, no report-signature algorithm or signature golden was changed. The subsequent consolidation below deliberately versions the source rules. Existing reports with unknown excerpt-boundary metadata are intentionally considered stale, while newly generated source references carry explicit metadata. Sections without source references do not trigger that legacy-source check.
 
 ## Verification commands and execution boundaries
 
@@ -47,3 +47,24 @@ PASS OCR cap: ten raster pages recognized, page 11 retains header and explicit r
 The harness compiles the unchanged production `DocumentImportService.swift` together with `Tests/DocumentImportChecks/Check.swift`, generates fictional PDFs under a temporary directory, and runs local PDFKit/Vision extraction. Its checked-in two-page fixture is `Tests/DocumentImportChecks/mixed-content.pdf`; regeneration and scope are documented in that directory's README. No real patient data, provider credentials, paid API, network OCR service, microphone or phone call is used.
 
 The broader integration build, full application suites, hosted deployment, physical iPhone intake, browser OCR-worker behavior and visual UIKit export checks belong to the coordinator's integration/device evidence. Passing these focused checks does not certify those unexecuted workflows or perfect OCR accuracy. Imported originals and explicit review warnings remain necessary.
+
+## Subsequent remote consolidation
+
+The initial results above apply to the first macOS repair checkpoint. The concurrent Windows comparison later contributed the `source-rules-v2` signature prefix, low-text-first OCR candidate scheduling and explicit incomplete browser coverage on inspection failure. Current vectors and combined verification are recorded in [the repair report](../06-audit-repairs.md). The initial statements about unchanged signatures are historical, not the final consolidated contract.
+
+
+## Remote repair consolidation
+
+The selected improvements from remote `36c055d` were combined with the existing implementation after integration checkpoint `488cd06`. Native OCR now reserves slots for low-text candidates before other detected raster candidates, while retaining the ten-page limit and original output page order. Ordinary embedded-text pages still consume no OCR slots. The bounded actual Vision harness now recognizes a low-text page 11 after ten graphical-header pages, preserves the skipped page 10 header and limit warning, and checks numeric-prefix disagreement through the production complete-line merge helper without additional OCR calls. Browser operator-inspection failure now explicitly marks extraction incomplete; its regression still uses real PDF.js parsing/rendering with a controlled OCR response.
+
+Swift and browser report signatures now prepend `source-rules-v2`; optional omission metadata and legacy-source warnings remain intact. The three baseline fixture goldens were emitted by the actual compiled Swift `ReportEngine` and asserted in native/browser tests: `527ef9c5bd17610165587b1ee17ef5e78a6d5937922ece737eed0c7830855e11`, `296a24acd853c35b53a9864894170716ba93650899330020e4aabc6e43f9dcb3`, and `9868130528caaa4118306c0c7c825c3ab6dad7d33a6e1857df1a97cb05cffde3`. A shared `currentSummary` policy preserves attributed AI and authored demo summaries, while deriving safe local source excerpts for display and preparation candidate copies. Preparation does not rewrite persisted records.
+
+Affected verification passed: 13 native source/fixture tests, 21 browser domain tests, and four browser extraction tests. The native `python3 scripts/check_document_import.py` run exited 0 with:
+
+```text
+PASS mixed PDF: raster dose/negation plus embedded header, original page mapping and review warnings
+PASS numeric source disagreement: complete-line deduplication retains differing values and prefixes
+PASS OCR priority/cap: late low-text page 11 recognized after ten graphical headers; page 10 retains header and review warning
+```
+
+The physical-device and browser OCR-worker limitations above still apply. The initial two-line OCR output records the earlier harness; the three-line output is the current consolidated regression result.

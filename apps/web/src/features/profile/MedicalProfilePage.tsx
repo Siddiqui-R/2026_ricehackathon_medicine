@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { formatDate } from '../../core/domain';
+import { demoLabel } from '../../core/presentation';
 import type { PatientProfile } from '../../core/models';
-import { Badge, Button, Card, Field, Modal, PageHeading } from '../../components/ui';
+import { Button, Card, Field, Modal, PageHeading } from '../../components/ui';
 import { localDay } from '../records/recordPresentation';
 
 // MARK: - Profile cards describe only supplied information, including unspecified fields
@@ -43,7 +44,6 @@ export function MedicalProfilePage() {
       <PageHeading
         eyebrow="Your health at a glance"
         title="Medical profile"
-        description="The details you want handy at every appointment."
         actions={
           <>
             <Button
@@ -65,13 +65,12 @@ export function MedicalProfilePage() {
           {profile.initials || <UserRound size={26} />}
         </div>
         <div className="record-main">
-          <h2>{profile.name}</h2>
+          <h2>{demoLabel(profile.name, profile.isDemo)}</h2>
           <p className="row muted">
             <CalendarDays size={17} />
             {profile.dateOfBirth ? `Born ${formatDate(profile.dateOfBirth)}` : 'Date of birth not provided'}
           </p>
         </div>
-        {profile.isDemo && <Badge>Fictional demo profile</Badge>}
       </Card>
       <div className="profile-grid">
         {sections.map((section) => (
@@ -86,7 +85,7 @@ export function MedicalProfilePage() {
               <ul className="profile-items">
                 {section.items.map((item, index) => (
                   <li key={`${index}-${item}`} className="prose">
-                    {item}
+                    {demoLabel(item, profile.isDemo)}
                   </li>
                 ))}
               </ul>
@@ -103,7 +102,9 @@ export function MedicalProfilePage() {
           </span>
           <h2>Care notes</h2>
         </div>
-        <p className={profile.careNotes ? 'prose' : 'muted'}>{profile.careNotes || 'Not provided'}</p>
+        <p className={profile.careNotes ? 'prose' : 'muted'}>
+          {demoLabel(profile.careNotes || '', profile.isDemo) || 'Not provided'}
+        </p>
       </Card>
       <p className="small muted">
         Keep these details up to date. This profile is for quick reference; visit preparation currently uses
@@ -221,7 +222,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
               <input
                 autoFocus
                 required
-                value={name}
+                value={demoLabel(name, profile.isDemo)}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={240}
                 autoComplete="name"
@@ -239,7 +240,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
             <Field label="Allergies">
               <textarea
                 rows={4}
-                value={allergies}
+                value={demoLabel(allergies, profile.isDemo)}
                 onChange={(event) => setAllergies(event.target.value)}
                 maxLength={12000}
                 placeholder="Substance and reaction, if known"
@@ -248,7 +249,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
             <Field label="Medications">
               <textarea
                 rows={4}
-                value={medications}
+                value={demoLabel(medications, profile.isDemo)}
                 onChange={(event) => setMedications(event.target.value)}
                 maxLength={12000}
                 placeholder="Name, dose, and how you take it"
@@ -257,7 +258,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
             <Field label="Conditions">
               <textarea
                 rows={4}
-                value={conditions}
+                value={demoLabel(conditions, profile.isDemo)}
                 onChange={(event) => setConditions(event.target.value)}
                 maxLength={12000}
                 placeholder="Conditions you want to keep in view"
@@ -266,7 +267,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
             <Field label="Surgeries & implants">
               <textarea
                 rows={4}
-                value={procedures}
+                value={demoLabel(procedures, profile.isDemo)}
                 onChange={(event) => setProcedures(event.target.value)}
                 maxLength={12000}
                 placeholder="Procedure or implant, location, and date"
@@ -276,7 +277,7 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
               <Field label="Care notes">
                 <textarea
                   rows={4}
-                  value={notes}
+                  value={demoLabel(notes, profile.isDemo)}
                   onChange={(event) => setNotes(event.target.value)}
                   maxLength={12000}
                   placeholder="Anything else you want handy at an appointment"

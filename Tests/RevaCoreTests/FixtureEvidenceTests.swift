@@ -61,6 +61,22 @@ final class FixtureEvidenceTests: XCTestCase {
 
     // MARK: - Scenario selection and original-page citations
 
+    func testSourceRuleVersionSignatureGoldens() throws {
+        let snapshot = try load("seed.json", as: AppSnapshot.self)
+        let expected = [
+            "527ef9c5bd17610165587b1ee17ef5e78a6d5937922ece737eed0c7830855e11",
+            "296a24acd853c35b53a9864894170716ba93650899330020e4aabc6e43f9dcb3",
+            "9868130528caaa4118306c0c7c825c3ab6dad7d33a6e1857df1a97cb05cffde3",
+        ]
+        XCTAssertEqual(
+            snapshot.visits.map { ReportEngine.signature(visit: $0, records: snapshot.records) }, expected)
+        var visit = snapshot.visits[0]
+        visit.report = ReportEngine.generate(visit: visit, records: snapshot.records)
+        XCTAssertFalse(ReportEngine.isStale(visit, records: snapshot.records))
+        visit.report?.sourceSignature = "b2437a79a5c1570e95aa2b950dcfab9c4902cae100e345b3a916e46416b67731"
+        XCTAssertTrue(ReportEngine.isStale(visit, records: snapshot.records))
+    }
+
     func testEveryExpectedScenarioSelectsAndExcludesItsDeclaredRecords() throws {
         let snapshot = try load("seed.json", as: AppSnapshot.self)
         let expected = try load("expected-evidence.json", as: Expectations.self)

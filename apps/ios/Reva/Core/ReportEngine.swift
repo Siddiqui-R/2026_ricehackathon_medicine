@@ -23,6 +23,11 @@ enum ReportEngine {
     static func localExcerptDetails(_ text: String, isDemo: Bool = false) -> Excerpt {
         boundedExcerpt(sourceContent(text, isDemo: isDemo))
     }
+    // Share the display/preparation policy without rewriting persisted source or provider summaries.
+    static func currentSummary(_ record: MedicalRecord) -> String {
+        record.summaryModel != nil || hasAuthoredDemoSummary(record)
+            ? record.summary : localExcerpt(record.text, isDemo: record.isDemo)
+    }
     // Legacy local summaries used a lossy character cut. Recognize that exact old output only
     // to classify it, then display a fresh safe excerpt; never quote the legacy transformed value.
     static func hasAuthoredDemoSummary(_ record: MedicalRecord) -> Bool {
@@ -91,10 +96,11 @@ enum ReportEngine {
     // MARK: - Evidence freshness
     // Hash visit intent and the full candidate pool so new or revised records invalidate saved briefs.
     static func signature(visit: Visit, records: [MedicalRecord]) -> String {
+        // The rule revision also invalidates old selections when a report has no citations.
         // Includes the candidate pool, so a newly imported relevant document also makes a brief stale.
         let inputs =
             [
-                visit.type, visit.concern, visit.goal,
+                "source-rules-v2", visit.type, visit.concern, visit.goal,
                 String(RevaDate.parse(visit.date).timeIntervalSince1970),
                 visit.pinnedRecordIDs.sorted().joined(separator: ","),
             ]

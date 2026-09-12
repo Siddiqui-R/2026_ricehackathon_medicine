@@ -3,7 +3,14 @@
 // Outputs: Observable state with durable snapshots, notices, capability flags and explicit failures.
 // Side effects: Serial IndexedDB writes and explicit same-origin sync/provider requests; no automatic calls.
 import type { AppSnapshot, BookingRequest, MedicalRecord, ProviderStatus, Visit } from './models.ts';
-import { generateReport, localExcerpt, reportSignature, uid, validateSnapshot } from './domain.ts';
+import {
+  currentSummary,
+  generateReport,
+  localExcerpt,
+  reportSignature,
+  uid,
+  validateSnapshot,
+} from './domain.ts';
 import { reconcileMemory, upsertRecord, validateBooking } from './mutations.ts';
 import { APIError, RevaAPI } from './api.ts';
 import { repository, type SnapshotRepository, type StoredSnapshot } from './repository.ts';
@@ -180,7 +187,7 @@ export class RevaStore {
         this.mustPull = false;
         this.publish({ loading: false, serverRevision: null });
       });
-      this.notify('Fictional demo restored in this browser.');
+      this.notify('Demo restored in this browser.');
     });
   setToken = (token: string): void => {
     if (token === this.state.token) return;
@@ -280,7 +287,9 @@ export class RevaStore {
         connected = this.state.connectedAI,
         api = connected ? this.apiFactory(this.state.token) : null;
       const signature = await reportSignature(original, snapshot.records);
-      const candidates = snapshot.records.filter((record) => record.text.trim());
+      const candidates = snapshot.records
+        .filter((record) => record.text.trim())
+        .map((record) => ({ ...record, summary: currentSummary(record) }));
       if (connected && !candidates.length)
         throw new Error(
           'Add readable sources before using connected preparation, or turn it off to prepare locally.',

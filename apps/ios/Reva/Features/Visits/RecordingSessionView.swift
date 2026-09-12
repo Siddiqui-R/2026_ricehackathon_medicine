@@ -1,7 +1,7 @@
 // Purpose: Capture visit audio after recording consent and save the completed recording.
 // Inputs: The Visit, user consent, AudioRecorder, and AppStore.
 // Outputs: Recording controls and a saved VisitRecording linked to its audio file.
-// Side effects: Requests microphone capture, writes audio, pauses on exit, and can discard unfinished capture.
+// Side effects: Captures audio, retries metadata saves, shares originals, and can discard unfinished capture.
 
 import SwiftUI
 
@@ -54,10 +54,17 @@ struct RecordingSessionView: View {
                         }.buttonStyle(.bordered).controlSize(.large)
                         Button("Finish & save audio") { finish() }.buttonStyle(PrimaryButtonStyle())
                     } else if saveDraft.recording != nil {
-                        Text("Your captured audio is kept here. Retry saving to add it to this visit.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                        Text(
+                            "Your completed audio is kept on this device. Retry saving or share a copy before closing."
+                        )
+                        .font(.subheadline).foregroundStyle(.secondary)
                         Button("Retry saving recording") { saveFinishedRecording() }
                             .buttonStyle(PrimaryButtonStyle())
+                        if let audioURL = saveDraft.audioURL {
+                            ShareLink(item: audioURL) {
+                                Label("Save or share audio", systemImage: "square.and.arrow.up")
+                            }.buttonStyle(.bordered).controlSize(.large)
+                        }
                     } else if savedID == nil {
                         Toggle("Everyone agreed to be recorded", isOn: $agreed)
                         Button {
@@ -102,7 +109,7 @@ struct RecordingSessionView: View {
             .confirmationDialog(
                 saveDraft.recording == nil
                     ? "Discard this unfinished recording?"
-                    : "Leave without saving this recording? Retry saving to keep the captured audio in Visits.",
+                    : "Leave without saving this recording?",
                 isPresented: $discard, titleVisibility: .visible
             ) {
                 Button(
@@ -111,6 +118,12 @@ struct RecordingSessionView: View {
                 ) {
                     recorder.cancel()
                     dismiss()
+                }
+            } message: {
+                if saveDraft.recording != nil {
+                    Text(
+                        "Closing ends this save attempt. Use Save or share audio to keep an accessible copy before leaving."
+                    )
                 }
             }
             .navigationDestination(item: $savedID) { RecordingDetailView(id: $0) }
@@ -124,7 +137,7 @@ struct RecordingSessionView: View {
             let recording = VisitRecording(
                 visitID: visit.id, title: visit.title + " · audio", duration: recorder.elapsed,
                 audioFilename: url.lastPathComponent)
-            saveDraft.retain(recording)
+            saveDraft.retain(recording, audioURL: url)
             savedID = try saveDraft.save(to: store)
         }
     }

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { ArrowLeft, CalendarDays, MapPin, Pencil } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { formatDate } from '../../core/domain';
+import { demoLabel } from '../../core/presentation';
 import { Badge, Button, Card, EmptyState, PageHeading } from '../../components/ui';
 import { VisitEditor } from './VisitEditor';
 import { VisitBrief } from './VisitBrief';
@@ -37,7 +38,7 @@ export function VisitDetail({ id }: { id: string }) {
         <PageHeading
           eyebrow={visit.type}
           title={visit.title}
-          description={visit.provider}
+          description={demoLabel(visit.provider, snapshot?.profile.isDemo)}
           actions={
             <Button variant="secondary" onClick={() => setEditing(true)}>
               <Pencil size={16} /> Edit visit
@@ -55,7 +56,7 @@ export function VisitDetail({ id }: { id: string }) {
           {visit.clinic && (
             <span className="row">
               <MapPin size={17} />
-              {visit.clinic}
+              {demoLabel(visit.clinic, snapshot?.profile.isDemo)}
             </span>
           )}
         </div>

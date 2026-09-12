@@ -9,6 +9,24 @@ export type BriefNotesValues = Pick<Visit, 'questions' | 'notes'>;
 export type BriefNotesBaseline = BriefNotesValues & Pick<Visit, 'id'>;
 const fields = ['questions', 'notes'] as const;
 
+// MARK: - Parse edited question lines while preserving untouched source question wording
+export function briefNotesValues(
+  baseline: BriefNotesBaseline,
+  questionText: string,
+  notes: string,
+): BriefNotesValues {
+  return {
+    questions:
+      questionText === baseline.questions.join('\n')
+        ? [...baseline.questions]
+        : questionText
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+    notes,
+  };
+}
+
 // MARK: - Check all edited fields against the opening version before changing either field
 export function applyBriefNotes(
   snapshot: AppSnapshot,

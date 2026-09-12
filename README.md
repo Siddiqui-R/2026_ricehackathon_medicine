@@ -63,7 +63,7 @@ From the repository root, start the local API:
 python3 scripts/run_server.py --build
 ```
 
-The launcher reads optional dotenv values without shell evaluation; exported environment variables take precedence. The delivered root `.env` is **exactly empty and Git-ignored**. A fresh clone can create it with `touch .env`. Use the commented [root example](.env.example) and [server example](server/.env.example) for later manual setup; provider secrets stay on the server.
+The launcher reads optional dotenv values without shell evaluation; exported environment variables take precedence. The root `.env` is local and Git-ignored. A fresh clone can create it with `touch .env`. Use the commented [root example](.env.example) and [server example](server/.env.example) for later manual setup; provider secrets stay on the server.
 
 Local defaults are `http://127.0.0.1:8080` and the public demo token `reva-local-demo-token`. Set the URL/token in the app's server settings. Paid providers additionally require a private configured token mapping; outbound calls require the live-call enable flag and explicit consent. See the [provider setup and routes](server/README.md#configurable-mvp-providers) and [MVP wire contract](docs/task-specs/mvp-api-contract.md).
 
@@ -88,6 +88,8 @@ The [three-person workflow](docs/team-workflow.md) assigns exact files, safe wor
 | Device adapters / backend providers | [Device](apps/ios/Reva/Device), [server](server) |
 
 ## Verification and limits
+
+The [current repair report](docs/reviews/06-audit-repairs.md) and [23-finding checklist](docs/reviews/audit-repair-status.csv) record the integrated fixes, fresh native/browser checks, concurrent Windows-checkpoint reconciliation and remaining device/service gates. The earlier totals below are historical.
 
 Latest browser-extension verification: **77 browser tests, 7 isolated HTTP-wrapper tests, 43 native tests, and 30 server tests passed**; one native real-server gate and one live PostgreSQL gate skipped. TypeScript/production build, native simulator compilation, formatting, and responsibility-block checks passed. See [browser verification and screenshots](docs/verification/web-client.md) for the tested responsive widths and local user journeys. Earlier [native verification](docs/verification/README.md) remains historical evidence; older teal screenshots do not show the current heart-red design.
 

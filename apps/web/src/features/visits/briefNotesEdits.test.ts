@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { RevaStore } from '../../core/store';
 import { deferred, MemoryRepository, transport } from '../../core/__tests__/fixtures';
-import { applyBriefNotes } from './briefNotesEdits';
+import { applyBriefNotes, briefNotesValues } from './briefNotesEdits';
 
 async function ready() {
   const store = new RevaStore(new MemoryRepository(), () => transport());
@@ -35,6 +35,44 @@ describe('questions and notes editor concurrency', () => {
     expect(saved.notes).toBe('My new notes');
     expect(saved.report!.questions).toEqual(questions);
     expect(saved.report!.notes).toBe(saved.notes);
+  });
+
+  it('keeps untouched question whitespace and embedded line breaks when the form saves only notes', async () => {
+    const store = await ready();
+    const questions = ['  Keep this spacing?  ', 'Keep a question with\nan intentional line break?'];
+    await store.mutate((draft) => {
+      draft.visits[0].questions = [...questions];
+    });
+    await store.prepareVisit(store.getState().snapshot!.visits[0].id);
+    const baseline = structuredClone(store.getState().snapshot!.visits[0]);
+    await store.mutate((draft) =>
+      applyBriefNotes(
+        draft,
+        baseline,
+        briefNotesValues(baseline, questions.join('\n'), 'Only notes changed'),
+      ),
+    );
+    const saved = store.getState().snapshot!.visits[0];
+    expect(saved.questions).toEqual(questions);
+    expect(saved.report!.questions).toEqual(questions);
+    expect(saved.notes).toBe('Only notes changed');
+    expect(saved.report!.notes).toBe(saved.notes);
+  });
+
+  it('parses edited question lines and supports deliberately clearing the question field', async () => {
+    const store = await ready();
+    const baseline = structuredClone(store.getState().snapshot!.visits[0]);
+    await store.mutate((draft) =>
+      applyBriefNotes(
+        draft,
+        baseline,
+        briefNotesValues(baseline, '  New question?  \n\nSecond question?  ', ''),
+      ),
+    );
+    expect(store.getState().snapshot!.visits[0].questions).toEqual(['New question?', 'Second question?']);
+    const current = structuredClone(store.getState().snapshot!.visits[0]);
+    await store.mutate((draft) => applyBriefNotes(draft, current, briefNotesValues(current, '', '')));
+    expect(store.getState().snapshot!.visits[0].questions).toEqual([]);
   });
 
   it('preserves notes queued ahead of saving an edited question', async () => {

@@ -6,6 +6,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { demoLabel } from '../../core/presentation';
 import { getAttachment } from '../../core/repository';
 import type { VisitRecording } from '../../core/models';
 import { durationLabel, formatDate } from '../../core/domain';
@@ -60,20 +61,18 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
   if (editor === 'notes')
     return <RecordingNotesEditor recording={recording} onClose={() => setEditor(null)} />;
   return (
-    <Modal title={recording.title} onClose={onClose} wide>
+    <Modal title={demoLabel(recording.title, recording.isSample)} onClose={onClose} wide>
       <div className="stack">
         <div className="row">
           <Badge tone={recording.isSample ? 'review' : 'accent'}>
-            {recording.isSample ? 'Fictional sample · no audio' : 'Saved visit audio'}
+            {recording.isSample ? 'Sample · no audio' : 'Saved visit audio'}
           </Badge>
           <span className="muted small">
             {formatDate(recording.createdAt, true)} · {durationLabel(recording.duration)}
           </span>
         </div>
         {recording.isSample ? (
-          <p className="small">
-            This is a fictional demonstration conversation, separate from any microphone recording.
-          </p>
+          <p className="small">This is a sample conversation, separate from any microphone recording.</p>
         ) : audio ? (
           <audio controls preload="metadata" src={audio}>
             Audio playback is unavailable.
@@ -133,7 +132,8 @@ export function RecordingDetail({ recording, onClose }: { recording: VisitRecord
               {recording.segments.map((segment) => (
                 <div key={segment.id} className="transcript-segment">
                   <p className="small muted">
-                    {durationLabel(segment.start)}–{durationLabel(segment.end)} · {segment.speaker}
+                    {durationLabel(segment.start)}–{durationLabel(segment.end)} ·{' '}
+                    {demoLabel(segment.speaker, recording.isSample)}
                   </p>
                   <p className="prose">{segment.text}</p>
                 </div>
@@ -222,7 +222,7 @@ function TranscriptEditor({ recording, onClose }: { recording: VisitRecording; o
         {recording.segments.map((segment) => (
           <Field
             key={segment.id}
-            label={`${durationLabel(segment.start)}–${durationLabel(segment.end)} · ${segment.speaker}`}
+            label={`${durationLabel(segment.start)}–${durationLabel(segment.end)} · ${demoLabel(segment.speaker, recording.isSample)}`}
           >
             <textarea
               rows={3}
