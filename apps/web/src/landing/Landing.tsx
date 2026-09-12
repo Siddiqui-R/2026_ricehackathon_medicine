@@ -1,6 +1,6 @@
 // Purpose: Present the public landing at / with sign-up, log-in and demo entry points.
 // Inputs: Static copy, the shared brand mark and the stored session (if one is live).
-// Outputs: A minimal hero, a drawn pulse line, three capability labels, session-aware actions and a footer.
+// Outputs: A minimal hero, a drawn pulse line, three capability labels and session-aware actions.
 // Side effects: Sets the document title; Log out revokes the session on the server and clears localStorage.
 
 import { useEffect, useState } from 'react';
@@ -52,16 +52,11 @@ export function Landing() {
     <div className="landing">
       <header className="landing-top">
         <Brand />
-        <span className="landing-mono">v0.1 · prototype</span>
       </header>
       <main className="landing-hero" id="main">
-        <p className="landing-eyebrow">
-          <span className="landing-dot" aria-hidden="true" />
-          Visit preparation
-        </p>
         <h1>Making every appointment count.</h1>
         <p className="landing-lede">
-          Your records, your questions, and a clearer conversation with your doctor.
+          Your records, your health, and a clearer conversation with your doctor.
         </p>
         <div className="landing-actions">
           {session ? (
@@ -110,10 +105,6 @@ export function Landing() {
           ))}
         </dl>
       </main>
-      <footer className="landing-foot landing-mono">
-        <span>Prototype · fictional data in the demo</span>
-        <span>No live services without your consent</span>
-      </footer>
     </div>
   );
 }
