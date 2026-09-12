@@ -1,0 +1,12 @@
+.env
+.env.local
+.build/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+.swiftpm/
+.worktrees/
+*.log
+output/qa/
