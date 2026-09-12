@@ -108,12 +108,15 @@ export class RevaStore {
     this.writes = pending.catch(() => undefined);
     return pending;
   }
-  private async edit(change: (draft: AppSnapshot) => void | Promise<void>): Promise<void> {
+  private async edit(
+    change: (draft: AppSnapshot) => void | Promise<void>,
+    attachments?: ReadonlyMap<string, Blob>,
+  ): Promise<void> {
     try {
       await this.queue(async () => {
         const draft = structuredClone(this.requiredSnapshot());
         await change(draft);
-        this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision));
+        this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision, attachments));
       });
     } catch (error) {
       this.reportError(error);
@@ -200,8 +203,15 @@ export class RevaStore {
   };
 
   // MARK: - Source and visit editing retain exact user-authored questions, notes and versions.
-  saveRecord = (record: MedicalRecord, expectedVersion?: number): Promise<void> =>
-    this.edit((draft) => upsertRecord(draft, record, expectedVersion));
+  // Imports publish their original in the same transaction as the source, including on retry.
+  saveRecord = (record: MedicalRecord, expectedVersion?: number, original?: Blob): Promise<void> =>
+    this.edit(
+      (draft) => {
+        if (original && !record.sourceFilename) throw new Error('The original filename is missing.');
+        upsertRecord(draft, record, expectedVersion);
+      },
+      original && record.sourceFilename ? new Map([[record.sourceFilename, original]]) : undefined,
+    );
   deleteRecord = (id: string): Promise<void> =>
     this.edit((draft) => {
       draft.records = draft.records.filter((record) => record.id !== id);
