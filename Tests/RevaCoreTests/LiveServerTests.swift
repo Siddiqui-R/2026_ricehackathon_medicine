@@ -118,6 +118,10 @@ final class LiveServerTests: XCTestCase {
         edited.records[0].notes = "Synthetic integration edit — preserve Unicode and source content."
         edited.visits[0].questions.append("Synthetic integration preparation question?")
         edited.visits[0].report = ReportEngine.generate(visit: edited.visits[0], records: edited.records)
+        // Exercise the new citation metadata through the real server's generic JSON snapshot storage.
+        let sectionIndex = try XCTUnwrap(
+            edited.visits[0].report?.sections.firstIndex { !$0.sources.isEmpty })
+        edited.visits[0].report?.sections[sectionIndex].sources[0].excerptOmitted = true
         let visit = edited.visits[0]
         edited.bookings.append(
             BookingRequest(
@@ -142,6 +146,9 @@ final class LiveServerTests: XCTestCase {
         XCTAssertFalse(updatedRead.snapshot.bookings.isEmpty)
         XCTAssertFalse(updatedRead.snapshot.recordings.isEmpty)
         XCTAssertNotNil(updatedRead.snapshot.visits[0].report)
+        XCTAssertEqual(
+            updatedRead.snapshot.visits[0].report?.sections[sectionIndex].sources[0].excerptOmitted,
+            true)
 
         // MARK: - Original attachment bytes and per-owner access
 
