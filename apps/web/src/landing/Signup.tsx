@@ -1,5 +1,5 @@
 // Purpose: Create a new account at /signup and open its empty personal workspace.
-// Inputs: Name, email and a new password typed by the user.
+// Inputs: Name, email, a new password and its confirmation typed by the user.
 // Outputs: A validated sign-up request, inline field errors, the server's reason on failure, or navigation to /app.
 // Side effects: One POST /v1/auth/signup; on success writes the session to localStorage and calls location.assign.
 
@@ -13,7 +13,13 @@ export function Signup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const existing = useMemo(() => readSession(), []);
@@ -27,10 +33,15 @@ export function Signup() {
       name: nameProblem(name) ?? undefined,
       email: emailProblem(email) ?? undefined,
       password: passwordProblem(password, email) ?? undefined,
+      confirmPassword: !confirmPassword
+        ? 'Confirm your password.'
+        : confirmPassword !== password
+          ? 'Passwords do not match.'
+          : undefined,
     };
     setErrors(next);
     setFailure(null);
-    if (next.name || next.email || next.password) return;
+    if (next.name || next.email || next.password || next.confirmPassword) return;
     setSubmitting(true);
     try {
       const session = await new AuthAPI().signup({ name, email, password });
@@ -44,7 +55,7 @@ export function Signup() {
       setSubmitting(false);
     }
   }
-  const clear = (key: 'name' | 'email' | 'password') => {
+  const clear = (key: 'name' | 'email' | 'password' | 'confirmPassword') => {
     if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }));
   };
   return (
@@ -93,9 +104,21 @@ export function Signup() {
           onChange={(value) => {
             setPassword(value);
             clear('password');
+            clear('confirmPassword');
           }}
           error={errors.password}
           help="At least 8 characters, 1 capital letter, 1 number, and 1 symbol."
+          autoComplete="new-password"
+          disabled={submitting}
+        />
+        <PasswordField
+          label="Confirm password"
+          value={confirmPassword}
+          onChange={(value) => {
+            setConfirmPassword(value);
+            clear('confirmPassword');
+          }}
+          error={errors.confirmPassword}
           autoComplete="new-password"
           disabled={submitting}
         />
