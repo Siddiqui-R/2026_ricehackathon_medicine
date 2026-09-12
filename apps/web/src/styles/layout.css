@@ -1,0 +1,525 @@
+/* Purpose: Adapt the workspace from a desktop patient portal to compact phone navigation.
+   Inputs: Shared shell markup and viewport width.
+   Outputs: Bounded sidebar, fluid main area, responsive header, and print-isolated report.
+   Side effects: None outside layout and visual focus presentation. */
+
+/* MARK: - Wide browser shell keeps navigation available without narrowing content excessively */
+.app-shell {
+  min-height: 100dvh;
+}
+.sidebar {
+  width: 242px;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 35px 20px 20px;
+  display: flex;
+  flex-direction: column;
+}
+.brand-link {
+  padding: 0 18px;
+  width: fit-content;
+  display: block;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--accent);
+}
+.brand-symbol {
+  width: 33px;
+  height: 33px;
+}
+.brand-name {
+  font-size: 39px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -2.4px;
+}
+.brand-period {
+  color: var(--accent-text);
+}
+.sidebar-label {
+  margin: 47px 18px 14px;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.desktop-nav {
+  display: grid;
+  gap: 7px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 48px;
+  border-radius: 9px;
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  transition: background 0.16s;
+}
+.nav-item:hover {
+  background: #fae6e588;
+  color: var(--accent);
+}
+.nav-item.active {
+  background: var(--soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+.active-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: auto;
+}
+.sidebar-log {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 26px 16px 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sidebar-log svg:last-child {
+  margin-left: auto;
+}
+.sidebar-bottom {
+  margin-top: auto;
+  padding-top: 44px;
+}
+.sidebar-bottom .nav-item {
+  font-size: 11px;
+  padding-inline: 13px;
+}
+.sidebar-divider {
+  margin: 20px 5px;
+  height: 1px;
+  background: var(--line);
+}
+.patient-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+}
+.patient-link > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.patient-link strong {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.patient-link small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.avatar-large {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+}
+.workspace {
+  margin-left: 242px;
+  min-width: 0;
+}
+.topbar {
+  height: 78px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  padding: 0 38px;
+}
+.breadcrumb {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  white-space: nowrap;
+}
+.breadcrumb strong {
+  color: var(--ink);
+  font-weight: 550;
+}
+.global-search {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(340px, 34vw);
+  border: 1px solid var(--line);
+  background: #ffffff55;
+  border-radius: 8px;
+  padding-left: 13px;
+}
+.global-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 10px 0;
+  font-size: 11px;
+  box-shadow: none;
+}
+.global-search input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.global-search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.global-search button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+.workspace-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.main-content {
+  padding: 36px 38px 0;
+  max-width: 1518px;
+  margin: 0 auto;
+  outline: none;
+}
+.workspace-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #dbcbc966;
+  margin-top: 44px;
+  padding: 23px 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.mobile-brand,
+.mobile-nav,
+.mobile-settings {
+  display: none;
+}
+.topbar .mobile-settings {
+  display: none;
+}
+.app-shell .topbar .global-search input {
+  border: 0;
+  background: transparent;
+  padding: 10px 0;
+  border-radius: 0;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 20px;
+  z-index: 100;
+  background: var(--surface);
+  padding: 12px;
+  border: 2px solid var(--accent);
+}
+.skip-link:focus {
+  top: 12px;
+}
+.startup-state {
+  min-height: 100dvh;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+}
+.startup-state p {
+  max-width: 480px;
+}
+.loading-ring {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--control-line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* MARK: - Laptop and tablet widths preserve readable panel widths before stacking */
+@media (min-width: 1700px) {
+  .main-content {
+    padding-top: 46px;
+  }
+  .topbar {
+    padding-inline: max(38px, calc((100vw - 1518px - 242px) / 2 + 38px));
+  }
+}
+@media (max-width: 1199px) {
+  .sidebar {
+    width: 212px;
+    padding-inline: 14px;
+  }
+  .workspace {
+    margin-left: 212px;
+  }
+  .topbar {
+    padding-inline: 26px;
+    gap: 16px;
+  }
+  .main-content {
+    padding: 28px 26px 0;
+  }
+  .workspace-status span {
+    display: none;
+  }
+  .nav-item {
+    font-size: 12px;
+  }
+}
+@media (min-width: 761px) and (max-width: 979px) {
+  .sidebar {
+    width: 82px;
+    align-items: center;
+    padding-inline: 10px;
+  }
+  .workspace {
+    margin-left: 82px;
+  }
+  .brand-link {
+    padding: 0;
+  }
+  .sidebar .brand-name,
+  .sidebar-label,
+  .nav-item span,
+  .sidebar-log span,
+  .sidebar-log svg:last-child,
+  .patient-link > span:nth-child(2),
+  .patient-link > svg {
+    display: none;
+  }
+  .desktop-nav {
+    margin-top: 36px;
+    width: 100%;
+  }
+  .nav-item {
+    justify-content: center;
+    padding: 13px;
+  }
+  .sidebar-log {
+    margin: 20px 0 0;
+    justify-content: center;
+    width: 100%;
+  }
+  .sidebar-bottom {
+    width: 100%;
+  }
+  .patient-link {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* MARK: - Phone layout provides thumb-accessible tabs and a wrapping search header */
+@media (max-width: 760px) {
+  .sidebar {
+    display: none;
+  }
+  .workspace {
+    margin-left: 0;
+    padding-bottom: 70px;
+  }
+  .topbar {
+    height: 67px;
+    padding: 0 20px;
+    gap: 14px;
+  }
+  .mobile-brand,
+  .topbar .mobile-settings {
+    display: inline-flex;
+  }
+  .mobile-brand .brand-symbol {
+    width: 29px;
+    height: 29px;
+  }
+  .breadcrumb,
+  .workspace-status {
+    display: none;
+  }
+  .global-search {
+    width: auto;
+    flex: 1;
+    margin: 0;
+  }
+  .global-search input {
+    font-size: 12px;
+  }
+  .main-content {
+    padding: 25px 20px 0;
+  }
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    bottom: 0;
+    inset-inline: 0;
+    z-index: 40;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px #b8425006;
+  }
+  .mobile-nav a {
+    color: var(--muted);
+    min-height: 49px;
+    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border-radius: 8px;
+  }
+  .mobile-nav a.active {
+    color: var(--accent);
+    background: var(--soft);
+    font-weight: 700;
+  }
+  .workspace-footer {
+    display: block;
+    font-size: 9px;
+    margin-top: 30px;
+  }
+  .workspace-footer span {
+    display: block;
+  }
+  .workspace-footer > span + span {
+    margin-top: 5px;
+  }
+}
+
+/* MARK: - Report export prints source citations without application chrome */
+@media print {
+  :root {
+    background: white;
+    color: black;
+  }
+  body {
+    font-size: 11pt;
+    background: white;
+  }
+  .sidebar,
+  .topbar,
+  .mobile-nav,
+  .workspace-footer,
+  .feedback,
+  .skip-link,
+  dialog,
+  .no-print {
+    display: none !important;
+  }
+  .workspace {
+    margin: 0;
+    padding: 0;
+  }
+  .main-content {
+    padding: 0;
+    max-width: none;
+  }
+  .visit-workspace,
+  .visit-workspace-grid,
+  .visit-primary,
+  .brief-card {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: white;
+  }
+  .visit-report {
+    width: 100%;
+    background: white !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .visit-report:not([data-print-ready='true']) > * {
+    display: none !important;
+  }
+  .visit-report:not([data-print-ready='true'])::before {
+    content: 'Update this visit brief before printing. Its sources have changed or are still being checked.';
+    display: block;
+    padding: 20px;
+  }
+  .visit-report button,
+  .visit-report .report-actions {
+    display: none !important;
+  }
+  .visit-report h2,
+  .visit-report h3 {
+    break-after: avoid;
+  }
+  .visit-report section,
+  .visit-report p,
+  .visit-report li {
+    orphans: 3;
+    widows: 3;
+  }
+  .visit-report a {
+    color: black;
+    text-decoration: none;
+  }
+  .visit-report .card {
+    box-shadow: none;
+    background: white;
+  }
+  @page {
+    size: auto;
+    margin: 18mm;
+  }
+}
+
+/* MARK: - Deep red preserves text contrast on the selected petal background */
+.nav-item.active,
+.mobile-nav a.active,
+.avatar,
+.profile-avatar {
+  color: var(--accent-text);
+}

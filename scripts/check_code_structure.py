@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Purpose: Check the required contracts and section markers in first-party Swift source.
-Inputs: The native app and server source trees relative to this script.
+"""Purpose: Check the required contracts and section markers in first-party Swift and browser source.
+Inputs: The native app, server, and browser source trees relative to this script.
 Outputs: File/line diagnostics and a nonzero exit status when a required marker is missing.
 Side effects: None; this check only reads source files.
 """
@@ -42,12 +42,24 @@ def main() -> int:
         print("No Swift sources found; check the repository layout.")
         return 1
     errors = [error for path in sources for error in check_source(path)]
+    # Browser blocks use the same contracts with JavaScript/CSS comment syntax.
+    web_roots = (ROOT / "apps/web/src", ROOT / "apps/web/scripts")
+    web_sources = sorted(path for root in web_roots for path in root.rglob("*")
+                         if path.suffix in {".ts", ".tsx", ".mjs", ".css"})
+    for path in web_sources:
+        text = path.read_text(encoding="utf-8")
+        contract = text[:1500]
+        for field in CONTRACT_FIELDS:
+            if not re.search(rf"{re.escape(field)}: \S.+", contract):
+                errors.append(f"{path.relative_to(ROOT)}:1: missing {field} contract")
+        if not re.search(r"(?:MARK: -|Chunk:) \S.+", text):
+            errors.append(f"{path.relative_to(ROOT)}:1: missing named logical section")
     for error in errors:
         print(error)
     if errors:
         print(f"Structure check failed: {len(errors)} missing contracts/sections.")
         return 1
-    print(f"Structure check passed: {len(sources)} Swift source files have contracts and named sections.")
+    print(f"Structure check passed: {len(sources)} Swift and {len(web_sources)} browser source files have contracts and named sections.")
     return 0
 
 

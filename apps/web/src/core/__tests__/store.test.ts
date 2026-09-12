@@ -1,0 +1,347 @@
+// Purpose: Verify observable browser actions protect newer edits and require deliberate external effects.
+// Inputs: Fictional snapshots, controllable provider promises and injectable persistence failures.
+// Outputs: Assertions for durable publication, source races, CAS conflicts, atomic pull and call intent.
+// Side effects: Test memory only; no requests reach a network or paid provider.
+import { describe, expect, it, vi } from 'vitest';
+import type { AIPreparation, AISummary, AudioTranscription, BookingRequest } from '../models.ts';
+import { APIError } from '../api.ts';
+import { RevaStore } from '../store.ts';
+import { deferred, MemoryRepository, sample, seed, transport } from './fixtures.ts';
+
+// MARK: - Setup initializes real store coordination over controllable boundaries.
+async function ready(api = transport(), repository = new MemoryRepository()) {
+  const store = new RevaStore(repository, () => api);
+  await store.initialize();
+  return { store, repository };
+}
+const callRequest = (): BookingRequest => {
+  const visit = seed().visits[0];
+  return {
+    id: 'synthetic-call-id',
+    visitID: visit.id,
+    clinic: 'Fictional clinic',
+    phone: '+13125550123',
+    reason: 'Fictional booking test',
+    earliest: visit.date,
+    latest: visit.date,
+    timeZone: visit.timeZone,
+    preferences: '',
+    status: 'draft',
+    scenario: 'live',
+    createdAt: visit.date,
+  };
+};
+
+// MARK: - State never publishes an edit that storage failed to commit.
+describe('local state publication', () => {
+  it('serializes simultaneous local edits without losing either field', async () => {
+    const { store, repository } = await ready();
+    await Promise.all([
+      store.mutate((draft) => {
+        draft.profile.careNotes = 'First edit';
+      }),
+      store.mutate((draft) => {
+        draft.profile.surgeriesAndImplants = ['Second edit'];
+      }),
+    ]);
+    expect(store.getState().snapshot!.profile).toMatchObject({
+      careNotes: 'First edit',
+      surgeriesAndImplants: ['Second edit'],
+    });
+    expect(repository.saved!.revision).toBe(3);
+  });
+  it('keeps the last published snapshot when persistence fails', async () => {
+    const { store, repository } = await ready(),
+      original = structuredClone(store.getState().snapshot);
+    repository.failure = new Error('Storage is full');
+    await expect(
+      store.mutate((draft) => {
+        draft.records = [];
+      }),
+    ).rejects.toThrow('Storage is full');
+    expect(store.getState().snapshot).toEqual(original);
+    expect(store.getState().error).toBe('Storage is full');
+  });
+  it('surfaces corrupt startup without replacing it with seed data', async () => {
+    const repository = new MemoryRepository();
+    repository.failure = new Error('Persisted workspace is corrupt');
+    const seedSpy = vi.spyOn(repository, 'seed');
+    const { store } = await ready(transport(), repository);
+    expect(store.getState()).toMatchObject({
+      snapshot: null,
+      loading: false,
+      error: 'Persisted workspace is corrupt',
+    });
+    expect(seedSpy).not.toHaveBeenCalled();
+    await store.resetDemo();
+    expect(store.getState().snapshot!.profile.isDemo).toBe(true);
+  });
+  it('marks interrupted live intent unknown on restart without starting another call', async () => {
+    const repository = new MemoryRepository(),
+      request = { ...callRequest(), isLive: true, status: 'starting' };
+    repository.saved!.snapshot.bookings = [request];
+    const startCall = vi.fn(),
+      { store } = await ready(transport({ startCall }), repository);
+    expect(store.getState().snapshot!.bookings[0].status).toBe('unknown');
+    expect(startCall).not.toHaveBeenCalled();
+  });
+});
+
+// MARK: - Connected results cannot overwrite sources or the user's question/notes authority.
+describe('provider result publication', () => {
+  it('discards a delayed summary after the source has been edited', async () => {
+    const response = deferred<AISummary>(),
+      summarize = vi.fn(() => response.promise);
+    const { store } = await ready(transport({ summarize }));
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const record = store.getState().snapshot!.records[0],
+      operation = store.summarizeRecord(record.id);
+    await vi.waitFor(() => expect(summarize).toHaveBeenCalledTimes(1));
+    await store.saveRecord({ ...record, text: 'New reviewed source' }, record.version);
+    response.resolve({ summary: 'Old provider answer', model: 'mock' });
+    await expect(operation).rejects.toThrow('changed during');
+    expect(store.getState().snapshot!.records[0].text).toBe('New reviewed source');
+    expect(store.getState().snapshot!.records[0].summary).not.toBe('Old provider answer');
+  });
+  it('keeps questions and notes edited while AI preparation was in flight', async () => {
+    const response = deferred<AIPreparation>(),
+      prepare = vi.fn(() => response.promise);
+    const { store } = await ready(transport({ prepare }));
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const visitID = store.getState().snapshot!.visits[0].id;
+    await store.mutate((draft) => {
+      const visit = draft.visits[0];
+      visit.questions = [];
+      visit.report = undefined;
+    });
+    const operation = store.prepareVisit(visitID);
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalled());
+    await store.mutate((draft) => {
+      draft.visits[0].questions = ['My explicit question'];
+      draft.visits[0].notes = 'My notes during generation';
+    });
+    response.resolve({
+      overview: 'Fictional overview',
+      questions: ['Suggested question'],
+      selectedRecordIDs: [seed().records[0].id],
+      model: 'mock-gemini',
+    });
+    await operation;
+    const visit = store.getState().snapshot!.visits[0];
+    expect(visit.questions).toEqual(['My explicit question']);
+    expect(visit.report!.questions).toEqual(visit.questions);
+    expect(visit.report!.notes).toBe('My notes during generation');
+    expect(visit.report!.generationModel).toBe('mock-gemini');
+    expect(visit.report!.sections[1].sources).toEqual([]);
+  });
+  it('rejects unknown AI-selected source identities', async () => {
+    const { store } = await ready(
+      transport({
+        prepare: async () => ({
+          overview: 'Fictional',
+          questions: [],
+          selectedRecordIDs: ['unknown-record'],
+          model: 'mock',
+        }),
+      }),
+    );
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const original = structuredClone(store.getState().snapshot!.visits[0].report);
+    await expect(store.prepareVisit(seed().visits[0].id)).rejects.toThrow('unknown source');
+    expect(store.getState().snapshot!.visits[0].report).toEqual(original);
+  });
+  it('rejects preparation when its candidate records change in flight', async () => {
+    const response = deferred<AIPreparation>(),
+      prepare = vi.fn(() => response.promise),
+      { store } = await ready(transport({ prepare }));
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const operation = store.prepareVisit(seed().visits[0].id);
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalled());
+    await store.deleteRecord(seed().records[0].id);
+    response.resolve({ overview: 'Old overview', questions: [], selectedRecordIDs: [], model: 'mock' });
+    await expect(operation).rejects.toThrow('Sources or visit details changed');
+  });
+  it('updates a first local report’s authoritative visit questions and respects clearing on refresh', async () => {
+    const { store } = await ready();
+    await store.mutate((draft) => {
+      draft.visits[0].questions = [];
+      draft.visits[0].report = undefined;
+    });
+    await store.prepareVisit(seed().visits[0].id);
+    expect(store.getState().snapshot!.visits[0].questions).toHaveLength(3);
+    await store.mutate((draft) => {
+      draft.visits[0].questions = [];
+    });
+    await store.prepareVisit(seed().visits[0].id);
+    expect(store.getState().snapshot!.visits[0].report!.questions).toEqual([]);
+  });
+  it('rejects a transcript result if a user corrected source words during transcription', async () => {
+    const response = deferred<AudioTranscription>(),
+      transcribe = vi.fn(() => response.promise),
+      { store } = await ready(transport({ transcribe }));
+    const recording = { ...sample(), isSample: false, audioFilename: 'synthetic.webm' };
+    await store.mutate((draft) => {
+      draft.recordings = [recording];
+    });
+    await store.checkServer();
+    const operation = store.transcribeRecording(recording.id);
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalled());
+    await store.mutate((draft) => {
+      draft.recordings[0].segments[0].text = 'User-reviewed words';
+    });
+    response.resolve({
+      text: 'Generated words',
+      segments: [{ id: 'generated', speaker: 'Speaker', text: 'Generated words', start: 0, end: 5 }],
+      model: 'mock-whisper',
+    });
+    await expect(operation).rejects.toThrow('changed during transcription');
+    expect(store.getState().snapshot!.recordings[0].segments[0].text).toBe('User-reviewed words');
+  });
+});
+
+// MARK: - CAS failures and incomplete original downloads preserve the browser's existing copy.
+describe('explicit server synchronization', () => {
+  it('requires known revision and accepts an empty owner tombstone on first check', async () => {
+    const push = vi.fn(async (_snapshot: import('../models.ts').AppSnapshot, _revision: number) => 8),
+      { store } = await ready(
+        transport({
+          pull: async () => {
+            throw new APIError(404, 7);
+          },
+          push,
+        }),
+      );
+    await expect(store.pushToServer()).rejects.toThrow('Check the connection');
+    expect(push).not.toHaveBeenCalled();
+    await store.checkServer();
+    expect(store.getState().serverRevision).toBe(7);
+    await store.pushToServer();
+    expect(push.mock.calls[0][1]).toBe(7);
+    expect(store.getState().serverRevision).toBe(8);
+  });
+  it('does not advance a stale write revision after a conflict or a subsequent check', async () => {
+    let remote = 1;
+    const push = vi.fn(async () => {
+        throw new APIError(409, 2);
+      }),
+      { store } = await ready(
+        transport({ pull: async () => ({ snapshot: seed(), revision: remote }), push }),
+      );
+    await store.checkServer();
+    await store.mutate((draft) => {
+      draft.profile.careNotes = 'Keep local';
+    });
+    remote = 2;
+    await expect(store.pushToServer()).rejects.toMatchObject({ status: 409 });
+    await store.checkServer();
+    expect(store.getState().serverRevision).toBe(1);
+    expect(store.getState().snapshot!.profile.careNotes).toBe('Keep local');
+    await expect(store.pushToServer()).rejects.toThrow('pull');
+    expect(push).toHaveBeenCalledTimes(1);
+    await store.pullFromServer();
+    expect(store.getState().serverRevision).toBe(2);
+  });
+  it('keeps all old originals and the local snapshot after any download fails', async () => {
+    const repository = new MemoryRepository(),
+      filename = seed().records[0].sourceFilename!;
+    repository.attachments.set(filename, new Blob(['existing original']));
+    let count = 0;
+    const { store } = await ready(
+      transport({
+        pull: async () => ({ revision: 4, snapshot: seed() }),
+        attachment: async () => {
+          if (++count === 2) throw new Error('Missing source');
+          return new Blob(['downloaded first']);
+        },
+      }),
+      repository,
+    );
+    await store.mutate((draft) => {
+      draft.profile.careNotes = 'Keep local notes';
+    });
+    const original = structuredClone(store.getState().snapshot);
+    await expect(store.pullFromServer()).rejects.toThrow('Missing source');
+    expect(store.getState().snapshot).toEqual(original);
+    expect(await repository.attachments.get(filename)!.text()).toBe('existing original');
+    expect(store.getState().serverRevision).toBeNull();
+  });
+  it('preserves edits made while originals were downloading', async () => {
+    const download = deferred<Blob>(),
+      attachment = vi.fn(() => download.promise),
+      { store } = await ready(
+        transport({ pull: async () => ({ revision: 4, snapshot: seed() }), attachment }),
+      );
+    const operation = store.pullFromServer();
+    await vi.waitFor(() => expect(attachment).toHaveBeenCalled());
+    await store.mutate((draft) => {
+      draft.profile.careNotes = 'Edited during download';
+    });
+    download.resolve(new Blob(['remote source']));
+    await expect(operation).rejects.toThrow('edited this browser');
+    expect(store.getState().snapshot!.profile.careNotes).toBe('Edited during download');
+  });
+  it('resets capability/revision state when changing session identity and never persists its token', async () => {
+    const { store, repository } = await ready();
+    await store.checkServer();
+    store.setConnectedAI(true);
+    store.setToken('new-private-token');
+    expect(store.getState()).toMatchObject({
+      serverRevision: null,
+      providers: null,
+      connectedAI: false,
+      token: 'new-private-token',
+    });
+    expect(JSON.stringify(repository.saved)).not.toContain('new-private-token');
+  });
+});
+
+// MARK: - Live calls require configured explicit submission and persist intent before contacting a provider.
+describe('durable call intent', () => {
+  it('persists one intent before a failed call and leaves it unknown without retry or confirmation', async () => {
+    const repository = new MemoryRepository(),
+      startCall = vi.fn(async () => {
+        expect(repository.saved!.snapshot.bookings[0]).toMatchObject({
+          id: 'synthetic-call-id',
+          status: 'starting',
+          isLive: true,
+        });
+        throw new Error('Connection ended after dispatch');
+      });
+    const { store } = await ready(transport({ startCall }), repository);
+    await store.checkServer();
+    await expect(store.startCall(callRequest())).rejects.toThrow('Connection ended');
+    expect(store.getState().snapshot!.bookings[0]).toMatchObject({ status: 'unknown', isLive: true });
+    expect(store.getState().snapshot!.bookings[0].confirmedVisitID).toBeUndefined();
+    await expect(store.startCall(callRequest())).rejects.toThrow('already exists');
+    expect(startCall).toHaveBeenCalledTimes(1);
+  });
+  it('does not place a call if the durable intent cannot be saved', async () => {
+    const startCall = vi.fn(),
+      { store, repository } = await ready(transport({ startCall }));
+    await store.checkServer();
+    repository.failure = new Error('Storage full');
+    await expect(store.startCall(callRequest())).rejects.toThrow('Storage full');
+    expect(startCall).not.toHaveBeenCalled();
+  });
+  it('refreshes the existing ID without changing the visit or confirming an appointment', async () => {
+    const repository = new MemoryRepository(),
+      request = { ...callRequest(), isLive: true, status: 'unknown' };
+    repository.saved!.snapshot.bookings = [request];
+    const callStatus = vi.fn(async () => ({
+      conversationID: 'mock-conversation',
+      status: 'done',
+      provider: 'mock',
+      transcript: 'Fictional outcome for review',
+    }));
+    const { store } = await ready(transport({ callStatus }), repository),
+      visit = structuredClone(store.getState().snapshot!.visits[0]);
+    await store.refreshCall(request.id);
+    expect(callStatus).toHaveBeenCalledWith(request.id);
+    expect(store.getState().snapshot!.visits[0]).toEqual(visit);
+    expect(store.getState().snapshot!.bookings[0].confirmedVisitID).toBeUndefined();
+  });
+});

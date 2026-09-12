@@ -1,0 +1,196 @@
+/* Purpose: Keep the exact approved palette and reusable browser design primitives in one place.
+   Inputs: The current heart-red light roles in design/palette.json.
+   Outputs: Theme, spacing, type, border and focus variables for all screens.
+   Side effects: Applies an explicitly light browser color scheme. */
+
+/* MARK: - Authoritative brand colors, with readable neutral text and functional focus states */
+:root {
+  color-scheme: light;
+  --canvas: #fbf7f5;
+  --surface: #ffffff;
+  --accent: #b84250;
+  --accent-text: #8c2f3b;
+  --soft: #fae6e5;
+  --line: #dbcbc9;
+  --control-line: #a88f93;
+  --button-text: #ffffff;
+  --ink: #342b2c;
+  --muted: #6c5c60;
+  --danger: #923d32;
+  --focus: var(--accent);
+  --radius: 16px;
+  --shadow: 0 2px 6px #342b2c03;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* MARK: - Predictable native elements and keyboard visibility */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+button,
+input,
+select,
+textarea,
+a {
+  touch-action: manipulation;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: clamp(27px, 2.8vw, 34px);
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.9px;
+}
+h2 {
+  font-size: 19px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.35px;
+}
+h3 {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.15px;
+}
+h4 {
+  font-size: 14px;
+  font-weight: 650;
+}
+svg {
+  flex-shrink: 0;
+  vertical-align: middle;
+  stroke-width: 1.7;
+}
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 20px 0;
+}
+::selection {
+  background: var(--accent-text);
+  color: var(--ink);
+}
+
+/* MARK: - Text content helpers respect long filenames and original medical wording */
+.muted {
+  color: var(--muted);
+}
+.small,
+small {
+  font-size: 12px;
+}
+.eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  margin-bottom: 10px;
+}
+.prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+.text-link {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.text-link:hover,
+.record-main strong:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.divider {
+  height: 1px;
+  background: var(--line);
+  margin: 22px 0;
+}
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
