@@ -229,7 +229,7 @@ struct GeminiProfileTests {
                 #expect(response.status == .ok)
                 let result = try response.content.decode(GeminiProfileResponse.self)
                 #expect(result.allergies.first?.recordIDs == ["report-1", "report-2"])
-                #expect(result.model == "gemini-3.8-flash")
+                #expect(result.model == "gemini-flash-lite-latest")
             }
         }
         #expect(await requests.values.count == 1)

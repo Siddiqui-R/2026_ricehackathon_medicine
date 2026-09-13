@@ -31,7 +31,7 @@ struct RevaCard<Content: View>: View {
 // MARK: - View.outlined
 /// Apply the outlined treatment: a white surface with a hairline border, so red stays reserved for actions and status.
 extension View {
-    func outlined(radius: CGFloat = 16) -> some View {
+    func outlined(radius: CGFloat = 10) -> some View {
         background(RevaTheme.surface, in: RoundedRectangle(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(RevaTheme.hairline, lineWidth: 1))
     }

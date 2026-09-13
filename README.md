@@ -51,7 +51,7 @@ The browser deploys with a same-origin Node.js backend on Vercel, using Tiger Po
 
 | Feature | Implemented behavior |
 | --- | --- |
-| Gemini | Document summaries, visit preparation and summaries of full appointment transcripts; configurable model, default `gemini-3.8-flash`. Selected IDs are validated; original-source citations come from local records. |
+| Gemini | Document summaries, medical-profile extraction, visit preparation and transcript summaries share `gemini-flash-lite-latest` by default. The alias follows Google's latest Flash-Lite release; `GEMINI_MODEL` is a server-wide override. Selected IDs are validated; original-source citations come from local records. |
 | OpenAI Whisper | Saved-audio transcription using `whisper-1`, with recording-relative segment times and generic speaker labels; no diarization claim. |
 | ElevenLabs Scribe | Vercel saved-audio transcription using `scribe_v2`, recording-relative timestamps and neutral speaker labels. |
 | Local workflow | Import/OCR, reviewable excerpts, cited briefs/PDF, consent-gated recording/playback and sample memory work without provider setup. |

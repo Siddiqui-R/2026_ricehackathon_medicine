@@ -26,7 +26,7 @@ const brief: ClinicalBrief = {
     { id: 'ecg', title: 'Resting ECG', date: '2026-09-07' },
     { id: 'labs', title: 'Laboratory results', date: '2026-09-07' },
   ],
-  model: 'gemini-3.8-flash',
+  model: 'gemini-flash-lite-latest',
   sourceSignature: '',
 };
 it('creates one letter-size PDF with Unicode clinical units', async () => {

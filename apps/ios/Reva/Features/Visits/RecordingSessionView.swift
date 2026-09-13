@@ -13,7 +13,8 @@ struct RecordingSessionView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = AudioRecorder()
-    let visit: Visit
+    var visit: Visit? = nil
+    @State private var title = "Appointment recording"
     @State private var agreed = false
     @State private var starting = false
     @State private var savedID: String?
@@ -22,8 +23,12 @@ struct RecordingSessionView: View {
     // MARK: - Rendering and navigation
     var body: some View {
         Page {
-            Text("Record your appointment.").font(.title2.bold())
-            Text(visit.title).foregroundStyle(.secondary)
+            Text("Record your session.").font(.title2.bold())
+            if let visit {
+                Text(visit.title).foregroundStyle(.secondary)
+            } else if !recorder.isRecording && saveDraft.recording == nil {
+                TextField("Session title", text: $title).textFieldStyle(.roundedBorder)
+            }
             StatusNotice(
                 title: "Before you record",
                 message:
@@ -135,7 +140,11 @@ struct RecordingSessionView: View {
         store.perform {
             let url = try recorder.finish()
             let recording = VisitRecording(
-                visitID: visit.id, title: visit.title + " · audio", duration: recorder.elapsed,
+                visitID: visit?.id ?? "",
+                title: visit.map { $0.title + " · audio" }
+                    ?? (title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Appointment recording" : title),
+                duration: recorder.elapsed,
                 audioFilename: url.lastPathComponent)
             saveDraft.retain(recording, audioURL: url)
             savedID = try saveDraft.save(to: store)

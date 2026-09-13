@@ -10,11 +10,11 @@ import SwiftUI
 @main struct RevaApp: App {
     // MARK: - Inputs and view state
 
-    @StateObject private var store = AppStore()
+    @StateObject private var account = NativeSessionController()
     // MARK: - Rendering and navigation
     var body: some Scene {
         WindowGroup {
-            RootView().environmentObject(store).tint(RevaTheme.accent)
+            NativeAccountEntry().environmentObject(account).tint(RevaTheme.accent)
                 .environment(\.timeZone, RevaDate.defaultTimeZone)
                 .preferredColorScheme(.light)
         }

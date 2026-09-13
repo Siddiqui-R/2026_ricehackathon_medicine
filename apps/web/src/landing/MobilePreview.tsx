@@ -12,11 +12,15 @@ export function MobilePreview() {
     url.hash = location.hash.startsWith('#/') ? location.hash : '/summary';
     return url.pathname + url.search + url.hash;
   });
-  useEffect(() => { document.title = 'Mobile preview · Reva'; }, []);
+  useEffect(() => {
+    document.title = 'Mobile preview · Reva';
+  }, []);
   return (
     <div className="mobile-preview">
       <header className="mobile-preview-header">
-        <a href="/" aria-label="Reva home"><Brand /></a>
+        <a href="/" aria-label="Reva home">
+          <Brand />
+        </a>
         <div className="mobile-preview-heading">
           <h1>Mobile preview</h1>
           <p>Explore the interactive demo at phone size.</p>

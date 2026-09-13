@@ -89,8 +89,14 @@ describe('workspace attachment ownership', () => {
     const demo = new IndexedDBRepository('demo-capture', factory);
     await repository.commit(personalSnapshot(), 0);
     await demo.commit(personalSnapshot(), 0);
+    let remoteSnapshot = personalSnapshot();
+    let remoteRevision = 3;
     const uploadAttachment = vi.fn<APITransport['uploadAttachment']>(async () => {});
-    const push = vi.fn<APITransport['push']>(async (_snapshot, revision) => revision + 1);
+    const push = vi.fn<APITransport['push']>(async (snapshot, revision) => {
+      expect(revision).toBe(remoteRevision);
+      remoteSnapshot = structuredClone(snapshot);
+      return ++remoteRevision;
+    });
     const transcribe = vi.fn<APITransport['transcribe']>(async () => ({
       text: 'Words from the account recording.',
       model: 'mock-transcription',
@@ -101,7 +107,7 @@ describe('workspace attachment ownership', () => {
     const store = accountStore(
       repository,
       transport({
-        pull: async () => ({ revision: 3, snapshot: personalSnapshot() }),
+        pull: async () => ({ revision: remoteRevision, snapshot: structuredClone(remoteSnapshot) }),
         uploadAttachment,
         push,
         transcribe,

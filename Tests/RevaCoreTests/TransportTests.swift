@@ -98,6 +98,69 @@ private final class SyntheticRequestCount {
 }
 
 final class TransportTests: XCTestCase {
+    func testHostedUploadStagesChunksBeforeCommittingOriginalAndAudio() async throws {
+        let original = Data(repeating: 73, count: HostedTransfers.chunkSize + 17)
+        let calls = SyntheticRequestCount()
+        var uploadID: String?
+        let transport = try SyntheticTransport(base: "https://revamed.health") { request in
+            calls.increment()
+            let path = request.url!.path
+            if path.hasPrefix("/v1/transfers/") {
+                XCTAssertEqual(request.httpMethod, "PUT")
+                let id = request.url!.lastPathComponent
+                if let uploadID { XCTAssertEqual(id, uploadID) } else { uploadID = id }
+                let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+                let offset = Int(query.first { $0.name == "offset" }!.value!)!
+                XCTAssertEqual(query.first { $0.name == "total" }?.value, String(original.count))
+                XCTAssertEqual(
+                    try self.body(request),
+                    original.subdata(in: offset..<min(offset + HostedTransfers.chunkSize, original.count)))
+                return SyntheticResponse(status: 204)
+            }
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Reva-Upload"), uploadID)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Filename"), "session.m4a")
+            XCTAssertTrue(try self.body(request).isEmpty)
+            if path == "/v1/audio/transcribe" {
+                return SyntheticResponse(
+                    body: Data(#"{"text":"Hello","segments":[],"model":"synthetic"}"#.utf8))
+            }
+            XCTAssertEqual(path, "/v1/attachments/original")
+            return SyntheticResponse(status: 204)
+        }
+        try await transport.client.uploadAttachment(
+            id: "original", filename: "session.m4a", data: original, type: "audio/mp4")
+        XCTAssertEqual(calls.value, 3)
+        uploadID = nil
+        let provider = try ProviderClient(
+            url: "https://revamed.health", token: transport.client.token, session: transport.client.session)
+        _ = try await provider.transcribe(bytes: original, filename: "session.m4a")
+        XCTAssertEqual(calls.value, 6)
+    }
+    func testHostedDownloadJoinsStableRangesAndRejectsChangedOriginals() async throws {
+        let original = Data(repeating: 91, count: HostedTransfers.chunkSize + 7)
+        for changed in [false, true] {
+            let transport = try SyntheticTransport(base: "https://revamed.health") { request in
+                let range = request.value(forHTTPHeaderField: "Range")!
+                let offset = Int(range.dropFirst(6).split(separator: "-")[0])!
+                let end = min(offset + HostedTransfers.chunkSize, original.count)
+                if offset > 0 { XCTAssertEqual(request.value(forHTTPHeaderField: "If-Match"), "original-v1") }
+                return SyntheticResponse(
+                    status: 206,
+                    headers: [
+                        "ETag": changed && offset > 0 ? "changed-v2" : "original-v1",
+                        "Content-Range": "bytes \(offset)-\(end - 1)/\(original.count)",
+                    ], body: original.subdata(in: offset..<end))
+            }
+            if changed {
+                await expectFailure({ try await transport.client.attachment(id: "original") }) {
+                    XCTAssertTrue($0 is RevaError)
+                }
+            } else {
+                let result = try await transport.client.attachment(id: "original")
+                XCTAssertEqual(result, original)
+            }
+        }
+    }
     // MARK: - Fixture loading and assertion helpers
 
     private func fixture() throws -> AppSnapshot {

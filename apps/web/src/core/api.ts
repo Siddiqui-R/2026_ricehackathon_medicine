@@ -321,7 +321,7 @@ export class RevaAPI {
 
   // MARK: - Original bytes use the same SHA256 filename IDs as the native client.
   // Vercel requests are bounded; staging chunks keeps the existing 16 MiB original limit.
-  private async stageLargeBlob(blob: Blob): Promise<string | undefined> {
+  private async stageLargeBlob(blob: Blob, signal?: AbortSignal): Promise<string | undefined> {
     if (!this.chunkedTransfers || blob.size <= 3 * 1024 * 1024) return undefined;
     const id = crypto.randomUUID();
     for (let offset = 0; offset < blob.size; offset += 3 * 1024 * 1024) {
@@ -330,6 +330,9 @@ export class RevaAPI {
         'PUT',
         blob.slice(offset, offset + 3 * 1024 * 1024),
         { 'Content-Type': 'application/octet-stream' },
+        MAX_SNAPSHOT_BYTES,
+        25_000,
+        signal,
       );
     }
     return id;
@@ -444,10 +447,10 @@ export class RevaAPI {
       model: string(result.model),
     };
   }
-  async transcribe(filename: string, audio: Blob): Promise<AudioTranscription> {
+  async transcribe(filename: string, audio: Blob, signal?: AbortSignal): Promise<AudioTranscription> {
     if (!safeFilename(filename) || !audio.size || audio.size > MAX_ATTACHMENT_BYTES)
       throw new Error('Saved audio must be nonempty and no larger than 16 MiB.');
-    const upload = await this.stageLargeBlob(audio);
+    const upload = await this.stageLargeBlob(audio, signal);
     const { bytes } = await this.send(
       '/v1/audio/transcribe',
       'POST',
@@ -459,6 +462,7 @@ export class RevaAPI {
       },
       MAX_SNAPSHOT_BYTES,
       110_000,
+      signal,
     );
     const result = object(JSON.parse(new TextDecoder().decode(bytes)));
     if (!Array.isArray(result.segments) || result.segments.length > 5000)

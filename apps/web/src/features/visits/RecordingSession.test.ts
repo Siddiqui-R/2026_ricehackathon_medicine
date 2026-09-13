@@ -144,6 +144,8 @@ describe('shared recording session', () => {
     expect(browser.location.hash).toBe('#/summary');
     render().confirmConsent(true);
     expect(render().draft?.consented).toBe(true);
+    expect(render().draft?.title).toBe('');
+    expect(render().hasUnsaved).toBe(false);
     expect(browser.location.hash).toBe('#/recording');
     expect(mocks.capture.start).not.toHaveBeenCalled();
     await render().start();
@@ -167,6 +169,7 @@ describe('shared recording session', () => {
 
   it('does not save while recording or paused', async () => {
     consent();
+    render().updateDraft({ title: 'Synthetic recording' });
     await render().start();
     mocks.capture.blob = new Blob(['partial']);
     await render().save();
@@ -176,6 +179,7 @@ describe('shared recording session', () => {
   });
 
   it('retains failed-save audio, serializes retries and clears only after durable success', async () => {
+    browser.location.hash = '#/records?query=synthetic';
     const id = consent().draft!.id;
     render().updateDraft({ title: ' Original session ', notes: ' My notes ' });
     finishedAudio();
@@ -187,6 +191,7 @@ describe('shared recording session', () => {
     render().discard();
     expect(mocks.save).toHaveBeenCalledOnce();
     expect(render().draft!.id).toBe(id);
+    expect(browser.location.hash).toBe('#/recording');
     expect(mocks.capture.reset).not.toHaveBeenCalled();
     write.reject(new Error('Storage unavailable'));
     await first;
@@ -199,13 +204,14 @@ describe('shared recording session', () => {
         title: 'Original session',
         summary: 'My notes',
         segments: [],
-        status: 'saved',
+        status: 'processing-queued',
       }),
       original,
     );
     expect(render().draft).toBeNull();
     expect(mocks.capture.reset).toHaveBeenCalledOnce();
-    expect(browser.location.hash).toBe(`#/recordings/${id}`);
+    expect(browser.location.hash).toBe('#/records?query=synthetic');
+    expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('background'));
   });
 
   it('keeps the draft when its title is empty instead of sending invalid metadata', async () => {
@@ -219,9 +225,12 @@ describe('shared recording session', () => {
   });
   it('preserves audio as a standalone session if its linked visit is removed during navigation', async () => {
     const visit = { id: 'removed-visit', title: 'Synthetic visit' } as Visit;
+    browser.location.hash = '#/visits/removed-visit';
     mocks.snapshot.visits = [visit];
     render().requestSession(visit);
     render().confirmConsent(true);
+    expect(render().draft?.title).toBe('');
+    render().updateDraft({ title: 'My appointment audio' });
     finishedAudio();
     expect(render().detachedVisit).toBe(false);
     mocks.snapshot.visits = [];
@@ -229,10 +238,11 @@ describe('shared recording session', () => {
     const original = render().original;
     await render().save();
     expect(mocks.save).toHaveBeenCalledWith(
-      expect.objectContaining({ visitID: '', title: 'Synthetic visit · recording' }),
+      expect.objectContaining({ visitID: '', title: 'My appointment audio' }),
       original,
     );
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('standalone session'));
+    expect(browser.location.hash).toBe('#/summary');
   });
 
   it('uses the same consented save flow for uploaded originals', async () => {
@@ -241,18 +251,28 @@ describe('shared recording session', () => {
     const file = new File(['synthetic original'], 'synthetic-visit.mp3', { type: 'audio/mpeg' });
     mocks.inspect.mockResolvedValue({ blob: file, duration: 64, extension: 'mp3' });
     await render().chooseAudio(file);
-    expect(render().draft?.title).toBe('synthetic-visit');
+    expect(render().draft?.title).toBe('');
     expect(render().original).toBe(file);
+    render().updateDraft({ title: 'My uploaded conversation' });
     await render().save();
     expect(mocks.save).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 64, audioFilename: expect.stringMatching(/\.mp3$/) }),
+      expect.objectContaining({
+        title: 'My uploaded conversation',
+        duration: 64,
+        audioFilename: expect.stringMatching(/\.mp3$/),
+      }),
       file,
     );
     expect(mocks.capture.start).not.toHaveBeenCalled();
   });
 
-  it('protects unsaved audio from reload and sign-out before credentials are revoked', async () => {
+  it('protects typed titles and unsaved audio from reload and sign-out before credentials are revoked', async () => {
     consent();
+    render().updateDraft({ title: 'A title worth keeping' });
+    expect(render().hasUnsaved).toBe(true);
+    const titleOnlyLeave = new Event('beforeunload', { cancelable: true });
+    browser.dispatchEvent(titleOnlyLeave);
+    expect(titleOnlyLeave.defaultPrevented).toBe(true);
     await render().start();
     render();
     const leave = new Event('beforeunload', { cancelable: true });

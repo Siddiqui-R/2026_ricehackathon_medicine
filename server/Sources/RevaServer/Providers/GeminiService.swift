@@ -59,7 +59,7 @@ struct GeminiService: Sendable {
             "additionalProperties": .bool(false),
         ])
         let object = try await generate(
-            input: request, schema: schema, model: "gemini-3.8-flash",
+            input: request, schema: schema,
             task: """
                 Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
                 supplied records and patient concerns. Include only the history and prior results relevant to preparing
@@ -87,13 +87,13 @@ struct GeminiService: Sendable {
         else { throw invalidResponse() }
         return GeminiPreparationResponse(
             overview: overview, questions: questions, selectedRecordIDs: selected,
-            model: "gemini-3.8-flash")
+            model: configuration.geminiModel)
     }
 
     // MARK: - Separate untrusted source JSON from server instructions
     // Configuration gates run before the single external request. No client state is changed by this service.
     func generate<Input: Encodable>(
-        input: Input, schema: JSONValue, model: String? = nil,
+        input: Input, schema: JSONValue,
         maxOutputTokens: Int64 = 8192, maxStructuredBytes: Int = 64_000, task: String
     ) async throws
         -> [String: Any]
@@ -133,7 +133,7 @@ struct GeminiService: Sendable {
         guard
             let url = URL(
                 string:
-                    "https://generativelanguage.googleapis.com/v1beta/models/\(model ?? configuration.geminiModel):generateContent"
+                    "https://generativelanguage.googleapis.com/v1beta/models/\(configuration.geminiModel):generateContent"
             )
         else {
             throw invalidResponse()

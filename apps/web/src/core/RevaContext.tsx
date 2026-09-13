@@ -5,6 +5,7 @@
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { RevaStore } from './store.ts';
 import { MedicalProfileUpdates } from './MedicalProfileUpdates';
+import { RecordingProcessingUpdates } from './RecordingProcessingUpdates';
 
 // MARK: - One store instance survives React strict-effect retries without resetting persisted data.
 const Context = createContext<RevaStore | null>(null);
@@ -18,7 +19,9 @@ export function RevaProvider({ children, store }: { children: ReactNode; store?:
   }, []);
   return (
     <Context.Provider value={instance.current}>
-      <MedicalProfileUpdates store={instance.current}>{children}</MedicalProfileUpdates>
+      <MedicalProfileUpdates store={instance.current}>
+        <RecordingProcessingUpdates store={instance.current}>{children}</RecordingProcessingUpdates>
+      </MedicalProfileUpdates>
     </Context.Provider>
   );
 }

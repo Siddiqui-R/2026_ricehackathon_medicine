@@ -20,7 +20,9 @@ extension AppStore {
     }
 
     func providerClient() throws -> ProviderClient {
-        try ProviderClient(url: connectionURL, token: connectionToken)
+        try ProviderClient(
+            url: connectionURL, token: connectionToken,
+            session: account == nil ? .shared : NativeAccountTransport.session)
     }
     // MARK: - Service discovery
     // Read configuration flags and models; this operation does not test provider credentials.
@@ -29,13 +31,12 @@ extension AppStore {
         providerDiscoveryID = requestID
         let context = providerContext
         let url = connectionURL
-        let token = connectionToken
         do {
-            let status = try await ProviderClient(url: url, token: token).status()
+            let status = try await providerClient().status()
             guard context == providerContext, requestID == providerDiscoveryID else { return }
             try Task.checkCancellation()
             providerStatus = status
-            UserDefaults.standard.set(url, forKey: "serverURL")
+            if account == nil { UserDefaults.standard.set(url, forKey: "serverURL") }
             notice = "Service configuration checked. Only configured connections can be used."
         } catch {
             guard context == providerContext, requestID == providerDiscoveryID else { return }

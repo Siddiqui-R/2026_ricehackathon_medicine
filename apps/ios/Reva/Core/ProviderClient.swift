@@ -33,7 +33,7 @@ struct ProviderClient {
     // Set a 110-second timeout, check HTTP status and reject unsupported JSON before returning values.
     private func request<T: Decodable>(
         _ path: String, method: String = "GET", bytes: Data? = nil,
-        contentType: String = "application/json", filename: String? = nil
+        contentType: String = "application/json", filename: String? = nil, uploadID: String? = nil
     ) async throws -> T {
         var request = URLRequest(url: baseURL.appendingPathComponent("v1/" + path))
         request.httpMethod = method
@@ -41,6 +41,7 @@ struct ProviderClient {
         request.timeoutInterval = 110
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        if let uploadID { request.setValue(uploadID, forHTTPHeaderField: "X-Reva-Upload") }
         if let filename {
             request.setValue(ServerClient.attachmentMetadataName(filename), forHTTPHeaderField: "X-Filename")
         }
@@ -63,6 +64,14 @@ struct ProviderClient {
     // MARK: - Configuration read
     // Use discovery to decide which feature controls can be offered.
     func status() async throws -> ProviderStatus { try await request("providers") }
+    func medicalProfile(_ sources: [NativeProfileSource]) async throws -> NativeProfileResult {
+        try NativeMedicalProfile.validateSources(sources)
+        struct Input: Encodable { var records: [NativeProfileSource] }
+        let result: NativeProfileResult = try await request(
+            "ai/profile", method: "POST", bytes: JSONEncoder().encode(Input(records: sources)))
+        try NativeMedicalProfile.validate(result, sources: sources)
+        return result
+    }
     // MARK: - Server request budgets
     // Match GeminiModels' UTF-8 limits before uploading; never truncate original evidence.
     private static func checkBudget(_ text: String, maximum: Int, field: String) throws {
@@ -152,7 +161,9 @@ struct ProviderClient {
             throw RevaError.invalid("Choose a nonempty recording under 16 MiB.")
         }
         let type = ServerClient.audioContentType(filename: filename)
+        let upload = try await HostedTransfers.stage(bytes, origin: baseURL, token: token, session: session)
         return try await request(
-            "audio/transcribe", method: "POST", bytes: bytes, contentType: type, filename: filename)
+            "audio/transcribe", method: "POST", bytes: upload == nil ? bytes : nil, contentType: type,
+            filename: filename, uploadID: upload)
     }
 }

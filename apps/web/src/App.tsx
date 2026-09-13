@@ -24,6 +24,7 @@ import { readWorkspaceRoute } from './routing';
 import { Button } from './components/ui';
 import { Dashboard } from './features/Dashboard';
 import { AccountMenu } from './components/AccountMenu';
+import { RecordingProcessingIndicator } from './components/RecordingProcessingIndicator';
 import { SettingsPage } from './features/SettingsPage';
 import { RecordsPage } from './features/records/RecordsPage';
 import { RecordDetail } from './features/records/RecordDetail';
@@ -166,6 +167,7 @@ function Workspace() {
           <ArrowUpRight size={16} />
         </a>
         <div className="sidebar-bottom">
+          <RecordingProcessingIndicator placement="sidebar" />
           <div className="sidebar-divider" />
           <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} />
         </div>
@@ -259,6 +261,7 @@ function Workspace() {
         ))}
       </nav>
       <RecordingConsent />
+      <RecordingProcessingIndicator placement="compact" />
       {(store.error || store.notice) && (
         <div
           className={`feedback ${store.error ? 'feedback-error' : ''}`}

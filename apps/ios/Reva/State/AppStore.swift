@@ -24,6 +24,21 @@ import Foundation
     @Published var serverConflictRevision: Int?
     @Published var providerStatus: ProviderStatus?
     @Published var isProviderBusy = false
+    @Published var syncStatus = "Saved on this device"
+    @Published var needsSignIn = false
+    @Published var profileUpdateMessage = "Medical details update from your reports when AI is connected."
+    let account: NativeAccountSession?
+    let demoPerson: NativeDemoPerson
+    var sessionExpired: (() -> Void)?
+    var syncBase: ServerState?
+    var backgroundActive = false
+    var backgroundGeneration = UUID()
+    var syncDebounce: Task<Void, Never>?
+    var profileDebounce: Task<Void, Never>?
+    var profileObserved = ""
+    var profileFailures = 0
+    var isAccountSyncRunning = false
+    var lastProviderCheck = Date.distantPast
     @Published var connectionURL =
         UserDefaults.standard.string(forKey: "serverURL") ?? "http://127.0.0.1:8080"
     {
@@ -32,7 +47,9 @@ import Foundation
     @Published var connectionToken = "reva-local-demo-token" {
         didSet { if connectionToken != oldValue { connectionDidChange() } }
     }
-    @Published var useConnectedAI = false
+    @Published var useConnectedAI = false {
+        didSet { if useConnectedAI != oldValue { considerMedicalProfileUpdate() } }
+    }
     let repository: LocalRepository
     var serverIdentity = ""
     private(set) var snapshotGeneration = UUID()
@@ -40,6 +57,13 @@ import Foundation
     private(set) var workspaceGeneration = UUID()
     private var isMutatingSnapshot = false
     var providerDiscoveryID = UUID()
+
+    func closeWorkspace() {
+        stopBackgroundUpdates()
+        workspaceGeneration = UUID()
+        connectionGeneration = UUID()
+        providerDiscoveryID = UUID()
+    }
 
     // MARK: - Invalidate in-flight connection results
     // A generation also catches switching away and back while an old request is suspended.
@@ -55,12 +79,30 @@ import Foundation
 
     // MARK: - Startup and recovery
     // Restore a valid snapshot, repair known demo labels, or load bundled fixtures.
-    init(repository: LocalRepository? = nil) {
+    init(
+        repository: LocalRepository? = nil, account: NativeAccountSession? = nil,
+        demoPerson: NativeDemoPerson = .jordan
+    ) {
+        self.account = account
+        self.demoPerson = demoPerson
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Reva", isDirectory: true)
         self.repository = repository ?? LocalRepository(directory: root)
+        if let account {
+            connectionURL = NativeAccount.origin.absoluteString
+            connectionToken = account.token
+            useConnectedAI = true
+            syncStatus = "Connecting…"
+            syncBase = try? JSONDecoder().decode(
+                ServerState.self,
+                from: Data(contentsOf: self.repository.directory.appendingPathComponent("sync-base.json")))
+        }
         do {
             if let loaded = try self.repository.load() {
+                if let account, loaded.snapshot.profile.id != account.user.id {
+                    throw RevaError.invalid(
+                        "This saved workspace belongs to a different account. Sign in again.")
+                }
                 snapshot = loaded.snapshot
                 if loaded.recovered {
                     notice = "Recovered the last valid checkpoint. Your original files remain available."
@@ -95,6 +137,11 @@ import Foundation
                     errorMessage =
                         "Your saved data is available, but a startup repair could not be saved: \(error.localizedDescription)"
                 }
+            } else if let account {
+                let empty = NativeAccount.emptySnapshot(account.user)
+                try self.repository.save(empty)
+                snapshot = empty
+                syncBase = ServerState(revision: 0, snapshot: empty)
             } else {
                 try resetDemo()
             }
@@ -135,6 +182,7 @@ import Foundation
         isMutatingSnapshot = true
         defer { isMutatingSnapshot = false }
         snapshot = next
+        scheduleBackgroundChanges()
     }
     // MARK: - UI error boundary
     // Convert thrown operations to one user-visible error and a success flag for dismissal.
@@ -150,10 +198,14 @@ import Foundation
     // MARK: - Explicit demo restoration
     // Replace active state with validated bundled fictional data; originals remain on disk.
     func resetDemo() throws {
+        guard account == nil else {
+            throw RevaError.invalid("Demo reset is unavailable in your personal account.")
+        }
         guard let url = Bundle.main.url(forResource: "seed", withExtension: "json") else {
             throw RevaError.invalid("The fictional demo dataset is missing from this build.")
         }
-        let seed = try JSONDecoder().decode(AppSnapshot.self, from: Data(contentsOf: url))
+        let seed = demoPerson.snapshot(
+            from: try JSONDecoder().decode(AppSnapshot.self, from: Data(contentsOf: url)))
         try seed.validate()
         try repository.save(seed)
         snapshot = seed

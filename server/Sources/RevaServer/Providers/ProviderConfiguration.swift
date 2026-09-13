@@ -24,7 +24,13 @@ public struct ProviderConfiguration: Sendable {
         self.paidAccessAllowed = paidAccessAllowed
         geminiAPIKey = try Self.secret(environment["GEMINI_API_KEY"], name: "GEMINI_API_KEY")
         openAIAPIKey = try Self.secret(environment["OPENAI_API_KEY"], name: "OPENAI_API_KEY")
-        geminiModel = environment["GEMINI_MODEL"] ?? "gemini-3.8-flash"
+        let configuredModel =
+            environment["GEMINI_MODEL"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Migrate the former shipped pins; explicit alternatives still apply to every analysis operation.
+        geminiModel =
+            configuredModel.isEmpty
+                || ["gemini-3.8-flash", "gemini-3.5-flash-lite"].contains(configuredModel)
+            ? "gemini-flash-lite-latest" : configuredModel
         guard geminiModel.hasPrefix("gemini-"), geminiModel.utf8.count <= 100,
             geminiModel.utf8.allSatisfy({ Self.identifierByte($0) || $0 == 46 })
         else {

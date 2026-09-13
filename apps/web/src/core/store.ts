@@ -157,6 +157,7 @@ export class RevaStore {
   private writes: Promise<unknown> = Promise.resolve();
   private initialization?: Promise<void>;
   private identity = 0;
+  private recordingRequests = new Set<string>();
   private mustPull = false;
   private readonly account: AccountOptions | null;
   private readonly storage: StorageLike | null;
@@ -197,6 +198,7 @@ export class RevaStore {
       };
   }
   getState = (): RevaState => this.state;
+  isWorkspaceActive = (): boolean => !this.sessionEnded;
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -395,7 +397,7 @@ export class RevaStore {
     const currentSession = readSession(this.storage);
     const replaced = currentSession && currentSession.token !== this.state.token;
     if (!replaced) clearSession(this.storage);
-    if (notice) this.publish({ notice, error: null });
+    this.publish(notice ? { notice, error: null } : {});
     this.redirect(replaced ? '/app' : path);
   }
 
@@ -946,144 +948,179 @@ export class RevaStore {
     });
 
   // MARK: - Transcription keeps original audio and rejects mismatched or edited transcript results.
-  transcribeRecording = (id: string): Promise<void> =>
-    this.action(async () => {
-      const original = structuredClone(
-        this.requiredSnapshot().recordings.find((recording) => recording.id === id),
-      );
-      if (!original || original.isSample || !original.audioFilename)
-        throw new Error('Save a real audio recording before requesting transcription.');
-      if (!this.state.providers?.transcription.configured)
-        throw new Error('Check a server with configured transcription first.');
-      const identity = this.identity,
-        blob = await this.persistence.getAttachment(original.audioFilename);
-      const type = audioType(original.audioFilename) ?? blob.type.split(';')[0];
-      if (
-        ![
-          'audio/mp4',
-          'audio/m4a',
-          'audio/x-m4a',
-          'audio/wav',
-          'audio/x-wav',
-          'audio/mpeg',
-          'audio/webm',
-          'audio/ogg',
-        ].includes(type)
-      )
-        throw new Error(
-          'This recording format is not supported for transcription. Its original audio is preserved.',
-        );
-      this.assertIdentity(identity);
-      const result = await this.apiFactory(this.state.token).transcribe(
-        original.audioFilename,
-        blob.slice(0, blob.size, type),
-      );
-      this.assertIdentity(identity);
-      if (
-        !result.text.trim() ||
-        !result.segments.length ||
-        new Set(result.segments.map((segment) => segment.id)).size !== result.segments.length ||
-        result.segments.some(
-          (segment) =>
-            !segment.id ||
-            !segment.text.trim() ||
-            !Number.isFinite(segment.start) ||
-            !Number.isFinite(segment.end) ||
-            segment.start < 0 ||
-            segment.end < segment.start ||
-            segment.end > original.duration + 5,
-        )
-      )
-        throw new Error(
-          'The transcript did not match valid audio timestamps. Your previous transcript was kept.',
-        );
-      await this.edit((draft) => {
-        this.assertIdentity(identity);
-        const latest = draft.recordings.find((recording) => recording.id === id);
-        if (
-          !latest ||
-          latest.audioFilename !== original.audioFilename ||
-          JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
-        )
-          throw new Error('Audio or transcript changed during transcription. Your edits were kept.');
-        if (JSON.stringify(latest.segments) !== JSON.stringify(result.segments))
-          clearRecordingSummary(latest);
-        latest.segments = result.segments;
-        latest.transcriptionModel = result.model;
-        latest.status = 'ready';
-        if (draft.records.some((record) => record.sourceRecordingID === id || record.id === `memory-${id}`))
-          reconcileMemory(
-            draft,
-            id,
-            Object.fromEntries(result.segments.map((segment) => [segment.id, segment.text])),
-          );
-      });
-      this.notify('Transcript saved. Review the words and speakers against the original recording.');
-    });
-
-  // MARK: - Appointment summaries use only the exact saved transcript and reject stale or canceled work.
-  summarizeRecording = (id: string, signal?: AbortSignal): Promise<void> =>
-    this.action(async () => {
-      const snapshot = this.requiredSnapshot();
-      const original = structuredClone(snapshot.recordings.find((recording) => recording.id === id));
-      if (!original || !original.segments.length || original.segments.some((segment) => !segment.text.trim()))
-        throw new Error('Transcribe this appointment before summarizing it.');
-      if (!this.state.providers?.gemini.configured)
-        throw new Error('Check a server with configured AI before summarizing this appointment.');
-      const checkCancellation = () => {
-        if (signal?.aborted)
-          throw new DOMException('Summarization canceled. Your saved audio was kept.', 'AbortError');
-      };
-      const identity = this.identity;
-      const source: MedicalRecord = {
-        id: original.id,
-        title: original.title,
-        text: recordingTranscript(original),
-        summary: '',
-        notes: '',
-        kind: 'Recording',
-        provider: '',
-        date: original.createdAt,
-        uploadedAt: original.createdAt,
-        pageCount: 1,
-        tags: [],
-        status: 'ready',
-        isDemo: original.isSample,
-        version: 1,
-      };
-      checkCancellation();
-      const result = await this.apiFactory(this.state.token).summarize(source, signal);
-      checkCancellation();
-      this.assertIdentity(identity);
-      if (!result.summary.trim() || !result.model.trim())
-        throw new Error('The AI returned no usable summary. Your previous summary was kept.');
-      await this.edit((draft) => {
+  private async recordingAction(id: string, work: () => Promise<void>, background: boolean) {
+    if (this.recordingRequests.has(id)) throw new Error('This recording is already being processed.');
+    this.recordingRequests.add(id);
+    try {
+      if (background) await work();
+      else await this.action(work);
+    } catch (error) {
+      if (background && error instanceof APIError && error.status === 401) this.reportError(error);
+      throw error;
+    } finally {
+      this.recordingRequests.delete(id);
+    }
+  }
+  transcribeRecording = (id: string, signal?: AbortSignal, background = false): Promise<void> =>
+    this.recordingAction(
+      id,
+      async () => {
+        const checkCancellation = () => {
+          if (signal?.aborted)
+            throw new DOMException('Transcription canceled. Your audio was kept.', 'AbortError');
+        };
         checkCancellation();
-        this.assertIdentity(identity);
-        const latest = draft.recordings.find((recording) => recording.id === id);
+        const original = structuredClone(
+          this.requiredSnapshot().recordings.find((recording) => recording.id === id),
+        );
+        if (!original || original.isSample || !original.audioFilename)
+          throw new Error('Save a real audio recording before requesting transcription.');
+        if (!this.state.providers?.transcription.configured)
+          throw new Error('Check a server with configured transcription first.');
+        const identity = this.identity,
+          blob = await this.persistence.getAttachment(original.audioFilename);
+        const type = audioType(original.audioFilename) ?? blob.type.split(';')[0];
         if (
-          !latest ||
-          latest.visitID !== original.visitID ||
-          latest.createdAt !== original.createdAt ||
-          latest.title !== original.title ||
-          latest.audioFilename !== original.audioFilename ||
-          latest.duration !== original.duration ||
-          latest.isSample !== original.isSample ||
-          JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          ![
+            'audio/mp4',
+            'audio/m4a',
+            'audio/x-m4a',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/mpeg',
+            'audio/webm',
+            'audio/ogg',
+          ].includes(type)
         )
           throw new Error(
-            'The transcript or recording changed during summarization. Your edits were kept; summarize again.',
+            'This recording format is not supported for transcription. Its original audio is preserved.',
           );
-        latest.aiSummary = result.summary;
-        latest.aiSummaryModel = result.model;
-        latest.aiSummaryGeneratedAt = nowISO();
-        const index = draft.records.findIndex(
-          (record) => record.id === `memory-${id}` || record.sourceRecordingID === id,
+        this.assertIdentity(identity);
+        const result = await this.apiFactory(this.state.token).transcribe(
+          original.audioFilename,
+          blob.slice(0, blob.size, type),
+          signal,
         );
-        if (index >= 0) draft.records[index] = createMemoryRecord(latest, draft, true);
-      });
-      this.notify('Appointment summary saved. Review it against the transcript and original audio.');
-    });
+        checkCancellation();
+        this.assertIdentity(identity);
+        if (
+          !result.text.trim() ||
+          !result.segments.length ||
+          new Set(result.segments.map((segment) => segment.id)).size !== result.segments.length ||
+          result.segments.some(
+            (segment) =>
+              !segment.id ||
+              !segment.text.trim() ||
+              !Number.isFinite(segment.start) ||
+              !Number.isFinite(segment.end) ||
+              segment.start < 0 ||
+              segment.end < segment.start ||
+              segment.end > original.duration + 5,
+          )
+        )
+          throw new Error(
+            'The transcript did not match valid audio timestamps. Your previous transcript was kept.',
+          );
+        await this.edit((draft) => {
+          checkCancellation();
+          this.assertIdentity(identity);
+          const latest = draft.recordings.find((recording) => recording.id === id);
+          if (
+            !latest ||
+            latest.audioFilename !== original.audioFilename ||
+            JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          )
+            throw new Error('Audio or transcript changed during transcription. Your edits were kept.');
+          if (JSON.stringify(latest.segments) !== JSON.stringify(result.segments))
+            clearRecordingSummary(latest);
+          latest.segments = result.segments;
+          latest.transcriptionModel = result.model;
+          latest.status = background ? 'processing-analyzing' : 'ready';
+          if (draft.records.some((record) => record.sourceRecordingID === id || record.id === `memory-${id}`))
+            reconcileMemory(
+              draft,
+              id,
+              Object.fromEntries(result.segments.map((segment) => [segment.id, segment.text])),
+            );
+        });
+        if (!background)
+          this.notify('Transcript saved. Review the words and speakers against the original recording.');
+      },
+      background,
+    );
+
+  // MARK: - Appointment summaries use only the exact saved transcript and reject stale or canceled work.
+  summarizeRecording = (id: string, signal?: AbortSignal, background = false): Promise<void> =>
+    this.recordingAction(
+      id,
+      async () => {
+        const snapshot = this.requiredSnapshot();
+        const original = structuredClone(snapshot.recordings.find((recording) => recording.id === id));
+        if (
+          !original ||
+          !original.segments.length ||
+          original.segments.some((segment) => !segment.text.trim())
+        )
+          throw new Error('Transcribe this appointment before summarizing it.');
+        if (!this.state.providers?.gemini.configured)
+          throw new Error('Check a server with configured AI before summarizing this appointment.');
+        const checkCancellation = () => {
+          if (signal?.aborted)
+            throw new DOMException('Summarization canceled. Your saved audio was kept.', 'AbortError');
+        };
+        const identity = this.identity;
+        const source: MedicalRecord = {
+          id: original.id,
+          title: original.title,
+          text: recordingTranscript(original),
+          summary: '',
+          notes: '',
+          kind: 'Recording',
+          provider: '',
+          date: original.createdAt,
+          uploadedAt: original.createdAt,
+          pageCount: 1,
+          tags: [],
+          status: 'ready',
+          isDemo: original.isSample,
+          version: 1,
+        };
+        checkCancellation();
+        const result = await this.apiFactory(this.state.token).summarize(source, signal);
+        checkCancellation();
+        this.assertIdentity(identity);
+        if (!result.summary.trim() || !result.model.trim())
+          throw new Error('The AI returned no usable summary. Your previous summary was kept.');
+        await this.edit((draft) => {
+          checkCancellation();
+          this.assertIdentity(identity);
+          const latest = draft.recordings.find((recording) => recording.id === id);
+          if (
+            !latest ||
+            latest.visitID !== original.visitID ||
+            latest.createdAt !== original.createdAt ||
+            latest.title !== original.title ||
+            latest.audioFilename !== original.audioFilename ||
+            latest.duration !== original.duration ||
+            latest.isSample !== original.isSample ||
+            JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          )
+            throw new Error(
+              'The transcript or recording changed during summarization. Your edits were kept; summarize again.',
+            );
+          latest.aiSummary = result.summary;
+          latest.aiSummaryModel = result.model;
+          latest.aiSummaryGeneratedAt = nowISO();
+          const index = draft.records.findIndex(
+            (record) => record.id === `memory-${id}` || record.sourceRecordingID === id,
+          );
+          if (index >= 0) draft.records[index] = createMemoryRecord(latest, draft, true);
+        });
+        if (!background)
+          this.notify('Appointment summary saved. Review it against the transcript and original audio.');
+      },
+      background,
+    );
 
   // MARK: - Revision-aware discovery and explicit synchronization.
   private async discover(api: APITransport): Promise<Discovery> {

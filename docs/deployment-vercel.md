@@ -32,7 +32,7 @@ Store secrets in **Vercel → revamed → Environment Variables → Production �
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                   | Required Tiger connection string with database password; certificate verification is enforced.              |
 | `REVA_STORAGE=postgres`          | Documents storage selection; this API supports PostgreSQL only.                                             |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Document summaries, transcript summaries and visit preparation.                                             |
+| `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-flash-lite-latest` | Shared model for document/transcript summaries, medical-profile extraction and visit preparation. |
 | `ELEVENLABS_API_KEY`             | Scribe v2 transcription; key needs Speech to Text access.                                                   |
 | `REVA_SIGNUP`                    | Optional `closed` disables registrations; open by default.                                                  |
 | `REVA_SESSION_DAYS`              | Optional lifetime, default 30, bounded 1–365.                                                               |
@@ -40,6 +40,8 @@ Store secrets in **Vercel → revamed → Environment Variables → Production �
 | `REVA_TOKENS`                    | Optional private token-to-owner JSON mapping for native/manual integrations. Accounts need no shared token. |
 
 Existing ElevenLabs agent, Twilio and local Swift listener settings were also stored in Vercel as requested. They are inactive compatibility settings: this app has no telephone/booking routes. `OPENAI_TRANSCRIPTION_MODEL` is unused here; no OpenAI key is required. Vercel manages the port; `REVA_HOST`, `REVA_PORT` and `REVA_DATA_DIRECTORY` do not control functions. `REVA_ACCOUNTS` is Swift-only; Vercel account routes are always enabled.
+
+All Gemini analysis now defaults to the moving `gemini-flash-lite-latest` alias. Both server implementations migrate an absent/blank model or the prior shipped `gemini-3.8-flash` and `gemini-3.5-flash-lite` pins to this alias, including existing deployments with those old environment values. Other explicit custom model IDs remain server-wide overrides; change a deployment pinned to another model to `GEMINI_MODEL=gemini-flash-lite-latest` to follow future Flash-Lite releases. Preparation uses this same resolver, with no separate model pin. The alias is documented by Google; actual account access still requires a configured key. [Flash-Lite latest identifier](https://ai.google.dev/api/interactions-api), [model version patterns](https://ai.google.dev/gemini-api/docs/models).
 
 ## Transfer and provider limits
 

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { useRecordingProcessing } from '../../core/RecordingProcessingUpdates';
 import { demoLabel } from '../../core/presentation';
 import type { VisitRecording } from '../../core/models';
 import { durationLabel, formatDate } from '../../core/domain';
@@ -25,6 +26,22 @@ export function RecordingDetail({
 }) {
   const { snapshot, providers, transcribeRecording, summarizeRecording, saveMemory, getAttachment, busy } =
     useReva();
+  const processing = useRecordingProcessing();
+  const job = processing.jobs.find((item) => item.id === recording.id);
+  const processingStage =
+    job?.stage ??
+    (recording.status === 'processing-queued'
+      ? 'queued'
+      : recording.status === 'processing-transcribing'
+        ? 'transcribing'
+        : recording.status === 'processing-analyzing'
+          ? 'analyzing'
+          : recording.status === 'processing-failed'
+            ? 'failed'
+            : recording.status === 'processing-complete'
+              ? 'complete'
+              : null);
+  const automaticWork = ['queued', 'transcribing', 'analyzing', 'waiting'].includes(processingStage ?? '');
   const summaryRequest = useRef<AbortController | null>(null);
   const transcript = useRef<HTMLElement>(null);
   const audioPlayer = useRef<HTMLAudioElement>(null);
@@ -65,6 +82,7 @@ export function RecordingDetail({
     };
   }, [getAttachment, recording.audioFilename, recording.isSample]);
   async function act(operation: () => Promise<void>) {
+    if (automaticWork) return;
     setError('');
     setWorking(true);
     try {
@@ -75,9 +93,9 @@ export function RecordingDetail({
       setWorking(false);
     }
   }
-  if (editor === 'transcript')
+  if (editor === 'transcript' && !automaticWork)
     return <TranscriptEditor recording={recording} onClose={() => setEditor(null)} />;
-  if (editor === 'notes')
+  if (editor === 'notes' && !automaticWork)
     return <RecordingNotesEditor recording={recording} onClose={() => setEditor(null)} />;
   const content = (
     <div className="stack">
@@ -89,6 +107,45 @@ export function RecordingDetail({
           {formatDate(recording.createdAt, true)} · {durationLabel(recording.duration)}
         </span>
       </div>
+      {processingStage && (
+        <div className="recording-page-notice stack" role={processingStage === 'failed' ? 'alert' : 'status'}>
+          <strong>
+            {processingStage === 'queued'
+              ? 'Recording queued'
+              : processingStage === 'transcribing'
+                ? 'Transcribing your recording'
+                : processingStage === 'analyzing'
+                  ? 'Analyzing your conversation'
+                  : processingStage === 'waiting'
+                    ? 'Recording saved · waiting to continue'
+                    : processingStage === 'failed'
+                      ? 'Recording saved · processing needs attention'
+                      : 'Transcript and analysis ready'}
+          </strong>
+          <p>
+            {job?.message ??
+              (processingStage === 'complete'
+                ? 'Review the transcript and summary below against your original audio.'
+                : processingStage === 'failed'
+                  ? 'Your original audio is safe. Retry transcription and analysis when you’re ready.'
+                  : 'You can keep browsing your workspace. This will continue in the background.')}
+          </p>
+          {processingStage === 'failed' && (
+            <Button
+              variant="secondary"
+              disabled={busy || working}
+              onClick={() => processing.retry(recording.id)}
+            >
+              Retry processing
+            </Button>
+          )}
+          {processingStage === 'waiting' && (
+            <a className="text-link" href="#/settings" onClick={close}>
+              View connection settings
+            </a>
+          )}
+        </div>
+      )}
       {recording.isSample ? (
         <p className="small">This is a sample conversation, separate from any microphone recording.</p>
       ) : audio ? (
@@ -107,7 +164,7 @@ export function RecordingDetail({
         <div className="stack">
           <Button
             variant="secondary"
-            disabled={!providers?.transcription.configured || busy || working}
+            disabled={!providers?.transcription.configured || busy || working || automaticWork}
             onClick={() => {
               void act(() => transcribeRecording(recording.id));
             }}
@@ -130,7 +187,9 @@ export function RecordingDetail({
         <div className="section-heading">
           <h3>Appointment summary</h3>
           <Button
-            disabled={!recording.segments.length || !providers?.gemini.configured || busy || working}
+            disabled={
+              !recording.segments.length || !providers?.gemini.configured || busy || working || automaticWork
+            }
             onClick={() => {
               const controller = new AbortController();
               summaryRequest.current = controller;
@@ -178,9 +237,11 @@ export function RecordingDetail({
           </>
         ) : (
           <p className="muted small">
-            {recording.segments.length
-              ? 'Summarize the saved transcript to review what was discussed. Your personal notes stay separate.'
-              : 'Transcribe the appointment first. The summary is generated only from the saved transcript.'}
+            {automaticWork
+              ? 'Your appointment summary will appear here after background processing finishes.'
+              : recording.segments.length
+                ? 'Summarize the saved transcript to review what was discussed. Your personal notes stay separate.'
+                : 'Transcribe the appointment first. The summary is generated only from the saved transcript.'}
           </p>
         )}
         {!providers?.gemini.configured && (
@@ -197,7 +258,11 @@ export function RecordingDetail({
         <div className="section-heading">
           <h3>Transcript</h3>
           {recording.segments.length > 0 && (
-            <Button variant="ghost" onClick={() => setEditor('transcript')} disabled={working || busy}>
+            <Button
+              variant="ghost"
+              onClick={() => setEditor('transcript')}
+              disabled={working || busy || automaticWork}
+            >
               <Pencil size={15} /> Correct words
             </Button>
           )}
@@ -240,13 +305,21 @@ export function RecordingDetail({
             ))}
           </div>
         ) : (
-          <p className="muted">No transcript has been generated for this audio.</p>
+          <p className="muted">
+            {automaticWork
+              ? 'Your transcript will appear here when it is ready.'
+              : 'No transcript has been generated for this audio.'}
+          </p>
         )}
       </section>
       <section>
         <div className="section-heading">
           <h3>My visit notes</h3>
-          <Button variant="ghost" onClick={() => setEditor('notes')} disabled={working || busy}>
+          <Button
+            variant="ghost"
+            onClick={() => setEditor('notes')}
+            disabled={working || busy || automaticWork}
+          >
             <Pencil size={15} /> Edit notes
           </Button>
         </div>
@@ -265,7 +338,9 @@ export function RecordingDetail({
           </a>
         )}
         <Button
-          disabled={working || busy || (!recording.segments.length && !recording.summary.trim())}
+          disabled={
+            working || busy || automaticWork || (!recording.segments.length && !recording.summary.trim())
+          }
           onClick={() => {
             void act(() => saveMemory(recording.id));
           }}

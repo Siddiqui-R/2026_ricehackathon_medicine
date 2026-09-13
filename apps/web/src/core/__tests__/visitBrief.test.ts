@@ -64,7 +64,10 @@ describe('on-demand visit brief', () => {
     await expect(generating).rejects.toThrow();
   });
   it.each([
-    { ...response, model: 'other-model' },
+    { ...response, model: '' },
+    { ...response, model: '   ' },
+    { ...response, model: 'x'.repeat(101) },
+    { ...response, model: 'gemini\0invalid' },
     { ...response, selectedRecordIDs: ['unknown'] },
     { ...response, overview: 'word '.repeat(181) },
     { ...response, questions: Array(4).fill('Question?') },
@@ -72,6 +75,17 @@ describe('on-demand visit brief', () => {
     const snapshot = seed();
     expect(() => clinicalBrief(snapshot, briefVisit(input), briefSources(snapshot), result)).toThrow();
   });
+  it.each(['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-configured-model'])(
+    'accepts a validated brief attributed to %s without pinning one provider version',
+    (model) => {
+      const snapshot = seed();
+      const brief = clinicalBrief(snapshot, briefVisit(input), briefSources(snapshot), {
+        ...response,
+        model,
+      });
+      expect(brief.model).toBe(model);
+    },
+  );
 });
 
 describe('standalone home recording', () => {

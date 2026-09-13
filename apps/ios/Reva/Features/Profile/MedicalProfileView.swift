@@ -1,113 +1,87 @@
-// Purpose: Keep persistent medical essentials available in one overview.
-// Inputs: The current PatientProfile from AppStore.
-// Outputs: Identity, medical lists, care notes, and routes to editing and Settings.
-// Side effects: Changes local sheet state; the editor and Settings own their mutations.
-
+// Compact native profile with section-specific edits and links to original report evidence.
 import SwiftUI
 
-// MARK: - MedicalProfileView
-/// Keep persistent medical essentials available in one overview.
+private struct ProfileEditTarget: Identifiable {
+    var field: MedicalProfileField?
+    var id: String { field?.rawValue ?? "identity" }
+}
 struct MedicalProfileView: View {
-    // MARK: - Inputs and view state
-
     @EnvironmentObject private var store: AppStore
-    @State private var editing = false
-    @State private var settings = false
-
-    // MARK: - Rendering and navigation
+    @State private var editing: ProfileEditTarget?
     var body: some View {
-        Group {
+        Page {
             if let profile = store.snapshot?.profile {
-                Page {
-                    Text("The essentials to remember, in one place.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    RevaCard {
-                        HStack(spacing: 16) {
-                            Text(profile.initials).font(.title2.bold())
-                                .frame(width: 60, height: 60)
-                                .foregroundStyle(RevaTheme.accent)
-                                .background(RevaTheme.canvas, in: Circle())
+                HStack(spacing: 12) {
+                    Text(profile.initials).font(.headline).foregroundStyle(RevaTheme.accentText)
+                        .frame(width: 42, height: 42).background(RevaTheme.soft, in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.name).font(.headline)
+                        if !profile.dateOfBirth.isEmpty {
+                            Text("Born " + RevaDate.display(profile.dateOfBirth)).font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    editButton("personal details") { editing = .init(field: nil) }
+                }.padding(.vertical, 4)
+                HStack(alignment: .top) {
+                    Text(store.profileUpdateMessage).font(.footnote).foregroundStyle(.secondary)
+                    if store.profileUpdateMessage.contains("could not") {
+                        Button("Retry") { store.retryMedicalProfile() }.font(.footnote)
+                    }
+                }
+                ForEach(MedicalProfileField.allCases) { field in
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: field.symbol).foregroundStyle(RevaTheme.accent).frame(width: 24)
+                            Text(field.title).font(.headline)
+                            Spacer()
+                            editButton(field.title.lowercased()) { editing = .init(field: field) }
+                        }
+                        let values = field.values(profile)
+                        if values.isEmpty {
+                            Text("Not provided").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(values.enumerated()), id: \.offset) { _, value in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(profile.name).font(.title3.bold())
-                                if profile.isDemo {
-                                    Text("Fictional demo profile").font(.caption).foregroundStyle(.secondary)
+                                Text(value).font(.subheadline).textSelection(.enabled)
+                                if let fact = field.facts(
+                                    profile.aiMedicalHistory?.facts ?? NativeMedicalProfile.emptyFacts
+                                ).first(where: {
+                                    NativeMedicalProfile.key($0.text) == NativeMedicalProfile.key(value)
+                                }) {
+                                    ForEach(fact.recordIDs, id: \.self) { id in
+                                        if let record = store.record(id) {
+                                            NavigationLink {
+                                                RecordDetailView(id: id)
+                                            } label: {
+                                                Label(record.title, systemImage: "doc.text")
+                                            }
+                                            .font(.caption).foregroundStyle(RevaTheme.accentText)
+                                        }
+                                    }
                                 }
                             }
                         }
-                        LabeledContent(
-                            "Date of birth",
-                            value: profile.dateOfBirth.isEmpty
-                                ? "Not provided" : RevaDate.display(profile.dateOfBirth)
-                        )
-                        .font(.subheadline)
-                        Button {
-                            editing = true
-                        } label: {
-                            Label("Edit medical profile", systemImage: "pencil")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                    }
-                    MedicalProfileListCard(title: "Allergies", symbol: "allergens", items: profile.allergies)
-                    MedicalProfileListCard(title: "Medications", symbol: "pills", items: profile.medications)
-                    MedicalProfileListCard(
-                        title: "Conditions", symbol: "heart.text.clipboard", items: profile.conditions)
-                    MedicalProfileListCard(
-                        title: "Surgeries & implants", symbol: "cross.case",
-                        items: profile.surgeriesAndImplants ?? [])
-                    RevaCard {
-                        Label("Care notes", systemImage: "note.text").font(.headline).foregroundStyle(
-                            RevaTheme.accent)
-                        Text(profile.careNotes?.isEmpty == false ? profile.careNotes! : "Not provided")
-                            .font(.subheadline).foregroundStyle(
-                                profile.careNotes?.isEmpty == false ? .primary : .secondary
-                            )
-                            .textSelection(.enabled)
-                    }
-                    Text("Keep this profile up to date with the details you want handy at every appointment.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(16).outlined(radius: 8)
                 }
-                .sheet(isPresented: $editing) { NavigationStack { MedicalProfileEditor(profile: profile) } }
-            } else {
-                ContentUnavailableView(
-                    "Profile unavailable", systemImage: "person.crop.rectangle",
-                    description: Text("Open Settings to restore the fictional demo."))
+                Text(
+                    "Review report-derived details against their linked originals. Your own entries and corrections are preserved."
+                )
+                .font(.footnote).foregroundStyle(.secondary)
             }
-        }
-        .navigationTitle("Medical profile")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    settings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                }.accessibilityLabel("Settings")
+        }.navigationTitle("Medical profile").navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $editing) { target in
+                if let profile = store.snapshot?.profile {
+                    NavigationStack { MedicalProfileEditor(profile: profile, field: target.field) }
+                }
             }
-        }
-        .sheet(isPresented: $settings) { NavigationStack { SettingsView() } }
     }
-}
-
-// MARK: - MedicalProfileListCard
-/// Render a medical list and preserve the distinction between missing and negative information.
-private struct MedicalProfileListCard: View {
-    // MARK: - Inputs and view state
-
-    let title: String
-    let symbol: String
-    let items: [String]
-
-    // MARK: - Rendering and navigation
-    var body: some View {
-        RevaCard {
-            Label(title, systemImage: symbol).font(.headline).foregroundStyle(RevaTheme.accent)
-            if items.isEmpty {
-                Text("Not provided").font(.subheadline).foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    if index > 0 { Divider() }
-                    Text(item).font(.subheadline).textSelection(.enabled)
-                }
-            }
+    private func editButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "pencil").font(.system(size: 15)).frame(width: 36, height: 36).contentShape(
+                Rectangle())
         }
+        .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Edit " + label)
     }
 }

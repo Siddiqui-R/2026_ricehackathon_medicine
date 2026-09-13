@@ -7,13 +7,14 @@ import Foundation
 
 // MARK: - Controlled service boundaries
 // Transport callbacks suspend requests while the real store processes a connection switch or edit.
-struct ServerState {
+struct ServerState: Codable {
     var revision: Int
     var snapshot: AppSnapshot
 }
 enum ServerFailure: LocalizedError {
     case conflict
     case empty(Int)
+    case response(Int)
     var errorDescription: String? { "Synthetic server failure" }
 }
 @MainActor struct ServerClient {
@@ -29,7 +30,7 @@ enum ServerFailure: LocalizedError {
     static var pushes = 0
     static var lastPushed: AppSnapshot?
     static var files: [String: Data] = [:]
-    init(baseURL: URL, token: String) throws {}
+    init(baseURL: URL, token: String, session: URLSession = .shared) throws {}
     func health() async throws -> String {
         try await Self.onHealth?()
         return "Connected"
@@ -68,7 +69,7 @@ enum ServerFailure: LocalizedError {
     static let capabilities = ProviderStatus(
         gemini: .init(configured: true, model: "native-repair-double"),
         transcription: .init(configured: false, model: "native-repair-double"))
-    init(url: String, token: String) throws {}
+    init(url: String, token: String, session: URLSession = .shared) throws {}
     private func wait() async throws {
         Self.requestCount += 1
         await Task.yield()
@@ -77,6 +78,12 @@ enum ServerFailure: LocalizedError {
     func status() async throws -> ProviderStatus {
         try await wait()
         return Self.capabilities
+    }
+    func medicalProfile(_ sources: [NativeProfileSource]) async throws -> NativeProfileResult {
+        try await wait()
+        return NativeProfileResult(
+            allergies: [], medications: [], conditions: [], surgeriesAndImplants: [], careNotes: [],
+            model: "native-repair-double")
     }
     func summarize(_ record: MedicalRecord) async throws -> AISummary {
         Self.summaryInput = record
@@ -116,9 +123,75 @@ enum ServerFailure: LocalizedError {
         try checkEditorConflicts(fixture, root: scratch)
         try checkRecordingPersistence(fixture, root: scratch)
         try await checkAppointmentSummaries(fixture, root: scratch)
+        try await checkAutomaticAccountSync(root: scratch)
         print("ALL NATIVE REPAIR STATE CHECKS PASSED")
     }
 
+    @MainActor static func checkAutomaticAccountSync(root: URL) async throws {
+        let user = NativeAccountUser(
+            id: "sync-test", email: "judge@example.test", name: "Native Judge", createdAt: RevaDate.now)
+        let session = NativeAccountSession(token: "synthetic", expiresAt: "2099-01-01T00:00:00Z", user: user)
+        let repository = LocalRepository(directory: root.appendingPathComponent("account-sync"))
+        let store = AppStore(repository: repository, account: session)
+        let empty = NativeAccount.emptySnapshot(user)
+        precondition(
+            store.snapshot == empty && store.useConnectedAI && store.connectionToken == session.token)
+        ServerClient.onPull = nil
+        ServerClient.onPush = nil
+        ServerClient.onUpload = nil
+        ServerClient.onAttachment = nil
+        ServerClient.remote = empty
+        var remote = empty
+        remote.profile.allergies = ["Remote allergy"]
+        ServerClient.remote = remote
+        try store.mutate { $0.profile.medications = ["Local medication"] }
+        store.backgroundActive = true
+        await store.synchronizeAccount()
+        precondition(store.snapshot?.profile.medications == ["Local medication"])
+        precondition(store.snapshot?.profile.allergies == ["Remote allergy"])
+        precondition(ServerClient.lastPushed == store.snapshot && store.syncBase?.snapshot == store.snapshot)
+        precondition(store.syncStatus == "All changes saved")
+        let persisted = AppStore(repository: repository, account: session)
+        precondition(persisted.syncBase?.snapshot == store.syncBase?.snapshot)
+        ServerClient.onPush = {
+            try store.mutate { $0.profile.careNotes = "Typed during upload" }
+        }
+        try store.mutate { $0.profile.conditions = ["Another edit"] }
+        await store.synchronizeAccount()
+        precondition(store.snapshot?.profile.careNotes == "Typed during upload")
+        precondition(store.syncBase?.snapshot.profile.careNotes == nil)
+        precondition(store.syncStatus == "Saving newer changes…")
+        ServerClient.onPush = nil
+        ServerClient.onPull = { throw ServerFailure.response(401) }
+        var expired = false
+        let retained = store.snapshot
+        store.sessionExpired = {
+            expired = true
+            store.stopBackgroundUpdates()
+            store.needsSignIn = true
+        }
+        await store.synchronizeAccount()
+        precondition(expired && store.snapshot == retained && store.needsSignIn)
+        ServerClient.onPull = nil
+        let demo = try makeStore(empty, root: root)
+        demo.backgroundActive = true
+        demo.providerStatus = ProviderClient.capabilities
+        demo.useConnectedAI = true
+        try demo.mutate {
+            $0.records = [
+                MedicalRecord(
+                    title: "Report", kind: "Notes", provider: "", date: RevaDate.now,
+                    text: "Synthetic original", summary: "")
+            ]
+        }
+        precondition(demo.profileDebounce != nil)
+        demo.useConnectedAI = false
+        precondition(demo.profileDebounce?.isCancelled == true && demo.profileObserved.isEmpty)
+        demo.stopBackgroundUpdates()
+        print(
+            "PASS native accounts: isolated empty workspace, automatic merge and baseline persistence, edits during upload, expiry preserves state, and AI opt-out cancels work"
+        )
+    }
     @MainActor static func makeStore(_ fixture: AppSnapshot, root: URL) throws -> AppStore {
         let repository = LocalRepository(directory: root.appendingPathComponent(UUID().uuidString))
         try repository.save(fixture)

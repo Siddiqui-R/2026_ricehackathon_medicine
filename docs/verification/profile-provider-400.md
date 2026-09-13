@@ -16,3 +16,5 @@ The provider schema retains exact fields and source-ID enums. The prompt and ser
 No credentials or raw provider response bodies are included in this report.
 
 Separate observation: preparation still uses its documented fixed `gemini-3.8-flash` model. Direct checks saw intermittent provider overload (503) and a later successful response. This is distinct from the reproducible profile schema error; model selection was not changed in this fix.
+
+Subsequent model update: all Gemini analysis now shares `gemini-flash-lite-latest`, including preparation. The former `gemini-3.8-flash` and `gemini-3.5-flash-lite` environment pins migrate to that alias. The live checks above describe the earlier deployment; the new alias migration is covered separately by mocked model-routing tests.

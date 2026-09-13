@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = [
     "Core/Models.swift", "Core/SymptomEntry.swift", "Core/LocalRepository.swift",
     "Core/ProviderContracts.swift", "Core/ReportEngine.swift",
+    "Core/NativeAccount.swift", "Core/NativeDemoPerson.swift", "Core/NativeMedicalProfile.swift",
+    "Core/NativeProfileEditing.swift", "Core/NativeSnapshotMerge.swift", "Core/NativeVisitBrief.swift",
+    "State/AppStore+AutomaticUpdates.swift",
     "State/AppStore.swift", "State/AppStore+Records.swift", "State/AppStore+Visits.swift",
     "State/AppStore+Providers.swift", "State/AppStore+AI.swift",
     "State/AppStore+Recordings.swift",

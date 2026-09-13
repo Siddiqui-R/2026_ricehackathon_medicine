@@ -18,11 +18,20 @@ import {
 } from "./profile.mjs";
 import { providerJSON } from "./provider-http.mjs";
 // MARK: - Configuration discovery and bounded provider responses
+export const DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest";
+// Migrate the previously shipped model pins even when copied into an environment variable.
+// A deliberately configured alternate model remains a server-wide override.
+export function resolveGeminiModel(value = process.env.GEMINI_MODEL) {
+  const model = value?.trim();
+  return !model || ["gemini-3.8-flash", "gemini-3.5-flash-lite"].includes(model)
+    ? DEFAULT_GEMINI_MODEL
+    : model;
+}
 export function providerStatus() {
   return {
     gemini: {
       configured: Boolean(process.env.GEMINI_API_KEY),
-      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+      model: resolveGeminiModel(),
     },
     transcription: {
       configured: Boolean(process.env.ELEVENLABS_API_KEY),
@@ -38,10 +47,7 @@ export async function gemini(operation, input, fetcher = fetch) {
   else fail(400, "Unknown Gemini operation.");
   if (!process.env.GEMINI_API_KEY)
     fail(424, "Gemini is not configured on the server.");
-  const model =
-    operation === "prepare"
-      ? "gemini-3.8-flash"
-      : process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const model = resolveGeminiModel();
   if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(model))
     fail(424, "Invalid Gemini model configuration.");
   const fields =

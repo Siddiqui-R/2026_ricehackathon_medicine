@@ -2,7 +2,7 @@
 
 Home provides **Upcoming visit** and **Record session**. The appointment list is no longer a navigation destination. Existing appointments, reports and audio remain intact; old visit URLs still open.
 
-Upcoming visit accepts a visit type, optional concern and up to three questions. Each Run pre-visit brief click calls authenticated `POST /v1/ai/prepare`. Both server implementations use `gemini-3.8-flash` for preparation, independent of the configurable summary model. A working server key with access to that model is required. Errors are shown; this flow has no local or cached fallback.
+Upcoming visit accepts a visit type, optional concern and up to three questions. Each Run pre-visit brief click calls authenticated `POST /v1/ai/prepare`. Both server implementations use the same configured Gemini model for every analysis operation, defaulting to `gemini-flash-lite-latest`. Missing/blank settings and the prior `gemini-3.8-flash` / `gemini-3.5-flash-lite` pins migrate to this moving Flash-Lite alias; other explicit `GEMINI_MODEL` overrides remain global. Browser and native brief validation accept the attributed model without pinning one release. A working server key with access to the configured model is required. Errors are shown; this flow has no local or cached fallback.
 
 The request contains original readable records plus an explicitly patient-provided medical profile. Responses are limited to 180 words, three short questions and six source references. Source/identity changes invalidate pending results. The brief stays in memory until the user downloads the PDF or closes the flow; no scheduled visit or report is persisted by this flow.
 
