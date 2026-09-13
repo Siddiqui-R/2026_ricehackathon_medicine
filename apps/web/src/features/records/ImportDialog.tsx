@@ -19,6 +19,7 @@ import {
   type ExtractionResult,
 } from './extractDocument';
 import { localDay } from './recordPresentation';
+import { PDFPreview } from './PDFPreview';
 
 // MARK: - Cancellable reading and unchanged original ownership
 export function ImportDialog({ onClose }: { onClose: () => void }) {
@@ -260,7 +261,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     <summary>Compare with the original</summary>
                     <div className="source-preview-wrap">
                       {sourceType(file) === 'application/pdf' ? (
-                        <iframe className="source-preview" src={previewURL} title="Original uploaded PDF" />
+                        <PDFPreview key={previewURL} blob={file} title="Original uploaded PDF" />
                       ) : sourceType(file).startsWith('image/') ? (
                         <img
                           className="source-preview-image"

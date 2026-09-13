@@ -92,6 +92,8 @@ struct GeminiProfileTests {
         let schema = try #require(generation["responseJsonSchema"] as? [String: Any])
         #expect(schema["required"] as? [String] == categories)
         #expect(schema["additionalProperties"] as? Bool == false)
+        let properties = try #require(schema["properties"] as? [String: [String: Any]])
+        for category in categories { #expect(properties[category]?["maxItems"] == nil) }
     }
 
     // MARK: - Fail before provider transport when any source exceeds the contract

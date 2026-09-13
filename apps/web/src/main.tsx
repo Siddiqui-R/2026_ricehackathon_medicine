@@ -24,6 +24,7 @@ import { readSession } from './core/session';
 import { App } from './App';
 import { Brand } from './components/Brand';
 import { NotFound } from './components/NotFound';
+import { MobilePreview } from './landing/MobilePreview';
 import { HomeLanding } from './landing/HomeLanding';
 import { Login } from './landing/Login';
 import { Signup } from './landing/Signup';
@@ -59,6 +60,7 @@ function Entry() {
       </RevaProvider>
     );
   if (path === '/') return <HomeLanding />;
+  if (path === '/mobile') return <MobilePreview />;
   const LocalArchive = path === '/basic' ? BasicArchive : path === '/test' ? TestArchive : null;
   if (LocalArchive)
     return (

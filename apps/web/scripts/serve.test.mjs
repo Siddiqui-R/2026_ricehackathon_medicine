@@ -363,7 +363,7 @@ test(
         assert.equal(result.headers['content-type'], 'text/html; charset=utf-8');
         assert.match(result.bytes.toString(), /This page doesn’t exist/);
         assert.match(result.bytes.toString(), /href="\/">Back to home<\/a>/);
-        assert.match(result.headers['content-security-policy'], /frame-ancestors 'none'/);
+        assert.match(result.headers['content-security-policy'], /frame-ancestors 'self'/);
       }
       const head = await send(webPort, '/hospital', { method: 'HEAD' });
       assert.equal(head.status, 404);
@@ -380,6 +380,8 @@ test(
         ['/', 'text/html; charset=utf-8'],
         ['/demo', 'text/html; charset=utf-8'],
         ['/demo/', 'text/html; charset=utf-8'],
+        ['/mobile', 'text/html; charset=utf-8'],
+        ['/mobile/', 'text/html; charset=utf-8'],
         ['/login', 'text/html; charset=utf-8'],
         ['/signup', 'text/html; charset=utf-8'],
         ['/app', 'text/html; charset=utf-8'],
@@ -393,7 +395,7 @@ test(
         assert.equal(result.headers['content-type'], type);
         assert.equal(result.headers['x-content-type-options'], 'nosniff');
         assert.match(result.headers['content-security-policy'], /connect-src 'self' blob:/);
-        assert.match(result.headers['content-security-policy'], /frame-ancestors 'none'/);
+        assert.match(result.headers['content-security-policy'], /frame-ancestors 'self'/);
       }
       const head = await send(webPort, '/index.html?version=1', { method: 'HEAD' });
       assert.equal(head.status, 200);

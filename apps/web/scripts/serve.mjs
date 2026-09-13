@@ -26,7 +26,7 @@ const port = Number(process.env.PORT || 4173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid TCP port.');
 const host = process.env.HOST || '127.0.0.1';
 const contentSecurityPolicy =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -110,7 +110,7 @@ function readBody(incoming, maximum) {
 }
 
 // MARK: - Only compiled assets, bundled fictional data and the five public application routes are readable
-const appRoutes = new Set(['/', '/demo', '/login', '/signup', '/app']);
+const appRoutes = new Set(['/', '/demo', '/mobile', '/login', '/signup', '/app']);
 function appRoute(pathname) {
   return appRoutes.has(pathname.length > 1 ? pathname.replace(/\/+$/u, '') : pathname);
 }

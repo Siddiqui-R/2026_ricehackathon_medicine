@@ -33,7 +33,7 @@ extension GeminiService {
             "properties": .object(
                 Dictionary(
                     uniqueKeysWithValues: categories.map {
-                        ($0, .object(["type": .string("array"), "items": fact, "maxItems": .integer(30)]))
+                        ($0, .object(["type": .string("array"), "items": fact]))
                     })),
             "required": .array(categories.map(JSONValue.string)), "additionalProperties": .bool(false),
         ])

@@ -15,6 +15,7 @@
     { "source": "/health", "destination": "/api/reva?route=/health" },
     { "source": "/v1/:path*", "destination": "/api/reva?route=/v1/:path*" },
     { "source": "/demo", "destination": "/index.html" },
+    { "source": "/mobile", "destination": "/index.html" },
     { "source": "/login", "destination": "/index.html" },
     { "source": "/signup", "destination": "/index.html" },
     { "source": "/app", "destination": "/index.html" }
@@ -27,7 +28,7 @@
         { "key": "Referrer-Policy", "value": "no-referrer" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
         }
       ]
     }
