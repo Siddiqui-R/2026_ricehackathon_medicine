@@ -11,6 +11,8 @@ The provider schema retains exact fields and source-ID enums. The prompt and ser
 - [x] Replace the generic permissions/credits message with status-specific, sanitized guidance.
 - [x] Pass 10 backend tests (database integration skipped), 281 browser tests, production build and source structure checks.
 
-Deployment verification is performed after publishing. No credentials or raw provider response bodies are included in this report.
+- [x] Production deployment `8d71bda` reached Ready. Reloading the example account's medical-profile page completed automatic extraction and showed “Medical profile is up to date with your reports.” Extracted conditions and care notes linked to the laboratory and scanned sources; existing manually entered allergies and medications remained visible.
+
+No credentials or raw provider response bodies are included in this report.
 
 Separate observation: preparation still uses its documented fixed `gemini-3.8-flash` model. Direct checks saw intermittent provider overload (503) and a later successful response. This is distinct from the reproducible profile schema error; model selection was not changed in this fix.
