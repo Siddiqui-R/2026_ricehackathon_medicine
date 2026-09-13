@@ -23,6 +23,22 @@ async function putRaw(factory: IDBFactory, name: string, store: string, key: str
   db.close();
 }
 describe('IndexedDB durability and ownership of writes', () => {
+  it('persists the last server baseline separately and ignores an older tab checkpoint', async () => {
+    const factory = new IDBFactory();
+    const first = new IndexedDBRepository('sync-baseline', factory);
+    const local = seed(),
+      remote = seed();
+    local.profile.careNotes = 'Unsent local changes';
+    await first.commit(local, 0);
+    await first.saveSyncBase({ revision: 4, snapshot: remote });
+    await first.close();
+    const reopened = new IndexedDBRepository('sync-baseline', factory);
+    expect(await reopened.loadSyncBase()).toEqual({ revision: 4, snapshot: remote });
+    expect((await reopened.load())?.snapshot.profile.careNotes).toBe('Unsent local changes');
+    await reopened.saveSyncBase({ revision: 3, snapshot: local });
+    expect((await reopened.loadSyncBase())?.revision).toBe(4);
+    await reopened.close();
+  });
   it('restores the entire snapshot and original bytes after a repository restart', async () => {
     const factory = new IDBFactory(),
       first = new IndexedDBRepository('restart', factory),

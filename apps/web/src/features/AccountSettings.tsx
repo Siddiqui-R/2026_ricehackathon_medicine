@@ -46,17 +46,24 @@ export function AccountCard({
           <dd>{expiry ? `Expires ${formatDate(expiry, true)}` : 'Expiry unknown'}</dd>
         </div>
         <div>
-          <dt>Server copy</dt>
-          <dd>
-            {store.serverRevision == null
-              ? 'Not checked yet'
-              : `Revision ${store.serverRevision}${store.busy ? ' · syncing' : ''}`}
+          <dt>Account sync</dt>
+          <dd role="status">
+            {store.syncStatus === 'saved'
+              ? 'Up to date'
+              : store.syncStatus === 'offline'
+                ? 'Saved here · reconnecting'
+                : 'Syncing automatically…'}
           </dd>
         </div>
       </dl>
+      {store.syncError && (
+        <p className="muted small" role="status">
+          {store.syncError}
+        </p>
+      )}
       <p>
-        Changes you save here are sent to your account about a second later. Log out on a shared computer;
-        this browser keeps a private copy until you delete the account.
+        Changes sync automatically to your account, and updates from your other devices arrive here too. Log
+        out on a shared computer; this browser keeps a private copy until you delete the account.
       </p>
       <div className="form-actions account-actions">
         <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm(true)}>

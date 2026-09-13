@@ -4,7 +4,7 @@
 // Outputs: Restored state, preserved originals or explicit corruption/quota/concurrent-tab errors.
 // Side effects: IndexedDB transactions, whole-database deletion on request, and same-origin reads of
 //               explicitly bundled demo assets.
-import type { AppSnapshot } from './models.ts';
+import type { AppSnapshot, ServerState } from './models.ts';
 import { demoDatabaseName, demoSnapshot, selectedDemoPerson, type DemoPersonID } from './demoProfiles';
 import { safeFilename, validateSnapshot } from './validation.ts';
 import { boundedBytes, MAX_ATTACHMENT_BYTES, MAX_SNAPSHOT_BYTES } from './api.ts';
@@ -25,6 +25,9 @@ export interface SnapshotRepository {
   seed(): Promise<AppSnapshot>;
   saveAttachment(filename: string, blob: Blob): Promise<void>;
   getAttachment(filename: string): Promise<Blob>;
+  // The last server snapshot lives beside the local copy for durable three-way reconciliation.
+  loadSyncBase?(): Promise<ServerState | null>;
+  saveSyncBase?(state: ServerState): Promise<void>;
   // Optional: remove this database entirely (account deletion). Absent for repositories that cannot.
   destroy?(): Promise<void>;
 }
@@ -110,6 +113,41 @@ export class IndexedDBRepository implements SnapshotRepository {
       };
       transaction.oncomplete = () => (failure ? reject(failure) : resolve(result));
       transaction.onabort = () => reject(transaction.error ?? new Error('Saved data could not be read.'));
+    });
+  }
+  async loadSyncBase(): Promise<ServerState | null> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('snapshots', 'readonly');
+      const request = transaction.objectStore('snapshots').get('sync-base');
+      let result: ServerState | null = null,
+        failure: unknown;
+      request.onsuccess = () => {
+        try {
+          if (request.result !== undefined) result = checkedStored(request.result);
+        } catch (error) {
+          failure = error;
+        }
+      };
+      transaction.oncomplete = () => (failure ? reject(failure) : resolve(result));
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('The saved synchronization baseline could not be read.'));
+    });
+  }
+  async saveSyncBase(state: ServerState): Promise<void> {
+    const value = checkedStored(state);
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('snapshots', 'readwrite');
+      const store = transaction.objectStore('snapshots');
+      const request = store.get('sync-base');
+      request.onsuccess = () => {
+        // A slower request from another tab must never move the shared baseline backwards.
+        if (!request.result || request.result.revision <= value.revision) store.put(value, 'sync-base');
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('The synchronization baseline could not be saved.'));
     });
   }
 
@@ -209,7 +247,7 @@ export class IndexedDBRepository implements SnapshotRepository {
     const source = (await this.bundledSources()).find((item) => item.filename === filename);
     if (!source)
       throw new Error(
-        `The original “${filename}” is missing from this browser. Pull it from your server before syncing or opening it.`,
+        `The original “${filename}” is not available in this browser yet. Reconnect to finish downloading your account files.`,
       );
     const response = await this.fetcher(`/demo/${encodeURIComponent(filename)}`, {
       credentials: 'omit',
@@ -218,7 +256,7 @@ export class IndexedDBRepository implements SnapshotRepository {
     });
     if (!response.ok)
       throw new Error(
-        `The original “${filename}” is missing from this browser. Pull it from your server before syncing or opening it.`,
+        `The original “${filename}” is not available in this browser yet. Reconnect to finish downloading your account files.`,
       );
     const bytes = await boundedBytes(response, MAX_ATTACHMENT_BYTES);
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>

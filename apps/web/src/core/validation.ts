@@ -93,6 +93,33 @@ export function validateSnapshot(value: unknown): AppSnapshot {
   bool(profile.isDemo, 'profile.isDemo');
   optional(profile, 'surgeriesAndImplants', 'profile', strings);
   optional(profile, 'careNotes', 'profile');
+  optional(profile, 'aiMedicalHistory', 'profile', (raw, path) => {
+    const history = object(raw, path);
+    fields(history, ['sourceSignature', 'generatedAt', 'model'], path);
+    if (
+      !/^[a-f0-9]{64}$/.test(String(history.sourceSignature)) ||
+      !Number.isFinite(Date.parse(String(history.generatedAt)))
+    )
+      fail(path);
+    const facts = object(history.facts, `${path}.facts`);
+    for (const field of ['allergies', 'medications', 'conditions', 'surgeriesAndImplants', 'careNotes']) {
+      const items = array(facts[field], `${path}.facts.${field}`);
+      if (items.length > 30) fail(path);
+      items.forEach((rawFact) => {
+        const fact = object(rawFact, path);
+        text(fact.text, path);
+        strings(fact.recordIDs, path);
+      });
+    }
+    optional(history, 'suppressed', path, (rawSuppressed) => {
+      const suppressed = object(rawSuppressed, path);
+      Object.values(suppressed).forEach((items) => strings(items, path));
+    });
+    optional(history, 'suppressedRecordIDs', path, (rawSuppressed) => {
+      const suppressed = object(rawSuppressed, path);
+      Object.values(suppressed).forEach((items) => strings(items, path));
+    });
+  });
   const records = array(data.records, 'records').map((raw, index) => {
     const path = `records[${index}]`,
       record = object(raw, path);

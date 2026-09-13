@@ -1,7 +1,7 @@
 // Purpose: Keep persistent overarching health information together in an editable quick-reference profile.
 // Inputs: PatientProfile from the local snapshot and user-authored identity/medical field edits.
-// Outputs: Readable health cards and a validated profile update independent of historical source records.
-// Side effects: Saves through the aggregate mutation boundary; never rewrites documents or invokes providers.
+// Outputs: Editable health cards with report provenance and automatic update status.
+// Side effects: Saves manual corrections through the aggregate mutation boundary; never rewrites documents.
 
 import { useState, type FormEvent } from 'react';
 import {
@@ -10,22 +10,34 @@ import {
   NotebookPen,
   Pencil,
   Pill,
-  Settings,
   ShieldAlert,
   Stethoscope,
   UserRound,
 } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { useMedicalProfileUpdate } from '../../core/MedicalProfileUpdates';
 import { formatDate } from '../../core/domain';
 import { demoLabel } from '../../core/presentation';
-import type { PatientProfile } from '../../core/models';
-import { Button, Card, Field, Modal, PageHeading } from '../../components/ui';
+import type { MedicalProfileField, PatientProfile } from '../../core/models';
+import { Button, Card, Field, Modal } from '../../components/ui';
 import { localDay } from '../records/recordPresentation';
+
+type ProfileSection =
+  'identity' | 'allergies' | 'medications' | 'conditions' | 'surgeriesAndImplants' | 'careNotes';
+const sectionTitles: Record<ProfileSection, string> = {
+  identity: 'Personal details',
+  allergies: 'Allergies',
+  medications: 'Medications',
+  conditions: 'Conditions',
+  surgeriesAndImplants: 'Surgeries & implants',
+  careNotes: 'Care notes',
+};
 
 // MARK: - Profile cards describe only supplied information, including unspecified fields
 export function MedicalProfilePage() {
   const { snapshot } = useReva();
-  const [editing, setEditing] = useState(false);
+  const update = useMedicalProfileUpdate();
+  const [editing, setEditing] = useState<ProfileSection | null>(null);
   const profile = snapshot?.profile;
   if (!profile)
     return (
@@ -34,57 +46,92 @@ export function MedicalProfilePage() {
       </Card>
     );
   const sections = [
-    { title: 'Allergies', icon: ShieldAlert, items: profile.allergies },
-    { title: 'Medications', icon: Pill, items: profile.medications },
-    { title: 'Conditions', icon: HeartPulse, items: profile.conditions },
-    { title: 'Surgeries & implants', icon: Stethoscope, items: profile.surgeriesAndImplants ?? [] },
+    { key: 'allergies' as const, title: 'Allergies', icon: ShieldAlert, items: profile.allergies },
+    { key: 'medications' as const, title: 'Medications', icon: Pill, items: profile.medications },
+    { key: 'conditions' as const, title: 'Conditions', icon: HeartPulse, items: profile.conditions },
+    {
+      key: 'surgeriesAndImplants' as const,
+      title: 'Surgeries & implants',
+      icon: Stethoscope,
+      items: profile.surgeriesAndImplants ?? [],
+    },
   ];
+  const sources = (field: MedicalProfileField, text: string) => {
+    const fact = profile.aiMedicalHistory?.facts[field].find((item) => item.text === text);
+    const reports =
+      fact?.recordIDs
+        .map((id) => snapshot?.records.find((record) => record.id === id))
+        .filter((record) => !!record) ?? [];
+    return reports.length ? (
+      <span className="small muted" style={{ display: 'block' }}>
+        From{' '}
+        {reports.map((record, index) => (
+          <span key={record.id}>
+            {index > 0 && ', '}
+            <a href={`#/records/${encodeURIComponent(record.id)}`}>
+              {demoLabel(record.title, record.isDemo)}
+            </a>
+          </span>
+        ))}
+      </span>
+    ) : null;
+  };
   return (
-    <div className="stack">
-      <PageHeading
-        title="Medical profile"
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                location.hash = '/settings';
-              }}
-            >
-              <Settings size={18} /> Settings
-            </Button>
-            <Button onClick={() => setEditing(true)}>
-              <Pencil size={18} /> Edit profile
-            </Button>
-          </>
-        }
-      />
-      <Card className="profile-identity">
-        <div className="profile-avatar" aria-hidden="true">
-          {profile.initials || <UserRound size={26} />}
+    <div className="profile-page stack">
+      <header className="profile-heading">
+        <h1>Medical profile</h1>
+        <div className="profile-header-identity">
+          <span className="avatar" aria-hidden="true">
+            {profile.initials || <UserRound size={20} />}
+          </span>
+          <div className="profile-header-person">
+            <strong>{demoLabel(profile.name, profile.isDemo)}</strong>
+            <span>
+              <CalendarDays size={13} aria-hidden="true" />
+              {profile.dateOfBirth ? `Born ${formatDate(profile.dateOfBirth)}` : 'Date of birth not provided'}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            className="icon-button profile-edit"
+            aria-label="Edit personal details"
+            title="Edit personal details"
+            onClick={() => setEditing('identity')}
+          >
+            <Pencil size={16} />
+          </Button>
         </div>
-        <div className="record-main">
-          <h2>{demoLabel(profile.name, profile.isDemo)}</h2>
-          <p className="row muted">
-            <CalendarDays size={17} />
-            {profile.dateOfBirth ? `Born ${formatDate(profile.dateOfBirth)}` : 'Date of birth not provided'}
-          </p>
-        </div>
-      </Card>
+      </header>
+      <p className="small muted" role="status" aria-live="polite">
+        {update.message}
+        {profile.aiMedicalHistory?.generatedAt &&
+          update.status === 'current' &&
+          ` Last updated ${formatDate(profile.aiMedicalHistory.generatedAt)}.`}
+      </p>
       <div className="profile-grid">
         {sections.map((section) => (
-          <Card key={section.title} className="stack">
-            <div className="row">
+          <Card key={section.title} className="profile-section stack">
+            <div className="profile-section-heading">
               <span className="record-icon">
                 <section.icon size={22} />
               </span>
               <h2>{section.title}</h2>
+              <Button
+                variant="ghost"
+                className="icon-button profile-edit"
+                aria-label={`Edit ${section.title.toLowerCase()}`}
+                title={`Edit ${section.title.toLowerCase()}`}
+                onClick={() => setEditing(section.key)}
+              >
+                <Pencil size={16} />
+              </Button>
             </div>
             {section.items.length ? (
               <ul className="profile-items">
                 {section.items.map((item, index) => (
                   <li key={`${index}-${item}`} className="prose">
                     {demoLabel(item, profile.isDemo)}
+                    {sources(section.key, item)}
                   </li>
                 ))}
               </ul>
@@ -94,28 +141,58 @@ export function MedicalProfilePage() {
           </Card>
         ))}
       </div>
-      <Card className="stack">
-        <div className="row">
+      <Card className="profile-section stack">
+        <div className="profile-section-heading">
           <span className="record-icon">
             <NotebookPen size={22} />
           </span>
           <h2>Care notes</h2>
+          <Button
+            variant="ghost"
+            className="icon-button profile-edit"
+            aria-label="Edit care notes"
+            title="Edit care notes"
+            onClick={() => setEditing('careNotes')}
+          >
+            <Pencil size={16} />
+          </Button>
         </div>
-        <p className={profile.careNotes ? 'prose' : 'muted'}>
-          {demoLabel(profile.careNotes || '', profile.isDemo) || 'Not provided'}
-        </p>
+        {profile.careNotes ? (
+          profile.careNotes
+            .split('\n')
+            .filter(Boolean)
+            .map((line, index) => (
+              <p className="prose" key={index}>
+                {demoLabel(line, profile.isDemo)}
+                {sources('careNotes', line)}
+              </p>
+            ))
+        ) : (
+          <p className="muted">Not provided</p>
+        )}
       </Card>
       <p className="small muted">
-        Keep these details up to date. This profile is for quick reference; visit preparation currently uses
-        your Records. Profile edits do not change historical documents.
+        AI updates documented medical details when reports are added, edited, or removed. Your own entries and
+        corrections are preserved. Review these details against the linked reports; profile edits do not
+        change historical documents.
       </p>
-      {editing && <ProfileEditor profile={profile} onClose={() => setEditing(false)} />}
+      {editing && (
+        <ProfileEditor key={editing} section={editing} profile={profile} onClose={() => setEditing(null)} />
+      )}
     </div>
   );
 }
 
 // MARK: - Line-based editing preserves absent fields and detects concurrent profile changes
-function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose: () => void }) {
+function ProfileEditor({
+  profile,
+  section,
+  onClose,
+}: {
+  profile: PatientProfile;
+  section: ProfileSection;
+  onClose: () => void;
+}) {
   const { mutate, notify } = useReva();
   const [original] = useState(() => structuredClone(profile));
   const [name, setName] = useState(profile.name);
@@ -129,13 +206,11 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
   const dirty =
-    name !== original.name ||
-    birthDate !== original.dateOfBirth ||
-    allergies !== original.allergies.join('\n') ||
-    medications !== original.medications.join('\n') ||
-    conditions !== original.conditions.join('\n') ||
-    procedures !== (original.surgeriesAndImplants ?? []).join('\n') ||
-    notes !== (original.careNotes ?? '');
+    section === 'identity'
+      ? name !== original.name || birthDate !== original.dateOfBirth
+      : { allergies, medications, conditions, surgeriesAndImplants: procedures, careNotes: notes }[
+          section
+        ] !== (section === 'careNotes' ? (original.careNotes ?? '') : (original[section] ?? []).join('\n'));
   const close = () => {
     if (!saving) {
       if (dirty) setDiscard(true);
@@ -149,8 +224,10 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
     setError('');
     try {
       const trimmed = name.trim();
-      if (!trimmed) throw new Error('Add your name before saving your medical profile.');
+      if (section === 'identity' && !trimmed)
+        throw new Error('Add your name before saving your medical profile.');
       if (
+        section === 'identity' &&
         birthDate &&
         (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
           Number.isNaN(new Date(`${birthDate}T00:00:00Z`).getTime()) ||
@@ -173,23 +250,34 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
         .toUpperCase();
       const surgeries = list(procedures);
       await mutate((draft) => {
-        if (JSON.stringify(draft.profile) !== JSON.stringify(original))
+        const keys: (keyof PatientProfile)[] = section === 'identity' ? ['name', 'dateOfBirth'] : [section];
+        if (keys.some((key) => JSON.stringify(draft.profile[key]) !== JSON.stringify(original[key])))
           throw new Error(
-            'Your profile changed while this editor was open. Close and reopen it to see the latest details.',
+            'This section changed while you were editing. Close and reopen it to see the latest details.',
           );
-        draft.profile = {
-          ...original,
-          name: trimmed,
-          dateOfBirth: birthDate,
-          initials,
-          allergies: list(allergies),
-          medications: list(medications),
-          conditions: list(conditions),
-          surgeriesAndImplants: surgeries.length ? surgeries : null,
-          careNotes: notes.trim() || null,
-        };
+        // Only the selected fields are replaced; concurrent edits to other sections remain intact.
+        switch (section) {
+          case 'identity':
+            Object.assign(draft.profile, { name: trimmed, dateOfBirth: birthDate, initials });
+            break;
+          case 'allergies':
+            draft.profile.allergies = list(allergies);
+            break;
+          case 'medications':
+            draft.profile.medications = list(medications);
+            break;
+          case 'conditions':
+            draft.profile.conditions = list(conditions);
+            break;
+          case 'surgeriesAndImplants':
+            draft.profile.surgeriesAndImplants = surgeries.length ? surgeries : null;
+            break;
+          case 'careNotes':
+            draft.profile.careNotes = notes.trim() || null;
+            break;
+        }
       });
-      notify('Medical profile saved.');
+      notify(`${sectionTitles[section]} saved.`);
       onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The medical profile could not be saved.');
@@ -198,10 +286,10 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
     }
   };
   return (
-    <Modal title="Edit medical profile" onClose={close} wide>
+    <Modal title={`Edit ${sectionTitles[section].toLowerCase()}`} onClose={close}>
       {discard ? (
         <div className="stack">
-          <p>Discard your unsaved profile changes?</p>
+          <p>Discard your unsaved changes?</p>
           <div className="form-actions">
             <Button variant="secondary" onClick={() => setDiscard(false)}>
               Keep editing
@@ -214,74 +302,97 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
       ) : (
         <form className="stack" onSubmit={(event) => void save(event)}>
           <p className="muted">
-            Add what you know. Empty medical fields stay “Not provided.” Put one item on each line.
+            {section === 'identity'
+              ? 'Keep your personal details up to date.'
+              : section === 'careNotes'
+                ? 'Keep any details you want handy at an appointment.'
+                : 'Put one item on each line. Leave blank if not provided.'}
           </p>
-          <div className="form-grid">
-            <Field label="Name">
-              <input
-                autoFocus
-                required
-                value={demoLabel(name, profile.isDemo)}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={240}
-                autoComplete="name"
-              />
-            </Field>
-            <Field label="Date of birth · optional">
-              <input
-                type="date"
-                value={birthDate}
-                max={localDay()}
-                onChange={(event) => setBirthDate(event.target.value)}
-                autoComplete="bday"
-              />
-            </Field>
-            <Field label="Allergies">
-              <textarea
-                rows={4}
-                value={demoLabel(allergies, profile.isDemo)}
-                onChange={(event) => setAllergies(event.target.value)}
-                maxLength={12000}
-                placeholder="Substance and reaction, if known"
-              />
-            </Field>
-            <Field label="Medications">
-              <textarea
-                rows={4}
-                value={demoLabel(medications, profile.isDemo)}
-                onChange={(event) => setMedications(event.target.value)}
-                maxLength={12000}
-                placeholder="Name, dose, and how you take it"
-              />
-            </Field>
-            <Field label="Conditions">
-              <textarea
-                rows={4}
-                value={demoLabel(conditions, profile.isDemo)}
-                onChange={(event) => setConditions(event.target.value)}
-                maxLength={12000}
-                placeholder="Conditions you want to keep in view"
-              />
-            </Field>
-            <Field label="Surgeries & implants">
-              <textarea
-                rows={4}
-                value={demoLabel(procedures, profile.isDemo)}
-                onChange={(event) => setProcedures(event.target.value)}
-                maxLength={12000}
-                placeholder="Procedure or implant, location, and date"
-              />
-            </Field>
-            <div className="field-full">
-              <Field label="Care notes">
-                <textarea
-                  rows={4}
-                  value={demoLabel(notes, profile.isDemo)}
-                  onChange={(event) => setNotes(event.target.value)}
-                  maxLength={12000}
-                  placeholder="Anything else you want handy at an appointment"
+          <div className={section === 'identity' ? 'form-grid' : 'stack'}>
+            {section === 'identity' && (
+              <Field label="Name">
+                <input
+                  autoFocus
+                  required
+                  value={demoLabel(name, profile.isDemo)}
+                  onChange={(event) => setName(event.target.value)}
+                  maxLength={240}
+                  autoComplete="name"
                 />
               </Field>
+            )}
+            {section === 'identity' && (
+              <Field label="Date of birth · optional">
+                <input
+                  type="date"
+                  value={birthDate}
+                  max={localDay()}
+                  onChange={(event) => setBirthDate(event.target.value)}
+                  autoComplete="bday"
+                />
+              </Field>
+            )}
+            {section === 'allergies' && (
+              <Field label="Allergies">
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={demoLabel(allergies, profile.isDemo)}
+                  onChange={(event) => setAllergies(event.target.value)}
+                  maxLength={12000}
+                  placeholder="Substance and reaction, if known"
+                />
+              </Field>
+            )}
+            {section === 'medications' && (
+              <Field label="Medications">
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={demoLabel(medications, profile.isDemo)}
+                  onChange={(event) => setMedications(event.target.value)}
+                  maxLength={12000}
+                  placeholder="Name, dose, and how you take it"
+                />
+              </Field>
+            )}
+            {section === 'conditions' && (
+              <Field label="Conditions">
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={demoLabel(conditions, profile.isDemo)}
+                  onChange={(event) => setConditions(event.target.value)}
+                  maxLength={12000}
+                  placeholder="Conditions you want to keep in view"
+                />
+              </Field>
+            )}
+            {section === 'surgeriesAndImplants' && (
+              <Field label="Surgeries & implants">
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={demoLabel(procedures, profile.isDemo)}
+                  onChange={(event) => setProcedures(event.target.value)}
+                  maxLength={12000}
+                  placeholder="Procedure or implant, location, and date"
+                />
+              </Field>
+            )}
+            <div className="field-full">
+              {section === 'careNotes' && (
+                <Field label="Care notes">
+                  <textarea
+                    autoFocus
+                    rows={4}
+                    value={demoLabel(notes, profile.isDemo)}
+                    onChange={(event) => setNotes(event.target.value)}
+                    maxLength={12000}
+                    placeholder="Anything else you want handy at an appointment"
+                  />
+                </Field>
+              )}
             </div>
           </div>
           {error && (
@@ -293,8 +404,8 @@ function ProfileEditor({ profile, onClose }: { profile: PatientProfile; onClose:
             <Button variant="secondary" onClick={close} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !name.trim()}>
-              {saving ? 'Saving…' : 'Save profile'}
+            <Button type="submit" disabled={saving || (section === 'identity' && !name.trim())}>
+              {saving ? 'Saving…' : 'Save changes'}
             </Button>
           </div>
         </form>

@@ -38,7 +38,7 @@ describe('appointment recording interface', () => {
         <Dashboard />
       </RevaProvider>,
     );
-    expect(button(html, 'Upcoming visit')).toBeDefined();
+    expect(button(html, 'Prepare for this visit')).toBeDefined();
     expect(button(html, 'Record session')).toBeDefined();
     expect(html).toContain('Session recordings');
     expect(html).not.toMatch(/Your next appointment|Add an appointment|All appointments/);

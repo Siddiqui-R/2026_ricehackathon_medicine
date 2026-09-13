@@ -39,7 +39,7 @@ export function writeSyncMarker(
     if (!revision(marker.serverRevision) || !revision(marker.localRevision)) return;
     storage?.setItem(syncMarkerKey(userID), JSON.stringify(marker));
   } catch {
-    /* Chunk: Without a marker the next start asks the user to review the server copy, which is safe. */
+    /* Chunk: The IndexedDB baseline still merges offline edits; an unknown baseline preserves both copies. */
   }
 }
 export function clearSyncMarker(userID: string, storage: StorageLike | null = browserStorage()): void {

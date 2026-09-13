@@ -16,11 +16,34 @@ final class MedicalProfileTests: XCTestCase {
         let profile = try JSONDecoder().decode(PatientProfile.self, from: Data(json.utf8))
         XCTAssertNil(profile.surgeriesAndImplants)
         XCTAssertNil(profile.careNotes)
+        XCTAssertNil(profile.aiMedicalHistory)
         XCTAssertEqual(profile.allergies, [])
         XCTAssertEqual(profile.dateOfBirth, "1991-05-10")
     }
 
     // MARK: - Durable profile edits and unspecified values
+
+    func testAIProfileProvenanceSurvivesNativeRoundTripAndManualEdits() throws {
+        var snapshot = try fixture()
+        snapshot.profile.aiMedicalHistory = .init(
+            sourceSignature: "source-signature", generatedAt: "2026-09-12T12:00:00Z",
+            model: "configured-model",
+            facts: .init(
+                allergies: [
+                    .init(
+                        text: "Fictional allergen — rash, documented 2026-09-01",
+                        recordIDs: [snapshot.records[0].id])
+                ],
+                medications: [], conditions: [], surgeriesAndImplants: [], careNotes: []),
+            suppressed: ["conditions": ["Fictional historical condition rejected by patient"]],
+            suppressedRecordIDs: ["conditions": [snapshot.records[0].id]])
+        snapshot.profile.careNotes = "Manually updated care note."
+        let roundTrip = try JSONDecoder().decode(AppSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(roundTrip.profile.aiMedicalHistory, snapshot.profile.aiMedicalHistory)
+        XCTAssertEqual(roundTrip.profile.careNotes, "Manually updated care note.")
+        XCTAssertEqual(roundTrip.profile.name, snapshot.profile.name)
+        XCTAssertEqual(roundTrip.records, snapshot.records)
+    }
 
     func testMedicalProfileUpdatesPersistWithoutChangingOtherHistory() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

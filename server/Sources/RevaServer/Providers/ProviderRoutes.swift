@@ -1,6 +1,6 @@
 // Purpose: Register authenticated provider discovery and Gemini JSON endpoints, then attach voice routes.
 // Inputs: An already owner-authenticated /v1 route group, server provider settings, and injectable transports.
-// Outputs: Public configuration flags or validated summary/preparation DTOs with bounded request bodies.
+// Outputs: Public configuration flags or validated summary/preparation/profile DTOs with bounded request bodies.
 // Side effects: Creates provider services and dispatches configured AI requests when their routes are invoked.
 // Boundary: Discovery exposes configuration status only. JSON/media validation occurs before service dispatch.
 
@@ -48,6 +48,17 @@ func registerProviderRoutes(
                 reason: "Expected a visit object and candidate record objects for Gemini preparation.")
         }
         return try await gemini.prepare(input)
+    }
+    secured.on(.POST, "ai", "profile", body: .collect(maxSize: "2mb")) {
+        request async throws -> GeminiProfileResponse in
+        try requireProviderJSON(request)
+        let input: GeminiProfileRequest
+        do { input = try request.content.decode(GeminiProfileRequest.self) } catch {
+            throw Abort(
+                .badRequest,
+                reason: "Expected source report records with only id, version, title, date and text fields.")
+        }
+        return try await gemini.profile(input)
     }
     registerVoiceProviderRoutes(secured, configuration: configuration)
 }

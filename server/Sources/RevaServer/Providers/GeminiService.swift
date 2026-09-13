@@ -1,4 +1,4 @@
-// Purpose: Turn supplied source records into reviewed summary/preparation JSON through Gemini.
+// Purpose: Turn supplied source records into bounded summaries, visit preparation and medical history through Gemini.
 // Inputs: Validated request DTOs, server-only Gemini settings, and an injectable HTTP transport.
 // Outputs: Strictly checked model-labelled responses or sanitized provider/structured-output errors.
 // Side effects: Sends one configured Google request per operation. The service does not persist client state.
@@ -92,7 +92,10 @@ struct GeminiService: Sendable {
 
     // MARK: - Separate untrusted source JSON from server instructions
     // Configuration gates run before the single external request. No client state is changed by this service.
-    private func generate<Input: Encodable>(input: Input, schema: JSONValue, model: String? = nil, task: String) async throws
+    func generate<Input: Encodable>(
+        input: Input, schema: JSONValue, model: String? = nil,
+        maxOutputTokens: Int64 = 8192, maxStructuredBytes: Int = 64_000, task: String
+    ) async throws
         -> [String: Any]
     {
         guard configuration.paidAccessAllowed else {
@@ -121,7 +124,8 @@ struct GeminiService: Sendable {
             ]),
             "generationConfig": .object([
                 "responseMimeType": .string("application/json"), "responseJsonSchema": schema,
-                "candidateCount": .integer(1), "maxOutputTokens": .integer(8192), "temperature": .number(0.2),
+                "candidateCount": .integer(1), "maxOutputTokens": .integer(maxOutputTokens),
+                "temperature": .number(0.2),
             ]),
         ])
         // MARK: - Fixed Google endpoint and one bounded request
@@ -163,14 +167,14 @@ struct GeminiService: Sendable {
             let parts = candidate.content?.parts
         else { throw invalidResponse() }
         let text = parts.filter { $0.thought != true }.compactMap(\.text).joined()
-        guard !text.isEmpty, text.utf8.count <= 64_000,
+        guard !text.isEmpty, text.utf8.count <= maxStructuredBytes,
             let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
         else { throw invalidResponse() }
         return object
     }
 
     // MARK: - Sanitized failure surfaced to local fallback UI
-    private func invalidResponse() -> Abort {
+    func invalidResponse() -> Abort {
         Abort(
             .serviceUnavailable,
             reason:

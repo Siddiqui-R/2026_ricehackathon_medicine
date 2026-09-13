@@ -4,7 +4,7 @@
 // Side effects: None outside test memory; never contacts a provider or writes real workspace data.
 import seedJSON from '../../../public/demo/seed.json';
 import sampleJSON from '../../../public/demo/sample-transcript.json';
-import type { AppSnapshot, ProviderStatus, VisitRecording } from '../models.ts';
+import type { AppSnapshot, ProviderStatus, ServerState, VisitRecording } from '../models.ts';
 import type { SnapshotRepository, StoredSnapshot } from '../repository.ts';
 import { LocalConflictError } from '../repository.ts';
 import { APIError } from '../api.ts';
@@ -33,6 +33,13 @@ export class MemoryRepository implements SnapshotRepository {
   saved: StoredSnapshot | null = { snapshot: seed(), revision: 1 };
   attachments = new Map<string, Blob>();
   failure: Error | null = null;
+  syncBase: ServerState | null = null;
+  async loadSyncBase() {
+    return structuredClone(this.syncBase);
+  }
+  async saveSyncBase(base: ServerState) {
+    this.syncBase = structuredClone(base);
+  }
   async load() {
     if (this.failure) throw this.failure;
     return structuredClone(this.saved);

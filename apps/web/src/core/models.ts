@@ -15,6 +15,25 @@ export interface PatientProfile {
   isDemo: boolean;
   surgeriesAndImplants?: string[] | null;
   careNotes?: string | null;
+  aiMedicalHistory?: AIMedicalHistory | null;
+}
+export type MedicalProfileField =
+  'allergies' | 'medications' | 'conditions' | 'surgeriesAndImplants' | 'careNotes';
+export interface AIProfileFact {
+  text: string;
+  recordIDs: string[];
+}
+export type AIProfileFacts = Record<MedicalProfileField, AIProfileFact[]>;
+export interface AIProfileResult extends AIProfileFacts {
+  model: string;
+}
+export interface AIMedicalHistory {
+  sourceSignature: string;
+  generatedAt: string;
+  model: string;
+  facts: AIProfileFacts;
+  suppressed?: Partial<Record<MedicalProfileField, string[]>>;
+  suppressedRecordIDs?: Partial<Record<MedicalProfileField, string[]>>;
 }
 export interface SymptomEntry {
   observedAt: string;

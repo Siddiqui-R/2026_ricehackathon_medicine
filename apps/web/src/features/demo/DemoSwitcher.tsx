@@ -8,7 +8,15 @@ import { Modal } from '../../components/ui';
 import { demoPeople, demoPersonURL, selectedDemoPerson } from '../../core/demoProfiles';
 
 // MARK: - A full navigation starts a new store bound only to the selected person's database
-export function DemoSwitcher({ disabled, className = '' }: { disabled: boolean; className?: string }) {
+export function DemoSwitcher({
+  disabled,
+  className = '',
+  label = 'Switch demo account',
+}: {
+  disabled: boolean;
+  className?: string;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const selected = selectedDemoPerson();
   return (
@@ -17,12 +25,12 @@ export function DemoSwitcher({ disabled, className = '' }: { disabled: boolean; 
         className={`demo-switch ${className}`}
         type="button"
         disabled={disabled}
-        aria-label="Switch demo account"
-        title="Switch demo account"
+        aria-label={label}
+        title={label}
         onClick={() => setOpen(true)}
       >
         <UsersRound size={17} />
-        <span className="demo-switch-label">Switch demo account</span>
+        <span className="demo-switch-label">{label}</span>
       </button>
       {open && (
         <Modal title="Switch demo account" onClose={() => setOpen(false)}>

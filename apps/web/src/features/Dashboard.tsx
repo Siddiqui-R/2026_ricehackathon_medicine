@@ -19,7 +19,7 @@ import {
 import { useReva } from '../core/RevaContext';
 import { defaultTimeZone, formatDate } from '../core/domain';
 import { demoLabel } from '../core/presentation';
-import { Card, Modal } from '../components/ui';
+import { Button, Card, Modal } from '../components/ui';
 import { VisitPreparation } from './visits/VisitPreparation';
 import { RecordingCapture } from './visits/RecordingCapture';
 import { RecordingDetail } from './visits/RecordingDetail';
@@ -62,13 +62,16 @@ export function Dashboard() {
         </span>
       </div>
       <div className="home-care-actions" aria-label="Visit actions">
-        <button onClick={() => setPrepare(true)}>
-          <CalendarDays size={26} />
-          <span>
-            <strong>Upcoming visit</strong>
-            <small>Run a pre-visit brief</small>
-          </span>
-        </button>
+        <div className="home-prepare-action">
+          <div className="home-prepare-copy">
+            <CalendarDays size={26} aria-hidden="true" />
+            <div>
+              <strong>Upcoming visit</strong>
+              <small>Your records and questions, ready for the conversation.</small>
+            </div>
+          </div>
+          <Button onClick={() => setPrepare(true)}>Prepare for this visit</Button>
+        </div>
         <button onClick={() => setCapture(true)}>
           <Mic size={26} />
           <span>

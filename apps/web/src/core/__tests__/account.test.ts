@@ -6,9 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { APIError } from '../api.ts';
 import { accountDatabaseName, DEMO_DATABASE, emptyPersonalSnapshot, initialsFor } from '../account.ts';
 import { SESSION_KEY, type StoredSession } from '../session.ts';
-import { RevaStore, SERVER_DIFFERS_NOTICE, SESSION_ENDED_NOTICE, SESSION_ENDED_PATH } from '../store.ts';
+import { RevaStore, SESSION_ENDED_NOTICE, SESSION_ENDED_PATH } from '../store.ts';
 import { syncMarkerKey } from '../syncMarker.ts';
 import type { APITransport } from '../store.ts';
+import type { ServerState } from '../models.ts';
 import type { AuthTransport } from '../auth.ts';
 import { authTransport, fakeStorage, MemoryRepository, seed, testUser, transport } from './fixtures.ts';
 
@@ -53,10 +54,10 @@ const emptyLocal = () => {
   return repository;
 };
 const settle = (ms = 60) => new Promise((resolve) => setTimeout(resolve, ms));
-const originalCount = () =>
+const originalCount = (snapshot = seed()) =>
   new Set([
-    ...seed().records.flatMap((record) => (record.sourceFilename ? [record.sourceFilename] : [])),
-    ...seed().recordings.flatMap((recording) => (recording.audioFilename ? [recording.audioFilename] : [])),
+    ...snapshot.records.flatMap((record) => (record.sourceFilename ? [record.sourceFilename] : [])),
+    ...snapshot.recordings.flatMap((recording) => (recording.audioFilename ? [recording.audioFilename] : [])),
   ]).size;
 
 // MARK: - Naming and the empty personal snapshot never borrow the fictional demo.
@@ -128,36 +129,30 @@ describe('account startup reconciliation', () => {
     await store.initialize();
     expect(store.getState().snapshot).toEqual(remote);
     expect(store.getState()).toMatchObject({ serverRevision: 4, loading: false, error: null });
-    expect(store.getState().notice).toMatch(/downloaded to this browser/);
+    expect(store.getState().syncStatus).toBe('saved');
     expect(attachment).toHaveBeenCalledTimes(originalCount());
     expect(repository.attachments.size).toBe(originalCount());
     await settle();
     expect(push).not.toHaveBeenCalled();
   });
-  it('keeps the local copy, asks for a pull and blocks pushes when both sides differ', async () => {
-    const push = vi.fn<APITransport['push']>(async (_snapshot, revision) => revision + 1);
-    const { store, repository } = accountStore({
-      api: transport({ pull: async () => ({ revision: 3, snapshot: { ...seed(), records: [] } }), push }),
+  it('preserves unknown-baseline local items and automatically sends their merged copy', async () => {
+    let remote: ServerState = { revision: 3, snapshot: { ...seed(), records: [] } };
+    const push = vi.fn<APITransport['push']>(async (snapshot, revision) => {
+      remote = { revision: revision + 1, snapshot: structuredClone(snapshot) };
+      return remote.revision;
     });
+    const { store } = accountStore({ api: transport({ pull: async () => structuredClone(remote), push }) });
     await store.initialize();
-    expect(store.getState().notice).toBe(SERVER_DIFFERS_NOTICE);
-    expect(store.getState().snapshot!.records.length).toBeGreaterThan(0);
-    expect(store.getState().serverRevision).toBe(3);
-    await store.mutate((draft) => {
-      draft.profile.careNotes = 'Edited while diverged';
-    });
-    await settle();
-    expect(push).not.toHaveBeenCalled();
-    await expect(store.pushToServer()).rejects.toThrow(/pull the server/);
-    await store.pullFromServer();
-    expect(store.getState().snapshot!.records).toEqual([]);
-    expect(repository.attachments.size).toBe(0);
-    await store.mutate((draft) => {
-      draft.profile.careNotes = 'Edited after the pull';
-    });
-    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(store.getState().snapshot!.records.length).toBe(seed().records.length);
+    expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][1]).toBe(3);
-    expect(store.getState().serverRevision).toBe(4);
+    expect(remote.snapshot.records.length).toBe(seed().records.length);
+    await store.mutate((draft) => {
+      draft.profile.careNotes = 'Another automatic edit';
+    });
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
+    expect(remote.snapshot.profile.careNotes).toBe('Another automatic edit');
+    expect(store.getState().syncStatus).toBe('saved');
   });
   it('pushes a local copy the server has never seen', async () => {
     const push = vi.fn<APITransport['push']>(async (_snapshot, revision) => revision + 1);
@@ -177,7 +172,9 @@ describe('account startup reconciliation', () => {
     expect(quiet.store.getState()).toMatchObject({ notice: null, serverRevision: 3 });
     await settle();
     expect(push).not.toHaveBeenCalled();
-    const moved = accountStore({ api, entries: { [syncMarkerKey(testUser.id)]: marker(3, 0) } });
+    const repository = new MemoryRepository();
+    repository.saved!.snapshot.profile.careNotes = 'Changed while offline';
+    const moved = accountStore({ repository, api, entries: { [syncMarkerKey(testUser.id)]: marker(3, 0) } });
     await moved.store.initialize();
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     expect(push.mock.calls[0][1]).toBe(3);
@@ -188,7 +185,7 @@ describe('account startup reconciliation', () => {
 describe('account auto-sync', () => {
   it('sends one push for a burst of edits and remembers the new in-sync revisions', async () => {
     const push = vi.fn<APITransport['push']>(async (_snapshot, revision) => revision + 1);
-    const { store, storage } = accountStore({
+    const { store, storage, repository } = accountStore({
       api: transport({ pull: async () => ({ revision: 3, snapshot: seed() }), push }),
       entries: { [syncMarkerKey(testUser.id)]: marker(3, 1) },
       syncDelay: 20,
@@ -210,14 +207,18 @@ describe('account auto-sync', () => {
     expect(store.getState()).toMatchObject({ serverRevision: 4, busy: false, error: null, notice: null });
     expect(JSON.parse(storage.data.get(syncMarkerKey(testUser.id))!)).toEqual({
       serverRevision: 4,
-      localRevision: 4,
+      localRevision: repository.saved!.revision,
     });
   });
   it('uploads each original once per session even across several pushes', async () => {
     const uploadAttachment = vi.fn<APITransport['uploadAttachment']>(async () => {});
-    const push = vi.fn<APITransport['push']>(async (_snapshot, revision) => revision + 1);
+    let remote = { revision: 3, snapshot: seed() };
+    const push = vi.fn<APITransport['push']>(async (snapshot, revision) => {
+      remote = { revision: revision + 1, snapshot: structuredClone(snapshot) };
+      return remote.revision;
+    });
     const { store } = accountStore({
-      api: transport({ pull: async () => ({ revision: 3, snapshot: seed() }), push, uploadAttachment }),
+      api: transport({ pull: async () => structuredClone(remote), push, uploadAttachment }),
       entries: { [syncMarkerKey(testUser.id)]: marker(3, 1) },
     });
     await store.initialize();
@@ -225,12 +226,12 @@ describe('account auto-sync', () => {
       draft.profile.careNotes = 'first';
     });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-    expect(uploadAttachment).toHaveBeenCalledTimes(originalCount());
+    expect(uploadAttachment).toHaveBeenCalledTimes(originalCount(store.getState().snapshot!));
     await store.mutate((draft) => {
       draft.profile.careNotes = 'second';
     });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
-    expect(uploadAttachment).toHaveBeenCalledTimes(originalCount());
+    expect(uploadAttachment).toHaveBeenCalledTimes(originalCount(store.getState().snapshot!));
   });
   it('still re-uploads originals on every manual push in demo mode', async () => {
     const uploadAttachment = vi.fn<APITransport['uploadAttachment']>(async () => {});
@@ -241,31 +242,55 @@ describe('account auto-sync', () => {
     await store.pushToServer();
     expect(uploadAttachment).toHaveBeenCalledTimes(originalCount() * 2);
   });
-  it('treats a 409 during auto-sync as divergence and waits for a pull', async () => {
+  it('reconciles a 409 and retries the save automatically with both devices edits', async () => {
+    let remote = { revision: 3, snapshot: seed() };
     const push = vi
       .fn<APITransport['push']>()
-      .mockRejectedValueOnce(new APIError(409, 5))
-      .mockImplementation(async (_snapshot, revision) => revision + 1);
+      .mockImplementationOnce(async () => {
+        remote.snapshot.profile.conditions.push('Synthetic other-device condition');
+        remote.revision = 5;
+        throw new APIError(409, 5);
+      })
+      .mockImplementation(async (snapshot, revision) => {
+        remote = { revision: revision + 1, snapshot: structuredClone(snapshot) };
+        return remote.revision;
+      });
     const { store } = accountStore({
-      api: transport({ pull: async () => ({ revision: 3, snapshot: seed() }), push }),
+      api: transport({ pull: async () => structuredClone(remote), push }),
       entries: { [syncMarkerKey(testUser.id)]: marker(3, 1) },
     });
     await store.initialize();
     await store.mutate((draft) => {
-      draft.profile.careNotes = 'conflicting';
+      draft.profile.careNotes = 'My offline note';
     });
-    await vi.waitFor(() => expect(store.getState().error).toMatch(/server changed/i));
-    await store.mutate((draft) => {
-      draft.profile.careNotes = 'still local';
-    });
-    await settle();
-    expect(push).toHaveBeenCalledTimes(1);
-    expect(store.getState().snapshot!.profile.careNotes).toBe('still local');
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
+    expect(push.mock.calls.map((call) => call[1])).toEqual([3, 5]);
+    expect(remote.snapshot.profile.careNotes).toBe('My offline note');
+    expect(remote.snapshot.profile.conditions).toContain('Synthetic other-device condition');
+    expect(store.getState()).toMatchObject({ syncStatus: 'saved', error: null });
   });
 });
 
 // MARK: - An HTTP 401 ends the session: storage cleared, one notice, one redirect, no further sync.
 describe('session end on 401', () => {
+  it('does not clear a newer session established by another tab when the old request is rejected', async () => {
+    const { store, storage, redirect } = accountStore({
+      api: transport({
+        health: async () => {
+          throw new APIError(401);
+        },
+      }),
+    });
+    const replacement = {
+      ...session(),
+      token: 'newer-session-for-another-account',
+      user: { ...testUser, id: 'u_other' },
+    };
+    storage.setItem(SESSION_KEY, JSON.stringify(replacement));
+    await store.initialize();
+    expect(JSON.parse(storage.data.get(SESSION_KEY)!)).toEqual(replacement);
+    expect(redirect).toHaveBeenCalledWith('/app');
+  });
   it('clears the stored session and redirects when startup discovery is rejected', async () => {
     const { store, storage, redirect } = accountStore({
       api: transport({

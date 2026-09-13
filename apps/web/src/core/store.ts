@@ -6,12 +6,12 @@ import {
   type ClinicalBrief,
   type VisitBriefInput,
 } from './visitBrief';
-// Purpose: Coordinate durable browser state, source-aware edits and deliberate connected actions.
+// Purpose: Coordinate durable browser edits, automatic account synchronization and connected actions.
 // Inputs: UI intents, an injectable repository/API factory, reviewed provider requests and, in account
 //         mode, the signed-in session (token, user) with injectable storage/redirect boundaries.
 // Outputs: Observable state with durable snapshots, notices, capability flags and explicit failures.
-// Side effects: Serial IndexedDB writes; explicit sync/provider requests in demo mode; in account mode a
-//               debounced push after each local commit, and a cleared session plus redirect on HTTP 401.
+// Side effects: Serial IndexedDB writes; explicit provider requests in demo mode; automatic account
+//               pull/merge/push with offline retries, and session-bound redirects on HTTP 401.
 import type {
   AppSnapshot,
   MedicalRecord,
@@ -40,9 +40,22 @@ import {
 import { APIError, RevaAPI } from './api.ts';
 import { AuthAPI, type AuthTransport } from './auth.ts';
 import { emptyPersonalSnapshot } from './account.ts';
-import { browserStorage, clearSession, type SessionUser, type StorageLike } from './session.ts';
+import {
+  browserStorage,
+  clearSession,
+  readSession,
+  SESSION_KEY,
+  type SessionUser,
+  type StorageLike,
+} from './session.ts';
 import { clearSyncMarker, readSyncMarker, writeSyncMarker } from './syncMarker.ts';
-import { repository, type SnapshotRepository, type StoredSnapshot } from './repository.ts';
+import {
+  LocalConflictError,
+  repository,
+  type SnapshotRepository,
+  type StoredSnapshot,
+} from './repository.ts';
+import { mergeSnapshots, sameSyncValue } from './syncMerge.ts';
 
 // MARK: - Observable values deliberately exclude credentials from durable snapshot state.
 export interface RevaState {
@@ -56,6 +69,9 @@ export interface RevaState {
   token: string;
   serverRevision: number | null;
   mode: 'demo' | 'account';
+  syncStatus: 'local' | 'syncing' | 'saved' | 'offline';
+  syncError: string | null;
+  lastSyncedAt: string | null;
   account: { user: SessionUser; expiresAt: string | null } | null;
 }
 export type APITransport = Pick<
@@ -83,11 +99,13 @@ export interface AccountOptions {
   redirect?: (path: string) => void;
   authFactory?: (token: string) => AuthTransport;
   syncDelay?: number;
+  syncInterval?: number;
 }
 export type StoreOptions = DemoOptions | AccountOptions;
 export const SESSION_ENDED_PATH = '/login?reason=session';
 export const SESSION_ENDED_NOTICE = 'Your session ended. Log in again to continue.';
-export const SERVER_DIFFERS_NOTICE = 'The server copy differs; pull to review it.';
+export const SERVER_DIFFERS_NOTICE =
+  'Simultaneous edits were kept as labeled recovery copies. You can review them in your workspace.';
 function message(error: unknown): string {
   return error instanceof Error
     ? error.message
@@ -129,6 +147,9 @@ export class RevaStore {
     token: 'reva-local-demo-token',
     serverRevision: null,
     mode: 'demo',
+    syncStatus: 'local',
+    syncError: null,
+    lastSyncedAt: null,
     account: null,
   };
   private listeners = new Set<() => void>();
@@ -146,6 +167,12 @@ export class RevaStore {
   private syncPending = false;
   private sessionEnded = false;
   private uploaded = new Set<string>();
+  private syncBase: ServerState | null = null;
+  private syncTask: Promise<void> | null = null;
+  private syncEnabled = true;
+  private syncFailures = 0;
+  private providersCheckedAt: number | null = null;
+  private lifecycleCleanup: (() => void) | null = null;
   constructor(
     private readonly persistence: SnapshotRepository = repository,
     private readonly apiFactory: (token: string) => APITransport = (token) => new RevaAPI(token),
@@ -165,6 +192,7 @@ export class RevaStore {
         ...this.state,
         token: this.account.token,
         mode: 'account',
+        syncStatus: 'syncing',
         account: { user: this.account.user, expiresAt: this.account.expiresAt ?? null },
       };
   }
@@ -201,7 +229,19 @@ export class RevaStore {
         const draft = structuredClone(previous);
         await change(draft);
         invalidateChangedRecordingSummaries(previous, draft);
-        this.adopt(await this.persistence.commit(validateSnapshot(draft), this.localRevision, attachments));
+        let candidate = validateSnapshot(draft);
+        for (let attempt = 0; ; attempt++) {
+          try {
+            this.adopt(await this.persistence.commit(candidate, this.localRevision, attachments));
+            break;
+          } catch (error) {
+            if (!this.account || !(error instanceof LocalConflictError) || attempt >= 3) throw error;
+            const latest = await this.persistence.load();
+            if (!latest) throw error;
+            candidate = mergeSnapshots(previous, candidate, latest.snapshot).snapshot;
+            this.adopt(latest);
+          }
+        }
       });
       this.scheduleSync();
     } catch (error) {
@@ -209,7 +249,7 @@ export class RevaStore {
       throw error;
     }
   }
-  // Quiet actions (auto-sync) keep the current notice; a failure still reaches the error banner.
+  // User actions use the busy flag. Background synchronization has its own independent status.
   private async action(work: () => Promise<void>, quiet = false): Promise<void> {
     if (this.state.busy) throw new Error('Another connected action is still running. Wait for it to finish.');
     this.publish(quiet ? { busy: true } : { busy: true, error: null, notice: null });
@@ -315,90 +355,97 @@ export class RevaStore {
     this.publish({ connectedAI });
   };
 
-  // MARK: - Account startup: local first, then reconcile with the server without discarding either copy.
+  // MARK: - Account startup works offline; every reconciliation pulls, merges, then pushes local edits.
   private async initializeAccount(): Promise<void> {
-    let existing: StoredSnapshot | null = null;
     try {
-      existing = await this.persistence.load();
-      if (existing) this.adopt(existing);
+      const existing = await this.persistence.load();
+      this.adopt(existing ?? (await this.persistence.commit(emptyPersonalSnapshot(this.account!.user), 0)));
+      this.syncBase =
+        (await this.persistence.loadSyncBase?.()) ??
+        (existing
+          ? null
+          : {
+              revision: 0,
+              snapshot: structuredClone(this.requiredSnapshot()),
+            });
     } catch (error) {
       this.reportError(error);
       this.publish({ loading: false });
       return;
     }
-    try {
-      await this.reconcileWithServer(existing);
-    } catch (error) {
-      this.reportError(error);
-    }
     this.publish({ loading: false });
+    await this.autoSync();
   }
-  private async reconcileWithServer(existing: StoredSnapshot | null): Promise<void> {
-    const account = this.account!,
-      identity = this.identity,
-      api = this.apiFactory(this.state.token),
-      found = await this.discover(api);
-    this.assertIdentity(identity);
-    this.publish({ providers: found.providers });
-    if (existing) {
-      this.positionAgainstServer(found);
-      return;
-    }
-    if (found.remote) {
-      await this.applyRemote(api, found.remote, identity, 0);
-      this.notify('Your account data was downloaded to this browser.');
-      return;
-    }
-    const empty = emptyPersonalSnapshot(account.user);
-    await this.queue(async () => {
-      this.assertIdentity(identity);
-      this.adopt(await this.persistence.commit(empty, 0));
-    });
-    const localRevision = this.localRevision;
-    this.publish({ serverRevision: found.revision });
-    const next = await api.push(empty, found.revision);
-    this.assertIdentity(identity);
-    this.publish({ serverRevision: next });
-    this.rememberSync(next, localRevision);
-  }
-  // With a local copy present, the remembered in-sync revision decides whether pushing is safe.
-  private positionAgainstServer(found: Discovery): void {
-    const marker = readSyncMarker(this.account!.user.id, this.storage);
-    if (!found.remote) {
-      this.publish({ serverRevision: found.revision });
-      this.scheduleSync();
-      return;
-    }
-    if (marker && marker.serverRevision === found.remote.revision) {
-      this.publish({ serverRevision: found.remote.revision });
-      if (marker.localRevision !== this.localRevision) this.scheduleSync();
-      return;
-    }
-    this.mustPull = true;
-    this.publish({ serverRevision: found.remote.revision });
-    this.notify(SERVER_DIFFERS_NOTICE);
-  }
-  private rememberSync(serverRevision: number, localRevision: number): void {
-    if (this.account) writeSyncMarker(this.account.user.id, { serverRevision, localRevision }, this.storage);
+  private async rememberSync(
+    serverRevision: number,
+    localRevision: number,
+    snapshot: AppSnapshot,
+  ): Promise<void> {
+    if (!this.account) return;
+    const base = { revision: serverRevision, snapshot: structuredClone(snapshot) };
+    await this.persistence.saveSyncBase?.(base);
+    this.syncBase = base;
+    writeSyncMarker(this.account.user.id, { serverRevision, localRevision }, this.storage);
   }
   private endSession(notice: string | null, path: string): void {
     if (this.sessionEnded) return;
     this.sessionEnded = true;
     this.cancelSync();
-    clearSession(this.storage);
+    this.lifecycleCleanup?.();
+    const currentSession = readSession(this.storage);
+    const replaced = currentSession && currentSession.token !== this.state.token;
+    if (!replaced) clearSession(this.storage);
     if (notice) this.publish({ notice, error: null });
-    this.redirect(path);
+    this.redirect(replaced ? '/app' : path);
   }
 
-  // MARK: - Auto-sync: a debounced quiet push after local commits, never while busy or behind the server.
-  private scheduleSync(): void {
-    if (!this.account || this.sessionEnded) return;
+  // MARK: - Polling and browser wake events keep read-only devices current, with bounded offline retries.
+  startAutomaticSync = (): (() => void) => {
+    if (!this.account || this.sessionEnded) return () => {};
+    this.lifecycleCleanup?.();
+    this.syncEnabled = true;
+    const wake = (refreshProviders = false) => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (refreshProviders) this.providersCheckedAt = null;
+      void this.initialize().then(() => {
+        if (refreshProviders && this.syncTask) this.scheduleSync(0);
+        else return this.autoSync();
+      });
+    };
+    const resume = () => wake(true);
+    const visibility = () => wake(true);
+    const sessionChanged = (event: StorageEvent) => {
+      if (event.key !== SESSION_KEY && event.key !== null) return;
+      if (readSession(this.storage)?.token !== this.state.token)
+        this.endSession(SESSION_ENDED_NOTICE, SESSION_ENDED_PATH);
+    };
+    globalThis.addEventListener?.('online', resume);
+    globalThis.addEventListener?.('focus', resume);
+    globalThis.addEventListener?.('storage', sessionChanged);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibility);
+    const interval = setInterval(wake, this.account.syncInterval ?? 30_000);
+    const cleanup = () => {
+      clearInterval(interval);
+      globalThis.removeEventListener?.('online', resume);
+      globalThis.removeEventListener?.('focus', resume);
+      globalThis.removeEventListener?.('storage', sessionChanged);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibility);
+      this.syncEnabled = false;
+      this.cancelSync();
+      if (this.lifecycleCleanup === cleanup) this.lifecycleCleanup = null;
+    };
+    this.lifecycleCleanup = cleanup;
+    void this.initialize();
+    return cleanup;
+  };
+  private scheduleSync(delay = this.syncDelay): void {
+    if (!this.account || this.sessionEnded || !this.syncEnabled) return;
     this.syncPending = true;
     if (this.syncTimer) clearTimeout(this.syncTimer);
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
       void this.autoSync();
-    }, this.syncDelay);
+    }, delay);
   }
   private cancelSync(): void {
     if (this.syncTimer) clearTimeout(this.syncTimer);
@@ -406,31 +453,241 @@ export class RevaStore {
     this.syncPending = false;
   }
   private async autoSync(): Promise<void> {
-    if (!this.account || this.sessionEnded || this.mustPull) {
-      this.syncPending = false;
+    if (!this.account || this.sessionEnded || !this.syncEnabled || !this.state.snapshot) return;
+    if (this.syncTask) {
+      await this.syncTask.catch(() => undefined);
       return;
     }
-    if (this.state.busy) return;
-    this.syncPending = false;
-    try {
-      await this.action(async () => {
-        if (this.state.serverRevision === null) {
-          const identity = this.identity,
-            api = this.apiFactory(this.state.token),
-            found = await this.discover(api);
-          this.assertIdentity(identity);
-          this.publish({
-            providers: found.providers,
-            connectedAI: this.state.connectedAI && found.providers.gemini.configured,
-          });
-          this.positionAgainstServer(found);
-          if (this.mustPull) return;
-        }
-        await this.push(true);
-      }, true);
-    } catch {
-      /* Chunk: The action already showed the error banner; the local snapshot is untouched. */
+    if (this.state.busy) {
+      this.scheduleSync();
+      return;
     }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.publish({
+        syncStatus: 'offline',
+        syncError: 'Changes are saved on this device and will sync when you reconnect.',
+      });
+      this.scheduleSync(30_000);
+      return;
+    }
+    this.cancelSync();
+    this.publish({ syncStatus: 'syncing', syncError: null });
+    const task = this.synchronizeAccount();
+    this.syncTask = task;
+    try {
+      await task;
+      this.syncFailures = 0;
+      if (!this.sessionEnded)
+        this.publish({
+          syncStatus: this.syncPending ? 'syncing' : 'saved',
+          syncError: null,
+          lastSyncedAt: nowISO(),
+        });
+    } catch (error) {
+      if (error instanceof APIError && error.status === 401) this.reportError(error);
+      else if (!this.sessionEnded) {
+        this.publish({
+          syncStatus: 'offline',
+          syncError: `Saved on this device. Sync will retry automatically. ${message(error)}`,
+        });
+        this.syncFailures += 1;
+        this.scheduleSync(Math.min(60_000, 3000 * 2 ** Math.min(this.syncFailures - 1, 5)));
+      }
+    } finally {
+      this.syncTask = null;
+      if (this.syncPending && !this.syncTimer) this.scheduleSync();
+    }
+  }
+  private async synchronizeAccount(): Promise<void> {
+    const identity = this.identity,
+      api = this.apiFactory(this.state.token);
+    if (!this.state.providers) {
+      const found = await this.discover(api);
+      this.assertIdentity(identity);
+      this.providersCheckedAt = Date.now();
+      this.publish({
+        providers: found.providers,
+        connectedAI: this.state.connectedAI && found.providers.gemini.configured,
+      });
+      await this.reconcileAccountRemote(api, found.remote, found.revision, identity);
+    } else {
+      // Server keys can be configured after login. Refresh on wake or at most once per minute;
+      // ordinary local edits reuse the cached capabilities and never opt the user into connected AI.
+      if (this.providersCheckedAt === null || Date.now() - this.providersCheckedAt >= 60_000) {
+        const providers = await api.providers();
+        this.assertIdentity(identity);
+        this.providersCheckedAt = Date.now();
+        this.publish({ providers, connectedAI: this.state.connectedAI && providers.gemini.configured });
+      }
+      const found = await this.readRemote(api);
+      this.assertIdentity(identity);
+      await this.reconcileAccountRemote(api, found.remote, found.revision, identity);
+    }
+    // Another device can save after our read. Retry from its new revision without replacing either edit.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await this.writes;
+      this.assertIdentity(identity);
+      if (this.syncBase && sameSyncValue(this.syncBase.snapshot, this.requiredSnapshot())) return;
+      try {
+        await this.push(true);
+        return;
+      } catch (error) {
+        if (!(error instanceof APIError) || error.status !== 409 || attempt === 3) throw error;
+        const found = await this.readRemote(api);
+        this.assertIdentity(identity);
+        await this.reconcileAccountRemote(api, found.remote, found.revision, identity);
+      }
+    }
+  }
+  private async readRemote(api: APITransport): Promise<{ remote: ServerState | null; revision: number }> {
+    try {
+      const remote = await api.pull();
+      return { remote, revision: remote.revision };
+    } catch (error) {
+      if (!(error instanceof APIError) || error.status !== 404 || error.revision === null) throw error;
+      return { remote: null, revision: error.revision };
+    }
+  }
+  private async reconcileAccountRemote(
+    api: APITransport,
+    remote: ServerState | null,
+    revision: number,
+    identity: number,
+  ): Promise<void> {
+    await this.writes;
+    this.assertIdentity(identity);
+    if (!remote) {
+      this.publish({ serverRevision: revision });
+      this.mustPull = false;
+      this.syncBase = null;
+      this.uploaded.clear();
+      return;
+    }
+    const attachments = new Map<string, Blob>();
+    const priorMarker = readSyncMarker(this.account!.user.id, this.storage);
+    const knownFiles = this.syncBase
+      ? originals(this.syncBase.snapshot)
+      : priorMarker?.serverRevision === remote.revision
+        ? originals(remote.snapshot)
+        : new Map<string, string | undefined>();
+    const localFiles = originals(this.requiredSnapshot());
+    for (const [filename, type] of originals(remote.snapshot)) {
+      this.assertIdentity(identity);
+      // Original names are stable. Already shared files stay cached; new device files download first.
+      const fileOwners = (snapshot: AppSnapshot | undefined) => [
+        ...(snapshot?.records.filter((record) => record.sourceFilename === filename) ?? []),
+        ...(snapshot?.recordings.filter((recording) => recording.audioFilename === filename) ?? []),
+      ];
+      const immutable = /^reva-[a-f0-9]{64}(?:\.[a-z0-9]{1,10})?$/.test(filename);
+      const ownersUnchanged = this.syncBase
+        ? sameSyncValue(fileOwners(this.syncBase.snapshot), fileOwners(remote.snapshot))
+        : priorMarker?.serverRevision === remote.revision;
+      if (knownFiles.has(filename) && localFiles.has(filename) && (immutable || ownersUnchanged)) {
+        try {
+          await this.persistence.getAttachment(filename);
+          continue;
+        } catch {
+          /* Download missing cache. */
+        }
+      }
+      const blob = await api.attachment(filename);
+      if (immutable && (await this.blobHash(blob)) !== filename.slice(5, 69))
+        throw new Error(
+          'A downloaded original did not match its saved content fingerprint. The existing local file was kept.',
+        );
+      attachments.set(filename, type ? blob.slice(0, blob.size, type) : blob);
+    }
+    await this.queue(async () => {
+      this.assertIdentity(identity);
+      for (let attempt = 0; ; attempt++) {
+        const durable = await this.persistence.load();
+        if (durable && durable.revision !== this.localRevision) this.adopt(durable);
+        const local = structuredClone(this.requiredSnapshot());
+        const originalConflicts = { records: new Set<string>(), recordings: new Set<string>() };
+        // If two devices reused a filename for different bytes, retain this device's original separately.
+        for (const [filename, remoteBlob] of [...attachments]) {
+          if (!originals(local).has(filename)) continue;
+          let localBlob: Blob;
+          try {
+            localBlob = await this.persistence.getAttachment(filename);
+          } catch {
+            continue;
+          }
+          const localHash = await this.blobHash(localBlob);
+          if (localHash === (await this.blobHash(remoteBlob))) continue;
+          const extension = filename.includes('.') ? `.${filename.split('.').pop()}` : '';
+          const preserved = `sync-original-${localHash}${extension}`;
+          attachments.set(preserved, localBlob);
+          local.records.forEach((record) => {
+            if (record.sourceFilename !== filename) return;
+            record.sourceFilename = preserved;
+            if (remote.snapshot.records.some((item) => item.id === record.id))
+              originalConflicts.records.add(record.id);
+          });
+          local.recordings.forEach((recording) => {
+            if (recording.audioFilename !== filename) return;
+            recording.audioFilename = preserved;
+            if (remote.snapshot.recordings.some((item) => item.id === recording.id))
+              originalConflicts.recordings.add(recording.id);
+          });
+        }
+        const marker = readSyncMarker(this.account!.user.id, this.storage);
+        const base =
+          this.syncBase?.snapshot ??
+          (marker?.serverRevision === remote.revision
+            ? remote.snapshot
+            : marker?.localRevision === this.localRevision
+              ? this.requiredSnapshot()
+              : null);
+        const merged = mergeSnapshots(base, local, remote.snapshot, originalConflicts);
+        this.assertIdentity(identity);
+        try {
+          if (!sameSyncValue(this.requiredSnapshot(), merged.snapshot) || attachments.size)
+            this.adopt(await this.persistence.commit(merged.snapshot, this.localRevision, attachments));
+          this.mustPull = false;
+          this.publish({ serverRevision: remote.revision });
+          await this.rememberSync(
+            remote.revision,
+            sameSyncValue(merged.snapshot, remote.snapshot) ? this.localRevision : 0,
+            remote.snapshot,
+          );
+          if (merged.recovered) this.notify(SERVER_DIFFERS_NOTICE);
+          return;
+        } catch (error) {
+          if (!(error instanceof LocalConflictError) || attempt >= 3) throw error;
+        }
+      }
+    });
+  }
+  private async blobHash(blob: Blob): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+  private async normalizeAccountOriginals(identity: number): Promise<void> {
+    if (!this.account) return;
+    await this.queue(async () => {
+      const snapshot = structuredClone(this.requiredSnapshot());
+      const attachments = new Map<string, Blob>();
+      for (const [filename] of originals(snapshot)) {
+        const blob = await this.persistence.getAttachment(filename);
+        const hash = await this.blobHash(blob);
+        const extension = filename.split('.').pop()?.toLowerCase();
+        const suffix =
+          filename.includes('.') && extension && /^[a-z0-9]{1,10}$/.test(extension) ? `.${extension}` : '';
+        const immutable = `reva-${hash}${suffix}`;
+        if (immutable === filename) continue;
+        attachments.set(immutable, blob);
+        snapshot.records.forEach((record) => {
+          if (record.sourceFilename === filename) record.sourceFilename = immutable;
+        });
+        snapshot.recordings.forEach((recording) => {
+          if (recording.audioFilename === filename) recording.audioFilename = immutable;
+        });
+      }
+      this.assertIdentity(identity);
+      if (attachments.size)
+        this.adopt(await this.persistence.commit(snapshot, this.localRevision, attachments));
+    });
   }
 
   // MARK: - Account actions revoke sessions on the server before leaving the workspace.
@@ -440,10 +697,16 @@ export class RevaStore {
     return this.authFactory(this.state.token);
   }
   private async flushBeforeLeaving(): Promise<void> {
-    if (!this.syncPending || this.mustPull || this.state.serverRevision === null) return;
+    try {
+      await this.syncTask;
+    } catch {
+      /* Local edits survive an offline logout. */
+    }
+    if (!this.syncPending && this.syncBase && sameSyncValue(this.syncBase.snapshot, this.state.snapshot))
+      return;
     this.cancelSync();
     try {
-      await this.push(true);
+      await this.synchronizeAccount();
     } catch {
       /* Chunk: Unsent edits stay in the local copy; the next login pushes them. */
     }
@@ -855,11 +1118,12 @@ export class RevaStore {
         this.notify(`${found.health}. Provider availability checked.`);
       }
     });
-  // Originals uploaded earlier in this account session under the same filename and size are skipped.
+  // Account originals use content-addressed names and digests, so concurrent uploads cannot replace bytes.
   private async push(quiet: boolean): Promise<void> {
     if (this.state.serverRevision === null || this.mustPull)
       throw new Error('Check the connection or pull the server’s latest copy before pushing.');
     await this.writes;
+    await this.normalizeAccountOriginals(this.identity);
     const snapshot = structuredClone(this.requiredSnapshot()),
       identity = this.identity,
       revision = this.state.serverRevision,
@@ -867,7 +1131,7 @@ export class RevaStore {
       api = this.apiFactory(this.state.token);
     for (const [filename, type] of originals(snapshot)) {
       const blob = await this.persistence.getAttachment(filename);
-      const key = `${filename}\u0000${blob.size}`;
+      const key = `${filename}\u0000${this.account ? await this.blobHash(blob) : blob.size}`;
       if (this.account && this.uploaded.has(key)) continue;
       this.assertIdentity(identity);
       await api.uploadAttachment(filename, type ? blob.slice(0, blob.size, type) : blob);
@@ -878,7 +1142,7 @@ export class RevaStore {
       const next = await api.push(snapshot, revision);
       this.assertIdentity(identity);
       this.publish({ serverRevision: next });
-      this.rememberSync(next, localRevision);
+      await this.rememberSync(next, localRevision, snapshot);
       if (!quiet)
         this.notify(
           localRevision === this.localRevision
@@ -887,12 +1151,12 @@ export class RevaStore {
         );
       else if (localRevision !== this.localRevision) this.scheduleSync();
     } catch (error) {
-      if (error instanceof APIError && error.status === 409 && identity === this.identity)
+      if (error instanceof APIError && error.status === 409 && identity === this.identity && !this.account)
         this.mustPull = true;
       throw error;
     }
   }
-  pushToServer = (): Promise<void> => this.action(() => this.push(false));
+  pushToServer = (): Promise<void> => (this.account ? this.autoSync() : this.action(() => this.push(false)));
   // Downloads every original first, then replaces the local copy in one transaction.
   private async applyRemote(
     api: APITransport,
@@ -916,19 +1180,21 @@ export class RevaStore {
       this.adopt(await this.persistence.commit(remote.snapshot, localRevision, attachments));
       this.mustPull = false;
       this.publish({ serverRevision: remote.revision });
-      this.rememberSync(remote.revision, this.localRevision);
+      await this.rememberSync(remote.revision, this.localRevision, remote.snapshot);
     });
   }
   pullFromServer = (): Promise<void> =>
-    this.action(async () => {
-      await this.writes;
-      const identity = this.identity,
-        localRevision = this.localRevision,
-        api = this.apiFactory(this.state.token),
-        remote = await api.pull();
-      await this.applyRemote(api, remote, identity, localRevision);
-      this.notify('Server snapshot and all originals saved in this browser.');
-    });
+    this.account
+      ? this.autoSync()
+      : this.action(async () => {
+          await this.writes;
+          const identity = this.identity,
+            localRevision = this.localRevision,
+            api = this.apiFactory(this.state.token),
+            remote = await api.pull();
+          await this.applyRemote(api, remote, identity, localRevision);
+          this.notify('Server snapshot and all originals saved in this browser.');
+        });
 }
 interface Discovery {
   health: string;

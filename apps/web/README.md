@@ -27,7 +27,7 @@ Open `http://127.0.0.1:5173`. `npm run assets` copies native fictional fixtures 
 | `/signup` | Creates an account (`POST /v1/auth/signup`), stores the returned session and opens `/app`. |
 | `/login` | Logs an existing account in (`POST /v1/auth/login`). `/login?reason=session` shows a quiet "Your session ended" notice after a rejected session. |
 | `/app` | The signed-in workspace. It keeps the workspace's `#/…` hash routes and redirects to `/login` when no live session is stored. |
-| `/demo` | The fictional demo workspace with the public local token and manual push/pull. Older `/#/…` bookmarks are forwarded here. |
+| `/demo` | The fictional local demo workspace. Connected services can be configured, but its records do not sync automatically and it has no manual transfer controls. Older `/#/…` bookmarks are forwarded here. |
 
 `scripts/serve.mjs` serves the public paths as the single page, and `vercel.json` rewrites them the same way. `/test` and `/basic` are available only through the Vite development server when their local archives exist; the production wrapper and deployment return 404 for both. Hash routes inside `/app` and `/demo` are handled by the client.
 
@@ -41,7 +41,7 @@ npm run build
 npm run serve
 ```
 
-The built preview opens at `http://127.0.0.1:4173`. After pulling route or server changes, rebuild, stop the existing preview, and run `npm run serve` again. The preview process does not reload `scripts/serve.mjs`; an older process can return “File not found” for `/demo` even when the current source supports it. `PORT` and `HOST` configure that listener; its default is loopback. Development and built previews have different origins and therefore separate browser storage. Keep the same origin when checking persistence, or use explicit server sync to transfer a workspace.
+The built preview opens at `http://127.0.0.1:4173`. After pulling route or server changes, rebuild, stop the existing preview, and run `npm run serve` again. The preview process does not reload `scripts/serve.mjs`; an older process can return “File not found” for `/demo` even when the current source supports it. `PORT` and `HOST` configure that listener; its default is loopback. Development and built previews have different origins and therefore separate browser storage. Keep the same origin when checking demo persistence. Signed-in account workspaces sync automatically through their configured server.
 
 ## Deploy the browser on Vercel
 
@@ -75,11 +75,18 @@ Accounts are created and used through the `/v1/auth` routes, served by the Node.
 
 Because the token lives in `localStorage`, cross-site scripting is the threat to keep in mind. The mitigations in this client are the Content-Security-Policy set by `scripts/serve.mjs` (scripts only from the same origin, no inline scripts, no remote connections beyond the same origin), the absence of inline scripts and `dangerouslySetInnerHTML` in the application, and the server's own limits: any HTTP 401 immediately clears the stored session, shows one notice and returns the workspace to `/login?reason=session`. Apply an equivalent CSP header on any other host.
 
-Inside `/app` the store runs in **account mode**: the session token is the workspace token (the Settings token field is not shown), records live in a **per-user IndexedDB database** named `reva-account-<16 hex of SHA-256(user id)>-v1` (the demo keeps `reva-workspace-v1`), and saves are pushed to the server automatically about **1.5 seconds** after the last local commit. On first login the store compares both sides: an empty server receives an empty personal snapshot built around the account (never the fictional demo); a server with data and an empty browser downloads the snapshot and its originals; when both hold data and this browser's remembered in-sync revision (`localStorage` key `reva.sync.v1.<user id>`) does not match the server, the local copy is kept, automatic pushes pause, and Settings shows "The server copy differs; pull to review it." Originals uploaded earlier in the same session (same filename and size) are not re-uploaded. Manual **Push to server** and **Pull from server** remain available; **Restore fictional demo** is demo-only. **Settings** also offers **Change password** and a typed-confirmation **Delete account**, which removes the server copy, every session and this browser's private database.
+Inside `/app` the store runs in **account mode**: the session token is the workspace token (the Settings token field is not shown), and records live in a **per-user IndexedDB database** named `reva-account-<16 hex of SHA-256(user id)>-v1` (the demo keeps `reva-workspace-v1`). New accounts start with an empty personal snapshot, never the fictional demo. Returning accounts reconcile their browser copy with the server automatically. **Settings** offers passive sync status, **Change password**, and a typed-confirmation **Delete account**, which removes the server copy, every session, and this browser's private database. **Restore demo** is demo-only.
+
+### Automatic account sync
+
+Account changes are saved locally, then synchronized about **1.5 seconds** after the last local commit. A **30-second** visible-page poll, plus focus, visibility, and connectivity events, brings changes from other devices into the browser. Provider availability also refreshes during sync (at most once a minute during normal polling and on browser wake), so newly configured services become available without a manual transfer. The demo stays local and has no push/pull controls.
+
+Each account stores its last shared snapshot and server revision as a durable merge base in IndexedDB. A sync cycle reads the server, merges independent edits against that base, downloads missing originals, and writes pending local changes with a revision check. Conflicting scalar edits are retained as labeled recovery copies; they do not require replacing the whole workspace. Generated medical history is merged separately from patient-entered details so AI provenance and manual corrections remain coherent. Concurrent server writes trigger another read and merge, while offline or transient failures retain the browser copy and retry with backoff.
+
+Original attachments are immutable: an existing filename cannot silently acquire different bytes. Sync uploads required originals before publishing their snapshot references and commits downloaded originals with browser state locally. Attachment transfers and server snapshot writes are separate operations, so an interrupted cycle can leave unused uploaded originals; it does not overwrite a different original. Clearing browser storage removes unsynced local changes, so wait for **Up to date** before deliberately clearing it.
 
 Production provider keys and database settings belong to Vercel's server-only environment. The [Vercel backend guide](../../docs/deployment-vercel.md) covers accounts, Tiger storage, Gemini and ElevenLabs Scribe. For local Swift development, follow [server setup](../../server/README.md). Paid providers require an authenticated account or private workspace token. Checking configuration does not prove that a provider account works.
 
-**Push to server** uploads originals and then performs a revision-checked snapshot write. **Pull from server** downloads originals before replacing the active browser snapshot after confirmation. A conflict preserves local state and requires an explicit pull before another push; there is no automatic merge. The demo has no background sync; account mode adds the debounced automatic push described under **Accounts and sessions**. Attachment uploads and server snapshot writes are separate operations, so a failed push may leave copied originals. Browser pull publishes downloaded originals and state in one local transaction.
 
 ## What works
 
@@ -88,11 +95,19 @@ Production provider keys and database settings belong to Vercel's server-only en
 | Dashboard and Records | Recent sources, search/filter, source detail, edit/delete, original preview/download, and page links from briefs. |
 | Document intake | Text and PDF extraction using PDF.js; image and scanned-PDF OCR using local Tesseract.js and bundled English data. Review text before saving; original bytes remain unchanged. PDF/OCR code loads on demand. |
 | Symptom entries | Required symptom and occurrence time; optional severity, duration, details, triggers, and what helped. Entries retain time-zone context and participate in Records, search, source versions, and visit preparation. |
-| Medical Profile | Persistent allergies, medications, conditions, surgeries/implants, and care notes. This is quick-reference data; preparation currently reads Records, so profile edits do not rewrite sources or automatically add profile facts to a brief. |
-| Visits and preparation | Visit editing, goals/questions, pinned sources, local evidence with exact quotations/page links, stale-report detection, reviewable questions/notes, and report-only print/save-to-PDF. Configured Gemini can provide summaries and preparation. |
+| Medical Profile | Editable identity and medical details, with automatic report-grounded AI updates to allergies, medications, conditions, surgeries/implants, and care notes. Generated details link to source reports; manual entries and corrections are protected. Current profile context participates in the pre-visit brief without rewriting source documents. |
+| Visits and preparation | The dashboard’s pink visit banner opens a concise pre-visit brief using current records, profile context, and questions, with PDF download. Existing visit detail supports goals/questions, pinned sources, source excerpts/page links, stale-report detection, and editable notes. |
 | Visit memory | Consent-gated microphone capture or audio upload, playback, configured transcription, transcript correction, and linked memory records. New audio starts without a fabricated transcript. |
 
 Local imports receive a reviewable excerpt. With connected AI enabled, saving a readable import or symptom entry also requests a configured summary after local saving; errors preserve the source. Transcription and appointment summaries use explicit connected actions. No provider account, paid request, or production deployment is established by installing the browser app.
+
+## Automatic medical profile
+
+With Gemini configured, signed-in accounts automatically update their medical history from existing reports and after reports are added, edited, or removed. The observer debounces changes, cancels outdated requests, and checks the exact source signature again before saving. The demo only runs this feature when connected AI is explicitly enabled. Identity, name, initials, and date of birth remain user-entered; the AI endpoint does not generate or change them.
+
+`POST /v1/ai/profile` receives the original readable report text, title, date, ID, and version, rather than generated document summaries. Each returned medical detail must cite valid source record IDs, and the profile displays links to those reports. Recovery notes are excluded from clinical evidence. Existing manual details remain editable, and correcting or removing an AI detail suppresses replacement from the same source in that category, including paraphrased output. Other reports can still contribute new documented details. Removing a report retires generated details that are no longer supported without deleting patient-entered history.
+
+A request includes **all readable sources**, bounded to **100 reports**, **200,000 UTF-8 bytes of report text in total**, and **100,000 bytes per report**. Oversized input is rejected with the existing profile preserved; reports are not silently dropped or truncated. Output is limited to 30 source-linked details per category and 500 UTF-8 bytes per detail. The prompt preserves historical status, uncertainty, negation, and conflicting documentation; missing evidence does not establish absence. Provider and validation failures leave saved medical details intact, and transient failures retry automatically. Generated details still require review against their linked reports.
 
 ## Appointment recording
 
@@ -114,11 +129,11 @@ See [core compatibility](src/core/COMPATIBILITY.md) for timestamp/Unicode differ
 
 | Source | Responsibility |
 | --- | --- |
-| `src/App.tsx`, `src/features/Dashboard.tsx`, `src/features/SettingsPage.tsx`, `src/features/AccountSettings.tsx` | Shell, navigation, summary dashboard, explicit connection controls, and account cards. |
+| `src/App.tsx`, `src/features/Dashboard.tsx`, `src/features/SettingsPage.tsx`, `src/features/AccountSettings.tsx` | Shell, navigation, summary dashboard, service configuration, automatic-sync status, and account cards. |
 | `src/landing` | Public landing, `/login` and `/signup` forms and their shared accessible form pieces. |
 | `src/features/records`, `src/features/profile` | Source intake/review, symptoms, originals, and Medical Profile. |
 | `src/features/visits` | Visit editing/preparation, consent-gated recording, transcripts, appointment summaries, and memories. |
-| `src/core` | Native-compatible values, validation, pure rules, versioned mutation queue, IndexedDB, API transport, the auth client (`auth.ts`), stored session (`session.ts`) and account-mode store logic. |
+| `src/core` | Native-compatible values, validation, versioned mutations, IndexedDB, API/auth transport, stored sessions, automatic account reconciliation, and report-grounded medical-profile automation. |
 | `src/components`, `src/styles` | Shared components, brand, responsive layout, and palette roles. |
 | `scripts`, `vite.config.ts` | Generated local assets, build/development configuration, and bounded built-preview proxy. |
 

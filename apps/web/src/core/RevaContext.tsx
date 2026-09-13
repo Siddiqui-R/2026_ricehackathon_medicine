@@ -4,6 +4,7 @@
 // Side effects: Initializes browser persistence once; subscriptions clean up on unmount.
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { RevaStore } from './store.ts';
+import { MedicalProfileUpdates } from './MedicalProfileUpdates';
 
 // MARK: - One store instance survives React strict-effect retries without resetting persisted data.
 const Context = createContext<RevaStore | null>(null);
@@ -11,9 +12,15 @@ export function RevaProvider({ children, store }: { children: ReactNode; store?:
   const instance = useRef<RevaStore | null>(null);
   if (!instance.current) instance.current = store ?? new RevaStore();
   useEffect(() => {
-    void instance.current!.initialize();
+    const current = instance.current!;
+    void current.initialize();
+    return current.startAutomaticSync();
   }, []);
-  return <Context.Provider value={instance.current}>{children}</Context.Provider>;
+  return (
+    <Context.Provider value={instance.current}>
+      <MedicalProfileUpdates store={instance.current}>{children}</MedicalProfileUpdates>
+    </Context.Provider>
+  );
 }
 
 // MARK: - Bound arrow actions remain safe when UI controls pass them directly as callbacks.

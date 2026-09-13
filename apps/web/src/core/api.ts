@@ -13,6 +13,7 @@ import type {
   Visit,
 } from './models.ts';
 import { safeFilename, sha256, validateSnapshot } from './domain.ts';
+import { validateProfileResult, validateProfileSources, type ProfileSource } from './medicalProfileAI';
 
 // MARK: - One API origin: same-origin by default, or a validated VITE_REVA_API_ORIGIN.
 // Only https:// or a loopback http:// origin is accepted, so a bearer token can never leak over
@@ -92,7 +93,7 @@ export function defaultReason(status: number, retryAfter: number | null = null):
     case 404:
       return 'This server identity has no saved state or the requested item is unavailable.';
     case 409:
-      return 'The server changed. Your browser copy was kept. Pull and review its latest copy before pushing again.';
+      return 'The server changed during this save. Your browser copy was kept for synchronization.';
     case 429:
       return retryAfter
         ? `Too many attempts. Try again in about ${Math.ceil(retryAfter / 60)} minute${retryAfter > 60 ? 's' : ''}.`
@@ -401,6 +402,13 @@ export class RevaAPI {
       signal,
     );
     return { summary: string(result.summary), model: string(result.model) };
+  }
+  async medicalProfile(records: ProfileSource[], signal?: AbortSignal) {
+    validateProfileSources(records);
+    return validateProfileResult(
+      await this.json('/v1/ai/profile', 'POST', { records }, 80_000, signal),
+      records,
+    );
   }
   async prepare(visit: Visit, records: MedicalRecord[]): Promise<AIPreparation> {
     const result = await this.json(

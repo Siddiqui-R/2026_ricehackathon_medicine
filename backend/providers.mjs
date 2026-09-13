@@ -1,7 +1,7 @@
 // Purpose: Server-only Gemini and ElevenLabs Scribe adapters for the existing app DTOs.
 // Inputs are bounded and untrusted; no source text, credentials or raw provider errors are logged.
 // Inputs: Source DTOs, audio bytes and server-only provider keys.
-// Outputs: Schema-validated summaries, preparation and timestamped transcripts.
+// Outputs: Schema-validated summaries, preparation, source-linked medical history and timestamped transcripts.
 // Side effects: Authenticated HTTPS requests to fixed provider origins.
 import {
   fail,
@@ -10,6 +10,12 @@ import {
   summaryInput,
   preparationInput,
 } from "./validation.mjs";
+import {
+  profileInput,
+  profileFields,
+  profileTask,
+  profileResult,
+} from "./profile.mjs";
 // MARK: - Configuration discovery and bounded provider responses
 export function providerStatus() {
   return {
@@ -61,33 +67,43 @@ async function providerJSON(url, options, fetcher) {
 // MARK: - Source-grounded Gemini requests and strict output validation
 export async function gemini(operation, input, fetcher = fetch) {
   if (operation === "summarize") summaryInput(input);
-  else preparationInput(input);
+  else if (operation === "profile") profileInput(input);
+  else if (operation === "prepare") preparationInput(input);
+  else fail(400, "Unknown Gemini operation.");
   if (!process.env.GEMINI_API_KEY) fail(503, "Gemini is not configured.");
   const model =
-    operation === "summarize"
-      ? process.env.GEMINI_MODEL || "gemini-3.8-flash"
-      : "gemini-3.8-flash";
+    operation === "prepare"
+      ? "gemini-3.8-flash"
+      : process.env.GEMINI_MODEL || "gemini-3.8-flash";
   if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(model))
     fail(503, "Invalid Gemini model configuration.");
   const fields =
     operation === "summarize"
       ? { summary: { type: "string" } }
-      : {
-          overview: { type: "string" },
-          questions: { type: "array", items: { type: "string" }, maxItems: 3 },
-          selectedRecordIDs: {
-            type: "array",
-            items: {
-              type: "string",
-              enum: input.records.map((record) => record.id),
+      : operation === "profile"
+        ? profileFields(input)
+        : {
+            overview: { type: "string" },
+            questions: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 3,
             },
-            maxItems: 6,
-          },
-        };
+            selectedRecordIDs: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: input.records.map((record) => record.id),
+              },
+              maxItems: 6,
+            },
+          };
   const task =
     operation === "summarize"
       ? "Summarize this supplied document or appointment transcript in a factual patient-readable paragraph (maximum 8000 UTF-8 bytes). Preserve dates, numbers, units, negations and uncertainty. For a transcript, summarize only discussion and follow-up explicitly stated. Do not infer speaker identities or clinician roles. Return only summary."
-      : `Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
+      : operation === "profile"
+        ? profileTask
+        : `Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
 supplied records and patient concerns. Include only the history and prior results relevant to preparing
 for that visit. Never describe the upcoming appointment as completed or invent its findings, decisions,
 treatment or follow-up.
@@ -129,7 +145,7 @@ the stated visit concern only.`;
             additionalProperties: false,
           },
           candidateCount: 1,
-          maxOutputTokens: 8192,
+          maxOutputTokens: operation === "profile" ? 32768 : 8192,
           temperature: 0.2,
         },
       }),
@@ -161,7 +177,8 @@ the stated visit concern only.`;
     fail(503, "Gemini returned unexpected fields.");
   if (operation === "summarize") {
     if (!text(result.summary, 8000)) fail(503, "Invalid summary response.");
-  } else if (
+  } else if (operation === "profile") profileResult(result, input);
+  else if (
     !text(result.overview, 2400) ||
     result.overview.trim().split(/\s+/u).length > 180 ||
     result.overview.split("\n").length > 12 ||

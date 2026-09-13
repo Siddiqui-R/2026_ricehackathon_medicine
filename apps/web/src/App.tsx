@@ -1,6 +1,6 @@
 // Purpose: Coordinate responsive navigation, global record search, and shared status feedback.
 // Inputs: Browser hash routes and the current Reva context (demo or signed-in account mode).
-// Outputs: Desktop sidebar, tablet/mobile navigation, a Log out item in account mode, and the selected screen.
+// Outputs: Desktop sidebar, tablet/mobile navigation, an account action menu, and the selected screen.
 // Side effects: Changes routes, announces operation feedback, moves focus after navigation, and in account
 //               mode asks the store to revoke the session on Log out.
 
@@ -12,9 +12,7 @@ import {
   ChevronRight,
   FileText,
   LayoutDashboard,
-  LogOut,
   Search,
-  Settings,
   ShieldCheck,
   UserRound,
   X,
@@ -23,8 +21,7 @@ import { useReva } from './core/RevaContext';
 import { Brand } from './components/Brand';
 import { Button } from './components/ui';
 import { Dashboard } from './features/Dashboard';
-import { DemoSwitcher } from './features/demo/DemoSwitcher';
-import { demoLabel } from './core/presentation';
+import { AccountMenu } from './components/AccountMenu';
 import { SettingsPage } from './features/SettingsPage';
 import { RecordsPage } from './features/records/RecordsPage';
 import { RecordDetail } from './features/records/RecordDetail';
@@ -95,7 +92,10 @@ export function App() {
   const account = store.mode === 'account';
   const demo = store.mode === 'demo' && profile.isDemo;
   // The store reports a failed revoke in the feedback banner; a successful one leaves this page.
-  const logout = () => void store.logout().catch(() => undefined);
+  const logout = () => {
+    if (account) void store.logout().catch(() => undefined);
+    else location.assign('/');
+  };
 
   // MARK: - Desktop navigation and phone tabs share the same active route and labels
   return (
@@ -142,43 +142,8 @@ export function App() {
           <ArrowUpRight size={16} />
         </a>
         <div className="sidebar-bottom">
-          <a
-            className={`nav-item ${route.section === 'settings' ? 'active' : ''}`}
-            href="#/settings"
-            aria-label="Settings & connections"
-            title="Settings & connections"
-            aria-current={route.section === 'settings' ? 'page' : undefined}
-          >
-            <Settings size={19} />
-            <span>Settings & connections</span>
-          </a>
-          {account && (
-            <button
-              type="button"
-              className="nav-item nav-button"
-              aria-label="Log out"
-              title="Log out"
-              onClick={logout}
-              disabled={store.busy}
-            >
-              <LogOut size={19} />
-              <span>Log out</span>
-            </button>
-          )}
           <div className="sidebar-divider" />
-          <a
-            href="#/profile"
-            className="patient-link"
-            aria-label={`${demoLabel(profile.name, profile.isDemo)} — medical profile`}
-          >
-            <span className="avatar">{profile.initials}</span>
-            <span>
-              <strong>{demoLabel(profile.name, profile.isDemo)}</strong>
-              <small>{account || !profile.isDemo ? 'Your medical profile' : 'Demo profile'}</small>
-            </span>
-            <ChevronRight size={16} />
-          </a>
-          {demo && <DemoSwitcher disabled={store.busy} />}
+          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} />
         </div>
       </aside>
       <div className="workspace">
@@ -202,31 +167,11 @@ export function App() {
               <ChevronRight size={17} />
             </button>
           </form>
-          <a
-            href="#/settings"
-            className="workspace-status"
-            aria-label={
-              account ? 'Account settings' : profile.isDemo ? 'Demo settings' : 'Browser storage settings'
-            }
-          >
+          <span className="workspace-status">
             <ShieldCheck size={17} />
             <span>{account ? 'Your account' : profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
-          </a>
-          {demo && <DemoSwitcher disabled={store.busy} className="mobile-demo-switch" />}
-          <a href="#/settings" className="mobile-settings icon-button" aria-label="Settings">
-            <Settings size={21} />
-          </a>
-          {account && (
-            <button
-              type="button"
-              className="mobile-settings mobile-logout icon-button"
-              onClick={logout}
-              disabled={store.busy}
-              aria-label="Log out"
-            >
-              <LogOut size={21} />
-            </button>
-          )}
+          </span>
+          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} compact />
         </header>
         <main ref={content} id="main-content" className="main-content" tabIndex={-1}>
           {route.section === 'records' ? (

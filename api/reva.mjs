@@ -56,7 +56,9 @@ export default async function handler(req, res) {
     const attachment = /^\/v1\/attachments\/([A-Za-z0-9_-]{1,80})$/.exec(
       route || "",
     );
-    const operation = /^\/v1\/ai\/(summarize|prepare)$/.exec(route || "");
+    const operation = /^\/v1\/ai\/(summarize|prepare|profile)$/.exec(
+      route || "",
+    );
     const transfer = /^\/v1\/transfers\/([A-Za-z0-9_-]{1,80})$/.exec(
       route || "",
     );
@@ -181,7 +183,11 @@ export default async function handler(req, res) {
               operation[1],
               await readBody(
                 req,
-                operation[1] === "summarize" ? 256 * 1024 : 1024 * 1024,
+                operation[1] === "summarize"
+                  ? 256 * 1024
+                  : operation[1] === "profile"
+                    ? 2 * 1024 * 1024
+                    : 1024 * 1024,
                 true,
               ),
             ),
