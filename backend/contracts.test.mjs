@@ -121,6 +121,47 @@ test("Scribe returns ordered source timestamps and neutral speaker labels; rejec
 });
 
 // MARK: - The serverless preparation contract matches the concise web and Swift brief
+test("provider failures distinguish request, access, quota and availability without exposing response bodies", async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "fictional-test-key";
+  try {
+    for (const [status, expected] of [
+      [400, /request format/],
+      [401, /denied access/],
+      [403, /denied access/],
+      [404, /model or endpoint/],
+      [422, /request format/],
+      [429, /rate or quota limit/],
+      [503, /temporarily unavailable/],
+    ]) {
+      await assert.rejects(
+        () =>
+          gemini(
+            "summarize",
+            source,
+            async () =>
+              new Response("private-provider-details fictional-test-key", {
+                status,
+              }),
+          ),
+        (error) => {
+          assert.match(error.message, expected);
+          assert.match(error.message, new RegExp(`HTTP ${status}`));
+          assert.doesNotMatch(
+            error.message,
+            /private-provider-details|fictional-test-key|credits/,
+          );
+          if (status === 400) assert.doesNotMatch(error.message, /permissions/);
+          return true;
+        },
+      );
+    }
+  } finally {
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
+  }
+});
+
 const briefInput = {
   visit: {
     id: "transient-visit",

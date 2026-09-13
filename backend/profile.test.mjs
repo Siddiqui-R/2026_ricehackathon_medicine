@@ -102,6 +102,8 @@ test("profile sends every original source separately from instructions and uses 
     const schema = payload.generationConfig.responseJsonSchema;
     assert.deepEqual(schema.required, profileCategories);
     assert.equal(schema.additionalProperties, false);
+    for (const category of profileCategories)
+      assert.equal(schema.properties[category].maxItems, undefined);
     assert.deepEqual(
       schema.properties.conditions.items.properties.recordIDs.items.enum,
       ["report-1", "report-2"],

@@ -91,7 +91,9 @@ export function profileFields(input) {
   return Object.fromEntries(
     profileCategories.map((category) => [
       category,
-      { type: "array", items: fact, maxItems: 30 },
+      // Repeating bounded nested arrays makes Gemini reject this schema with HTTP 400.
+      // Keep the 30-fact limit in the prompt and authoritative profileResult validation.
+      { type: "array", items: fact },
     ]),
   );
 }

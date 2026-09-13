@@ -45,10 +45,20 @@ async function providerJSON(url, options, fetcher) {
   }
   if (!response.ok) {
     await response.body?.cancel();
-    fail(
-      503,
-      `The provider rejected the request (HTTP ${response.status}). Check key permissions and available credits.`,
-    );
+    const status = response.status;
+    const guidance =
+      status === 400 || status === 422
+        ? "The provider rejected the request format. The app's provider configuration needs review."
+        : status === 401 || status === 403
+          ? "The provider denied access. Check the server API key and its permissions."
+          : status === 429
+            ? "The provider's rate or quota limit was reached. Try again later or check usage limits."
+            : status === 404
+              ? "The configured provider model or endpoint is unavailable. Check the server configuration."
+              : status >= 500
+                ? "The provider is temporarily unavailable. Please try again shortly."
+                : "The provider could not complete this request. Check the server's provider configuration.";
+    fail(503, `${guidance} (HTTP ${status}). Your saved data is unchanged.`);
   }
   let bytes = 0,
     parts = [];
