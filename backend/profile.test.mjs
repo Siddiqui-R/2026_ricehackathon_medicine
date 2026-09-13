@@ -30,7 +30,7 @@ const valid = () => ({
   ...empty(),
   allergies: [
     {
-      text: "2024: sample allergen — rash; 2026 report records no known allergies (conflicting documentation).",
+      text: "2024: sample allergen, rash; 2026 report records no known allergies (conflicting documentation).",
       recordIDs: ["report-1", "report-2"],
     },
   ],

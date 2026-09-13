@@ -40,12 +40,12 @@ vi.mock('react', () => ({
     }
   },
 }));
-import { useVisitRecorder } from './useVisitRecorder';
+import { useVisitRecorder, type CaptureObserver } from './useVisitRecorder';
 
-function render() {
+function render(observer?: CaptureObserver) {
   driver.stateIndex = 0;
   driver.refIndex = 0;
-  const result = useVisitRecorder();
+  const result = useVisitRecorder(observer);
   driver.mounted = true;
   return result;
 }
@@ -130,6 +130,38 @@ afterEach(() => {
 
 // MARK: - Cancellation and cleanup always release microphone ownership
 describe('visit recorder lifecycle', () => {
+  it('shares only consented active audio with live captions and pauses captions when hidden', async () => {
+    const source = microphone();
+    requestMicrophone.mockResolvedValue(source.stream);
+    const observer = {
+      start: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(),
+      reset: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const capture = render(observer);
+    expect(observer.start).not.toHaveBeenCalled();
+    await capture.start();
+    expect(observer.start).toHaveBeenCalledExactlyOnceWith(source.stream);
+    documentMock.hidden = true;
+    documentMock.dispatchEvent(new Event('visibilitychange'));
+    expect(observer.pause).toHaveBeenCalledOnce();
+    capture.resume();
+    expect(observer.resume).not.toHaveBeenCalled();
+    documentMock.hidden = false;
+    capture.resume();
+    expect(observer.resume).toHaveBeenCalledExactlyOnceWith(source.stream);
+    FakeRecorder.instances[0].emit([1, 2, 3]);
+    capture.stop();
+    expect(observer.stop).toHaveBeenCalled();
+    capture.reset();
+    expect(observer.reset).toHaveBeenCalledOnce();
+    unmount();
+    expect(observer.dispose).toHaveBeenCalledOnce();
+    expect(requestMicrophone).toHaveBeenCalledOnce();
+  });
   it('does not request microphone access merely by mounting', () => {
     const capture = render();
     expect(capture.supported).toBe(true);
@@ -252,9 +284,11 @@ describe('visit recorder lifecycle', () => {
   });
 
   it('releases the microphone and original bytes when a draft is discarded', async () => {
+    vi.setSystemTime(new Date('2026-09-13T04:58:00Z'));
     const source = microphone();
     requestMicrophone.mockResolvedValue(source.stream);
     await render().start();
+    expect(render().startedAt).toBe('2026-09-13T04:58:00.000Z');
     const media = FakeRecorder.instances[0];
     media.emit([1, 2, 3]);
     elapsed = 2500;
@@ -264,6 +298,7 @@ describe('visit recorder lifecycle', () => {
     expect(render().state).toBe('idle');
     expect(render().seconds).toBe(0);
     expect(render().blob).toBeNull();
+    expect(render().startedAt).toBeNull();
     expect(source.track.stop).toHaveBeenCalledOnce();
   });
 

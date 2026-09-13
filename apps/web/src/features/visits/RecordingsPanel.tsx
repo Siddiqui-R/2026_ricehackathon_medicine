@@ -3,12 +3,13 @@
 // Outputs: Recording capture/detail dialogs and a sample tied only to its original sample visit.
 // Side effects: Explicit sample access reads bundled JSON and persists it through context; no microphone starts here.
 
+import { recordingDateLabel } from '../../core/recordingDates';
 import { useState } from 'react';
 import { ChevronRight, Mic, Play } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
 import type { Visit, VisitRecording } from '../../core/models';
-import { durationLabel, formatDate, uid } from '../../core/domain';
+import { durationLabel, uid } from '../../core/domain';
 import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Card } from '../../components/ui';
 import { useRecordingSession } from './RecordingSession';
@@ -85,7 +86,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
               <span className="record-main">
                 <strong>{demoLabel(recording.title, recording.isSample)}</strong>
                 <span className="record-meta">
-                  {formatDate(recording.createdAt)} · {durationLabel(recording.duration)}
+                  {recordingDateLabel(recording)} · {durationLabel(recording.duration)}
                 </span>
                 <Badge tone={recording.isSample ? 'review' : 'neutral'}>
                   {recording.isSample

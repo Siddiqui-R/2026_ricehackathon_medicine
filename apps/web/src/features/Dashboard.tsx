@@ -3,6 +3,8 @@
 // Outputs: Actionable appointment and record links with clearly labeled source state.
 // Side effects: Navigation only; preparation and edits happen on their dedicated screens.
 
+import { recordDateLabel } from '../core/recordDates';
+import { recordingDateLabel } from '../core/recordingDates';
 import { useState } from 'react';
 import {
   Activity,
@@ -17,7 +19,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
-import { defaultTimeZone, formatDate } from '../core/domain';
+import { defaultTimeZone } from '../core/domain';
 import { demoLabel } from '../core/presentation';
 import { Button, Card, Modal } from '../components/ui';
 import { SourceLink } from '../components/SourceLink';
@@ -126,7 +128,7 @@ export function Dashboard() {
                       <span className="record-main">
                         <strong>{demoLabel(session.title, session.isSample)}</strong>
                         <span className="record-meta">
-                          {formatDate(session.createdAt)}
+                          {recordingDateLabel(session)}
                           {session.isSample ? ' · Sample' : ''}
                         </span>
                       </span>
@@ -164,7 +166,7 @@ export function Dashboard() {
                       <span className="record-meta">
                         {record.kind}
                         <span aria-hidden="true"> · </span>
-                        {formatDate(record.date)}
+                        {recordDateLabel(record)}
                       </span>
                     </span>
                     <ChevronRight size={17} className="row-chevron" />

@@ -7,8 +7,11 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useReva } from '../../core/RevaContext';
 import { nowISO, uid } from '../../core/domain';
 import type { Visit, VisitRecording } from '../../core/models';
+import { recordingDateTitle } from '../../core/recordingDates';
 import { audioExtension, MAX_AUDIO_BYTES, useVisitRecorder } from './useVisitRecorder';
 import { inspectAudio, type UploadedAudio } from './recordingAudio';
+import { RevaAPI } from '../../core/api';
+import { useLiveTranscription } from './useLiveTranscription';
 
 interface RecordingDraft {
   id: string;
@@ -26,8 +29,12 @@ interface PendingSession {
 
 // MARK: - The provider is mounted outside the route switch, so screens never own the microphone
 export function useRecordingSessionDraft() {
-  const { snapshot, saveRecording, notify } = useReva();
-  const capture = useVisitRecorder();
+  const { snapshot, saveRecording, notify, token, providers } = useReva();
+  const live = useLiveTranscription(async (signal) => {
+    if (!providers?.realtimeTranscription?.configured) throw new Error('Live transcription is unavailable.');
+    return new RevaAPI(token).realtimeTranscriptionToken(signal);
+  });
+  const capture = useVisitRecorder(live);
   const [draft, setDraft] = useState<RecordingDraft | null>(null);
   const [pending, setPending] = useState<PendingSession | null>(null);
   const [upload, setUpload] = useState<UploadedAudio | null>(null);
@@ -168,16 +175,20 @@ export function useRecordingSessionDraft() {
     setSaving(true);
     setError('');
     try {
-      if (!draft.title.trim()) throw new Error('Add a title for this recording.');
       if (!Number.isFinite(duration) || duration <= 0)
         throw new Error('This recording has no captured audio duration.');
       if (!original.size || original.size > MAX_AUDIO_BYTES)
         throw new Error('Audio must be nonempty and no larger than 16 MiB.');
+      const savedAt = nowISO();
+      const capturedAt = upload ? undefined : (capture.startedAt ?? undefined);
       const recording: VisitRecording = {
         id: draft.id,
         visitID: detachedVisit ? '' : (draft.visit?.id ?? ''),
-        title: draft.title.trim(),
-        createdAt: nowISO(),
+        title: draft.title.trim() || recordingDateTitle(capturedAt ?? savedAt),
+        titleSource: draft.title.trim() ? 'user' : 'date',
+        createdAt: capturedAt ?? savedAt,
+        capturedAt,
+        savedAt,
         duration,
         audioFilename: `reva-audio-${draft.id}.${upload?.extension ?? audioExtension(original.type)}`,
         segments: [],
@@ -210,6 +221,7 @@ export function useRecordingSessionDraft() {
     draft,
     pending,
     capture,
+    liveTranscript: live.transcript,
     upload,
     original,
     duration,

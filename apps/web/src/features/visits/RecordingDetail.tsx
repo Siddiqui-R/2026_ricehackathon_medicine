@@ -3,6 +3,7 @@
 // Outputs: Audio playback, faithful segment corrections, separate notes, and links to saved memory records.
 // Side effects: Loads original audio; explicit actions transcribe or persist corrections/notes through context.
 
+import { recordingDateLabel } from '../../core/recordingDates';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { FileText, Pencil, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
@@ -104,7 +105,7 @@ export function RecordingDetail({
           {recording.isSample ? 'Sample · no audio' : 'Saved visit audio'}
         </Badge>
         <span className="muted small">
-          {formatDate(recording.createdAt, true)} · {durationLabel(recording.duration)}
+          {recordingDateLabel(recording, true)} · {durationLabel(recording.duration)}
         </span>
       </div>
       {processingStage && (

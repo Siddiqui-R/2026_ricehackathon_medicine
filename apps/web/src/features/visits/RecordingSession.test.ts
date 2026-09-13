@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   capture: {
     state: 'idle',
     seconds: 0,
+    startedAt: null as string | null,
     blob: null as Blob | null,
     error: '',
     notice: '',
@@ -111,13 +112,16 @@ beforeEach(() => {
   host.effects = [];
   mocks.capture.state = 'idle';
   mocks.capture.seconds = 0;
+  mocks.capture.startedAt = null;
   mocks.capture.blob = null;
   mocks.capture.start.mockImplementation(async () => {
     mocks.capture.state = 'recording';
+    mocks.capture.startedAt = new Date().toISOString();
   });
   mocks.capture.reset.mockImplementation(() => {
     mocks.capture.state = 'idle';
     mocks.capture.seconds = 0;
+    mocks.capture.startedAt = null;
     mocks.capture.blob = null;
   });
   mocks.save.mockResolvedValue(undefined);
@@ -127,6 +131,7 @@ beforeEach(() => {
 afterEach(() => {
   host.effects.forEach((effect) => effect.cleanup?.());
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 // MARK: - Page entry requires consent; capture still requires an explicit start action
@@ -214,14 +219,25 @@ describe('shared recording session', () => {
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('background'));
   });
 
-  it('keeps the draft when its title is empty instead of sending invalid metadata', async () => {
+  it('saves a blank title with its Central recording day and retains the actual capture time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-13T05:10:00Z'));
     consent();
     finishedAudio();
+    mocks.capture.startedAt = '2026-09-13T04:58:00.000Z';
     render().updateDraft({ title: ' ' });
     await render().save();
-    expect(render().error).toBe('Add a title for this recording.');
-    expect(render().original).not.toBeNull();
-    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Sep 12, 2026',
+        titleSource: 'date',
+        capturedAt: '2026-09-13T04:58:00.000Z',
+        createdAt: '2026-09-13T04:58:00.000Z',
+        savedAt: '2026-09-13T05:10:00Z',
+      }),
+      expect.any(Blob),
+    );
+    expect(render().draft).toBeNull();
   });
   it('preserves audio as a standalone session if its linked visit is removed during navigation', async () => {
     const visit = { id: 'removed-visit', title: 'Synthetic visit' } as Visit;
@@ -246,18 +262,26 @@ describe('shared recording session', () => {
   });
 
   it('uses the same consented save flow for uploaded originals', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-13T02:30:00Z'));
     consent();
     render().setMode('upload');
-    const file = new File(['synthetic original'], 'synthetic-visit.mp3', { type: 'audio/mpeg' });
+    const file = new File(['synthetic original'], 'synthetic-visit.mp3', {
+      type: 'audio/mpeg',
+      lastModified: Date.parse('2020-01-01T00:00:00Z'),
+    });
     mocks.inspect.mockResolvedValue({ blob: file, duration: 64, extension: 'mp3' });
     await render().chooseAudio(file);
     expect(render().draft?.title).toBe('');
     expect(render().original).toBe(file);
-    render().updateDraft({ title: 'My uploaded conversation' });
     await render().save();
     expect(mocks.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'My uploaded conversation',
+        title: 'Sep 12, 2026',
+        titleSource: 'date',
+        capturedAt: undefined,
+        savedAt: '2026-09-13T02:30:00Z',
+        createdAt: '2026-09-13T02:30:00Z',
         duration: 64,
         audioFilename: expect.stringMatching(/\.mp3$/),
       }),

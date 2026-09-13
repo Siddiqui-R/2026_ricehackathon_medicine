@@ -5,9 +5,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, AudioLines, Check, FileAudio, Mic, Pause, Play, Square, Upload } from 'lucide-react';
-import { Button, Field } from '../../components/ui';
+import { Button } from '../../components/ui';
 import { durationLabel } from '../../core/domain';
+import { recordingDateTitle } from '../../core/recordingDates';
 import { useRecordingSession } from './RecordingSession';
+import { RecordingLivePreview } from './RecordingLivePreview';
+import { RecordingNotes } from './RecordingNotes';
 
 // MARK: - Dedicated recording route uses shared state, never a route-owned MediaRecorder
 export function RecordingPage() {
@@ -58,7 +61,7 @@ export function RecordingPage() {
             aria-label="Session title"
             title="Edit session title"
             value={draft.title}
-            placeholder="Add a session title"
+            placeholder={recordingDateTitle(capture.startedAt ?? undefined)}
             maxLength={180}
             disabled={saving || reading}
             onChange={(event) => session.updateDraft({ title: event.target.value })}
@@ -133,6 +136,7 @@ export function RecordingPage() {
                   </Button>
                 )}
               </div>
+              <RecordingLivePreview transcript={session.liveTranscript} />
               {!capture.supported && (
                 <p className="inline-error">
                   Your browser cannot record here. Choose Upload audio to use an existing recording.
@@ -189,16 +193,11 @@ export function RecordingPage() {
           )}
         </section>
         <section className="recording-details" aria-label="Session notes">
-          <Field label="Your notes">
-            <textarea
-              rows={7}
-              maxLength={20000}
-              disabled={saving || reading}
-              placeholder="Questions, reminders, anything you want to remember…"
-              value={draft.notes}
-              onChange={(event) => session.updateDraft({ notes: event.target.value })}
-            />
-          </Field>
+          <RecordingNotes
+            value={draft.notes}
+            disabled={saving || reading}
+            onChange={(notes) => session.updateDraft({ notes })}
+          />
         </section>
         <div className="recording-stage-footer">
           <span>

@@ -19,6 +19,31 @@ extension AppStore {
         ProviderContext(connection: connectionGeneration, workspace: workspaceGeneration)
     }
 
+    // Retain request cancellation independently of the view task that initiated it.
+    // A workspace/connection switch stops both URLSession requests and Gemini backoff immediately.
+    func withProviderRequest<T>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T {
+        let id = UUID()
+        let request = Task { @MainActor in
+            try Task.checkCancellation()
+            let result = try await operation()
+            try Task.checkCancellation()
+            return result
+        }
+        providerRequestCancellations[id] = { request.cancel() }
+        defer { providerRequestCancellations.removeValue(forKey: id) }
+        return try await withTaskCancellationHandler {
+            try await request.value
+        } onCancel: {
+            request.cancel()
+        }
+    }
+
+    func cancelProviderRequests() {
+        let cancellations = Array(providerRequestCancellations.values)
+        providerRequestCancellations.removeAll()
+        for cancel in cancellations { cancel() }
+    }
+
     func providerClient() throws -> ProviderClient {
         try ProviderClient(
             url: connectionURL, token: connectionToken,
@@ -32,7 +57,7 @@ extension AppStore {
         let context = providerContext
         let url = connectionURL
         do {
-            let status = try await providerClient().status()
+            let status = try await withProviderRequest { try await self.providerClient().status() }
             guard context == providerContext, requestID == providerDiscoveryID else { return }
             try Task.checkCancellation()
             providerStatus = status

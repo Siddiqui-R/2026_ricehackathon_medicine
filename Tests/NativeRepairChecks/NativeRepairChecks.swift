@@ -119,6 +119,8 @@ enum ServerFailure: LocalizedError {
         try await checkProviders(fixture, root: scratch)
         try await checkProviderInputs(fixture, root: scratch)
         try await checkProviderCancellation(fixture, root: scratch)
+        try await checkProviderIdentitySwitchDuringBackoff(fixture, root: scratch)
+        try checkSummaryInputInvalidation(fixture, root: scratch)
         try await checkEditorMerges(fixture, root: scratch)
         try checkEditorConflicts(fixture, root: scratch)
         try checkRecordingPersistence(fixture, root: scratch)
@@ -460,6 +462,84 @@ enum ServerFailure: LocalizedError {
         )
     }
 
+    @MainActor static func checkProviderIdentitySwitchDuringBackoff(_ fixture: AppSnapshot, root: URL)
+        async throws
+    {
+        for boundary in ["token", "url", "replace", "close"] {
+            let store = try makeStore(fixture, root: root)
+            var waiting = false
+            var cancelled = false
+            var escapedWait = false
+            let requests = ProviderClient.requestCount
+            ProviderClient.duringRequest = {
+                waiting = true
+                do {
+                    try await Task.sleep(nanoseconds: 60_000_000_000)
+                    escapedWait = true
+                } catch {
+                    cancelled = Task.isCancelled
+                    throw error
+                }
+            }
+            let operation = Task { @MainActor in await store.summarizeWithAI(fixture.records[0].id) }
+            while !waiting { await Task.yield() }
+            switch boundary {
+            case "token": store.connectionToken = "new-synthetic-owner"
+            case "url": store.connectionURL = "http://localhost:9191"
+            case "replace": store.snapshot = fixture
+            default: store.closeWorkspace()
+            }
+            var watchdogFired = false
+            let watchdog = Task { @MainActor in
+                do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
+                watchdogFired = true
+                operation.cancel()
+            }
+            await operation.value
+            watchdog.cancel()
+            precondition(
+                !watchdogFired && cancelled && !escapedWait, "\(boundary) did not cancel provider backoff")
+            precondition(ProviderClient.requestCount == requests + 1)
+            precondition(store.providerRequestCancellations.isEmpty && !store.isProviderBusy)
+            precondition(store.snapshot == fixture)
+        }
+        ProviderClient.duringRequest = nil
+        print(
+            "PASS provider ownership: token, URL, workspace replacement and account closure cancel backoff immediately without retry/publication"
+        )
+    }
+
+    @MainActor static func checkSummaryInputInvalidation(_ fixture: AppSnapshot, root: URL) throws {
+        for field in ["title", "text", "date", "dateSource", "notes"] {
+            var source = fixture
+            source.records[0].summary = "Synthetic generated summary."
+            source.records[0].summaryModel = "synthetic-ai"
+            source.records[0].summaryGeneratedAt = "2026-09-12T15:30:00Z"
+            let store = try makeStore(source, root: root)
+            let original = store.record(source.records[0].id)!
+            var revised = original
+            switch field {
+            case "title": revised.title = "Updated source title"
+            case "text": revised.text = "Corrected source text."
+            case "date": revised.date = "2026-09-01"
+            case "dateSource": revised.dateSource = "document"
+            default: revised.notes = "Independent user notes."
+            }
+            try store.save(revised)
+            let saved = store.record(original.id)!
+            if field == "notes" {
+                precondition(saved.summary == original.summary && saved.summaryModel == original.summaryModel)
+                precondition(saved.summaryGeneratedAt == original.summaryGeneratedAt)
+            } else {
+                precondition(saved.summaryModel == nil && saved.summaryGeneratedAt == nil)
+                precondition(saved.summary == ReportEngine.localExcerpt(revised.text, isDemo: revised.isDemo))
+            }
+        }
+        print(
+            "PASS summary provenance: title, text, date and date-source changes invalidate generated summary/model/time; notes preserve them"
+        )
+    }
+
     // MARK: - Field-specific editor preservation
     @MainActor static func checkEditorMerges(_ fixture: AppSnapshot, root: URL) async throws {
         let store = try makeStore(fixture, root: root)
@@ -469,9 +549,11 @@ enum ServerFailure: LocalizedError {
         ProviderClient.duringRequest = nil
         await store.summarizeWithAI(original.id)
         let summarized = store.record(original.id)!
+        precondition(summarized.summaryGeneratedAt != nil)
         try store.saveRecordEdits(draft, original: original)
         let saved = store.record(original.id)!
         precondition(saved.summary == summarized.summary && saved.summaryModel == summarized.summaryModel)
+        precondition(saved.summaryGeneratedAt == summarized.summaryGeneratedAt)
         precondition(
             saved.version == summarized.version && saved.notes == draft.notes
                 && saved.pageTexts == original.pageTexts)
@@ -481,6 +563,7 @@ enum ServerFailure: LocalizedError {
         let edited = store.record(original.id)!
         precondition(
             edited.summary == ReportEngine.localExcerpt(corrected.text) && edited.summaryModel == nil
+                && edited.summaryGeneratedAt == nil
                 && edited.pageTexts == nil && edited.status == "ready")
         var conflicting = draft
         conflicting.text = "Competing correction from the old source"

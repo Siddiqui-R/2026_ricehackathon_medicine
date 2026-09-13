@@ -5,6 +5,7 @@
 import type { AppSnapshot, MedicalRecord, VisitRecording } from './models';
 import { durationLabel, localExcerpt, nowISO } from './domain';
 import { calendarDay } from './dates';
+import { recordingInstant } from './recordingDates';
 
 // MARK: - Source-aware version increments and optimistic record editing.
 export function upsertRecord(snapshot: AppSnapshot, incoming: MedicalRecord, expectedVersion?: number): void {
@@ -14,7 +15,12 @@ export function upsertRecord(snapshot: AppSnapshot, incoming: MedicalRecord, exp
     throw new Error('This record changed or was deleted while you were editing. Reopen it before saving.');
   const revised = structuredClone(incoming);
   if (current) {
-    const fields = ['title', 'date', 'text', 'tags', 'summary', 'status'] as const;
+    if ((['title', 'text', 'date', 'dateSource'] as const).some((key) => current[key] !== revised[key])) {
+      if (revised.summaryModel) revised.summary = localExcerpt(revised.text, revised.isDemo);
+      revised.summaryModel = undefined;
+      revised.summaryGeneratedAt = undefined;
+    }
+    const fields = ['title', 'date', 'dateSource', 'text', 'tags', 'summary', 'status'] as const;
     revised.version =
       current.version +
       (fields.some((field) => JSON.stringify(current[field]) !== JSON.stringify(revised[field])) ? 1 : 0);
@@ -86,7 +92,8 @@ export function createMemoryRecord(
       title: `${recording.title} · memory`,
       kind: 'Recording',
       provider: snapshot.visits.find((visit) => visit.id === recording.visitID)?.provider ?? 'Visit',
-      date: calendarDay(new Date(recording.createdAt)),
+      date: calendarDay(new Date(recordingInstant(recording))),
+      dateSource: recording.capturedAt ? 'recorded' : recording.savedAt ? 'added' : undefined,
       uploadedAt: nowISO(),
       tags: ['visit memory'],
       status: 'ready',
@@ -97,6 +104,7 @@ export function createMemoryRecord(
     text,
     summary,
     summaryModel: generated ? recording.aiSummaryModel : undefined,
+    summaryGeneratedAt: generated ? recording.aiSummaryGeneratedAt : undefined,
     sourceRecordingID: recording.id,
     isDemo: recording.isSample,
     pageTexts: undefined,

@@ -1,4 +1,4 @@
-// Purpose: Keep every Gemini operation on one latest Flash-Lite model resolver.
+// Purpose: Keep every Gemini operation on one latest Flash primary model resolver.
 // Inputs: Empty, prior-default and explicitly overridden environment values plus fictional records.
 // Outputs: Assertions for discovery, request URLs and returned model attribution.
 // Side effects: Test-process environment only; all provider traffic is mocked.
@@ -70,7 +70,7 @@ test("summaries, preparation and profile share the latest alias and legacy-defau
       else process.env.GEMINI_MODEL = configured;
       const expected = configured?.includes("custom")
         ? "gemini-custom-model"
-        : "gemini-flash-lite-latest";
+        : "gemini-flash-latest";
       assert.equal(providerStatus().gemini.model, expected);
       for (const [operation, input, output] of operations) {
         const result = await gemini(operation, input, async (url) => {

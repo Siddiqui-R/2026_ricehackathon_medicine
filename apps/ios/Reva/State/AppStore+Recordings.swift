@@ -42,14 +42,22 @@ extension AppStore {
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
-            let source = MedicalRecord(
+            var source = MedicalRecord(
                 id: original.id, title: original.title, kind: "Recording", provider: "",
                 date: original.createdAt, text: original.transcriptText, summary: "")
-            let result = try await providerClient().summarize(source)
+            if let capturedAt = original.capturedAt {
+                source.date = capturedAt
+                source.dateSource = "recorded"
+            } else if let savedAt = original.savedAt {
+                source.date = RevaDate.day(RevaDate.parse(savedAt), zone: RevaDate.defaultTimeZone)
+                source.dateSource = "added"
+            }
+            let result = try await withProviderRequest { try await self.providerClient().summarize(source) }
             guard context == providerContext else { return }
             try Task.checkCancellation()
             guard var latest = recording(id), latest.visitID == original.visitID,
                 latest.createdAt == original.createdAt, latest.title == original.title,
+                latest.capturedAt == original.capturedAt, latest.savedAt == original.savedAt,
                 latest.audioFilename == original.audioFilename, latest.duration == original.duration,
                 latest.isSample == original.isSample, latest.segments == original.segments
             else {
@@ -194,6 +202,14 @@ extension AppStore {
         record.summary =
             recording.hasAISummary ? recording.aiSummary! : ReportEngine.localExcerpt(sourceText)
         record.summaryModel = recording.hasAISummary ? recording.aiSummaryModel : nil
+        record.summaryGeneratedAt = recording.hasAISummary ? recording.aiSummaryGeneratedAt : nil
+        if let capturedAt = recording.capturedAt {
+            record.date = RevaDate.day(RevaDate.parse(capturedAt), zone: RevaDate.defaultTimeZone)
+            record.dateSource = "recorded"
+        } else if let savedAt = recording.savedAt {
+            record.date = RevaDate.day(RevaDate.parse(savedAt), zone: RevaDate.defaultTimeZone)
+            record.dateSource = "added"
+        }
         let origin =
             recording.isSample
             ? "Fictional sample transcript. No matching audio."
@@ -215,6 +231,7 @@ extension AppStore {
         if let existingIndex {
             if previous.text != record.text || previous.summary != record.summary
                 || previous.summaryModel != record.summaryModel
+                || previous.date != record.date || previous.dateSource != record.dateSource
             {
                 record.version = previous.version + 1
             }

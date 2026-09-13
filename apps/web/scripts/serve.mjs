@@ -26,7 +26,7 @@ const port = Number(process.env.PORT || 4173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid TCP port.');
 const host = process.env.HOST || '127.0.0.1';
 const contentSecurityPolicy =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob: wss://api.elevenlabs.io; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -81,6 +81,7 @@ function apiRoute(pathname) {
   if (pathname === '/v1/ai/summarize') return { POST: 256 * 1024 };
   if (pathname === '/v1/ai/prepare') return { POST: 1024 * 1024 };
   if (pathname === '/v1/audio/transcribe') return { POST: 16 * 1024 * 1024 };
+  if (pathname === '/v1/audio/realtime-token') return { POST: 0 };
   if (/^\/v1\/attachments\/[A-Za-z0-9_-]{1,80}$/u.test(pathname))
     return { GET: 0, PUT: 16 * 1024 * 1024, DELETE: 0 };
   return null;

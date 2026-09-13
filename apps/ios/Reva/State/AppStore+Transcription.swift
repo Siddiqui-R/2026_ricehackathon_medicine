@@ -16,7 +16,9 @@ extension AppStore {
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
-            let result = try await providerClient().transcribe(bytes: Data(contentsOf: url), filename: name)
+            let result = try await withProviderRequest {
+                try await self.providerClient().transcribe(bytes: Data(contentsOf: url), filename: name)
+            }
             guard context == providerContext else { return }
             try Task.checkCancellation()
             guard var latest = recording(id), latest.audioFilename == original.audioFilename,

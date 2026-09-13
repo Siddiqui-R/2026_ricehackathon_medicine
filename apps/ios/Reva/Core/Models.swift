@@ -67,7 +67,18 @@ struct MedicalRecord: Codable, Identifiable, Equatable {
     var pageTexts: [String]?
     var sourceRecordingID: String? = nil
     var summaryModel: String? = nil
+    var summaryGeneratedAt: String? = nil
     var symptomEntry: SymptomEntry? = nil
+    // Source/occurrence dates stay distinct from a fallback added date across browser sync.
+    var dateSource: String? = nil
+
+    var providerDateContext: String {
+        switch dateSource {
+        case "document", "observed", "recorded": return date
+        case "added": return "Added \(date.prefix(10)); event date unknown"
+        default: return "Date \(date.prefix(10)); source unverified"
+        }
+    }
 
     var symbol: String {
         switch kind {
@@ -195,6 +206,9 @@ struct VisitRecording: Codable, Identifiable, Equatable {
     var aiSummary: String? = nil
     var aiSummaryModel: String? = nil
     var aiSummaryGeneratedAt: String? = nil
+    var titleSource: String? = nil
+    var capturedAt: String? = nil
+    var savedAt: String? = nil
 
     // MARK: - Exact transcript and derived summary
     // Keep every source word and both timestamps; user notes never become transcript evidence.

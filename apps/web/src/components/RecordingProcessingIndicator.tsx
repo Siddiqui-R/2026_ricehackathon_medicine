@@ -136,9 +136,15 @@ function JobStatus({
       {(needsHelp || job.stage === 'complete') && (
         <div className="processing-job-actions">
           {needsHelp ? (
-            <button type="button" onClick={() => retry(job.id)} aria-label={`Retry processing ${job.title}`}>
-              <RotateCcw size={12} aria-hidden="true" /> Try again
-            </button>
+            !job.retryAt && (
+              <button
+                type="button"
+                onClick={() => retry(job.id)}
+                aria-label={`Retry processing ${job.title}`}
+              >
+                <RotateCcw size={12} aria-hidden="true" /> Try again
+              </button>
+            )
           ) : (
             <a href={`#/recordings/${encodeURIComponent(job.id)}`}>View recording</a>
           )}

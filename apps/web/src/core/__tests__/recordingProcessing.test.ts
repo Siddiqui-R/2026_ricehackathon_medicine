@@ -89,6 +89,38 @@ async function setup(
   return { repository, store, processor, transcribe, summarize, providerState, add, redirect };
 }
 describe('background recording processing', () => {
+  it('keeps canceled work resumable without restarting it until the user retries', async () => {
+    const late = deferred<AudioTranscription>();
+    const transcribe = vi
+      .fn<APITransport['transcribe']>()
+      .mockReturnValueOnce(late.promise)
+      .mockResolvedValue(transcription);
+    const test = await setup({ transcribe });
+    await test.add();
+    test.processor.start();
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
+    await test.store.cancelProviderWork();
+    await vi.waitFor(() =>
+      expect(test.processor.getState()[0]).toMatchObject({
+        stage: 'waiting',
+        message: expect.stringContaining('stopped'),
+      }),
+    );
+    expect(test.store.getState().snapshot!.recordings.find((item) => item.id === 'recording-1')!.status).toBe(
+      'processing-transcribing',
+    );
+    test.processor.wake();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(transcribe).toHaveBeenCalledOnce();
+    test.processor.retry('recording-1');
+    await vi.waitFor(() => expect(test.processor.getState()[0].stage).toBe('complete'));
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    late.resolve({ ...transcription, text: 'Stale canceled transcript' });
+    await Promise.resolve();
+    expect(
+      test.store.getState().snapshot!.recordings.find((item) => item.id === 'recording-1')!.segments,
+    ).toEqual(transcription.segments);
+  });
   it('transcribes then analyzes and saves sourced memory without blocking other edits', async () => {
     const speech = deferred<AudioTranscription>(),
       analysis = deferred<AISummary>();
@@ -163,6 +195,28 @@ describe('background recording processing', () => {
     await vi.waitFor(() => expect(test.processor.getState()[0].stage).toBe('complete'));
     expect(test.transcribe).not.toHaveBeenCalled();
     expect(test.summarize).toHaveBeenCalledOnce();
+  });
+  it('shows an analysis backoff as waiting while the rest of the workspace remains editable', async () => {
+    const analysis = deferred<AISummary>();
+    const retryAt = Date.now() + 60_000;
+    const test = await setup({
+      summarize: vi.fn<APITransport['summarize']>((_record, _signal, options) => {
+        options?.onRetry?.({ retryAt, attempt: 0 });
+        return analysis.promise;
+      }),
+    });
+    await test.add();
+    test.processor.start();
+    await vi.waitFor(() => expect(test.processor.getState()[0]).toMatchObject({ stage: 'waiting', retryAt }));
+    expect(test.store.getState().busy).toBe(false);
+    await test.store.mutate((draft) => {
+      draft.profile.careNotes = 'Edited during retry wait';
+    });
+    analysis.resolve(summary);
+    await vi.waitFor(() => expect(test.processor.getState()[0].stage).toBe('complete'));
+    expect(test.processor.getState()[0].retryAt).toBeUndefined();
+    expect(test.transcribe).toHaveBeenCalledOnce();
+    expect(test.store.getState().snapshot!.profile.careNotes).toBe('Edited during retry wait');
   });
   it('keeps the transcript on analysis failure, then retries only analysis', async () => {
     const summarize = vi.fn().mockRejectedValueOnce(new APIError(422)).mockResolvedValue(summary);

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, NotebookPen, Search, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { formatDate } from '../../core/domain';
+import { recordDateLabel } from '../../core/recordDates';
 import { demoLabel } from '../../core/presentation';
 import { Badge, Button, Card, EmptyState, PageHeading } from '../../components/ui';
 import { ImportDialog } from './ImportDialog';
@@ -56,7 +56,7 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
           record.text,
           record.summary,
           record.date,
-          formatDate(record.date),
+          recordDateLabel(record),
           ...record.tags,
         ]
           .join(' ')
@@ -121,7 +121,7 @@ export function RecordsPage({ initialAction }: { initialAction?: 'import' | 'sym
               <div className="record-main">
                 <h3>{demoLabel(record.title, record.isDemo)}</h3>
                 <p className="record-meta">
-                  {record.kind} · {formatDate(record.date)}
+                  {record.kind} · {recordDateLabel(record)}
                 </p>
                 <p className="small muted">{demoLabel(record.provider, record.isDemo)}</p>
               </div>

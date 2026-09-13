@@ -6,12 +6,15 @@ import { APIError } from './api';
 import { createMemoryRecord, hasRecordingSummary } from './mutations';
 import type { AppSnapshot, VisitRecording } from './models';
 import type { RevaState } from './store';
+import type { GeminiRetryState } from './geminiRetry';
+import { formatDate } from './dates';
 
 export interface RecordingJob {
   id: string;
   title: string;
   stage: 'queued' | 'transcribing' | 'analyzing' | 'waiting' | 'failed' | 'complete';
   message: string;
+  retryAt?: number;
 }
 export interface RecordingProcessingHost {
   getState(): RevaState;
@@ -19,7 +22,12 @@ export interface RecordingProcessingHost {
   subscribe(listener: () => void): () => void;
   mutate(change: (draft: AppSnapshot) => void): Promise<void>;
   transcribeRecording(id: string, signal?: AbortSignal, background?: boolean): Promise<void>;
-  summarizeRecording(id: string, signal?: AbortSignal, background?: boolean): Promise<void>;
+  summarizeRecording(
+    id: string,
+    signal?: AbortSignal,
+    background?: boolean,
+    onRetry?: (retry: GeminiRetryState | null) => void,
+  ): Promise<void>;
 }
 const pending = new Set(['processing-queued', 'processing-transcribing', 'processing-analyzing']);
 export class RecordingProcessingAutomation {
@@ -27,6 +35,8 @@ export class RecordingProcessingAutomation {
   private listeners = new Set<() => void>();
   private errors = new Map<string, string>();
   private retryAfter = new Map<string, number>();
+  private backoff = new Map<string, GeminiRetryState>();
+  private paused = new Set<string>();
   private timer?: ReturnType<typeof setTimeout>;
   private unsubscribe?: () => void;
   private request?: { id: string; controller: AbortController; owner: string };
@@ -56,6 +66,8 @@ export class RecordingProcessingAutomation {
     return JSON.stringify([state.token, state.account?.user.id, state.snapshot?.profile.id]);
   }
   private waiting(recording: VisitRecording, state: RevaState): string | undefined {
+    if (this.paused.has(recording.id))
+      return 'Processing stopped. Your audio and completed steps are saved. Try again when ready.';
     if (typeof navigator !== 'undefined' && navigator.onLine === false)
       return 'Waiting for a connection. Your audio is saved.';
     if (!recording.segments.length && !state.providers?.transcription.configured)
@@ -72,6 +84,8 @@ export class RecordingProcessingAutomation {
       this.request?.controller.abort();
       this.errors.clear();
       this.retryAfter.clear();
+      this.backoff.clear();
+      this.paused.clear();
       this.owner = owner;
     }
     const recordings =
@@ -97,7 +111,10 @@ export class RecordingProcessingAutomation {
               this.errors.get(item.id) ??
               'Processing could not finish. Your saved audio and completed steps are kept.',
           };
-        const waiting = this.waiting(item, state);
+        const scheduled = this.backoff.get(item.id);
+        const waiting = scheduled
+          ? `Analysis will retry ${formatDate(new Date(scheduled.retryAt).toISOString(), true)}. Your transcript is saved.`
+          : this.waiting(item, state);
         const stage = waiting
           ? 'waiting'
           : this.request?.id === item.id
@@ -109,6 +126,7 @@ export class RecordingProcessingAutomation {
           id: item.id,
           title: item.title,
           stage,
+          ...(scheduled ? { retryAt: scheduled.retryAt } : {}),
           message:
             waiting ??
             (stage === 'transcribing'
@@ -132,7 +150,7 @@ export class RecordingProcessingAutomation {
           !this.errors.has(item.id) &&
           !this.waiting(item, state),
       );
-      if (next) this.timer = setTimeout(() => void this.run(next.id, owner), 0);
+      if (next && !state.busy) this.timer = setTimeout(() => void this.run(next.id, owner), 0);
     }
   };
   private async mark(id: string, status: string, valid: () => boolean) {
@@ -144,7 +162,14 @@ export class RecordingProcessingAutomation {
     });
   }
   private async run(id: string, owner: string) {
-    if (!this.active || !this.host.isWorkspaceActive() || this.request || owner !== this.owner) return;
+    if (
+      !this.active ||
+      !this.host.isWorkspaceActive() ||
+      this.host.getState().busy ||
+      this.request ||
+      owner !== this.owner
+    )
+      return;
     const controller = new AbortController();
     const request = { id, owner, controller };
     this.request = request;
@@ -170,7 +195,13 @@ export class RecordingProcessingAutomation {
         return;
       }
       await this.mark(id, 'processing-analyzing', valid);
-      if (!hasRecordingSummary(recording)) await this.host.summarizeRecording(id, controller.signal, true);
+      if (!hasRecordingSummary(recording))
+        await this.host.summarizeRecording(id, controller.signal, true, (retry) => {
+          if (!valid()) return;
+          if (retry) this.backoff.set(id, retry);
+          else this.backoff.delete(id);
+          this.consider();
+        });
       if (!valid()) return;
       await this.host.mutate((draft) => {
         if (!valid()) throw new DOMException('Processing interrupted.', 'AbortError');
@@ -185,6 +216,11 @@ export class RecordingProcessingAutomation {
       });
     } catch (error) {
       if (!valid() || !current()) return;
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Store cancellation can precede logout/identity changes; keep the durable marker resumable.
+        this.paused.add(id);
+        return;
+      }
       this.errors.set(
         id,
         error instanceof Error ? error.message : 'Processing could not finish. Your audio is saved.',
@@ -197,6 +233,7 @@ export class RecordingProcessingAutomation {
         /* A failed local commit keeps the durable queued marker for the next app launch. */
       }
     } finally {
+      this.backoff.delete(id);
       if (this.request === request) this.request = undefined;
       this.consider();
     }
@@ -206,6 +243,7 @@ export class RecordingProcessingAutomation {
     const owner = this.owner;
     if (Date.now() < (this.retryAfter.get(id) ?? 0)) return;
     this.errors.delete(id);
+    this.paused.delete(id);
     void this.mark(
       id,
       'processing-queued',

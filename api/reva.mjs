@@ -6,7 +6,13 @@
 import { migrate, database } from "../backend/database.mjs";
 import { authenticate, accountRoute, throttle } from "../backend/accounts.mjs";
 import { stateRoute, attachmentRoute } from "../backend/storage.mjs";
-import { providerStatus, gemini, transcribe } from "../backend/providers.mjs";
+import {
+  providerStatus,
+  gemini,
+  transcribe,
+  realtimeTranscriptionToken,
+} from "../backend/providers.mjs";
+import { geminiFallbackHeader } from "../backend/gemini-request.mjs";
 import { fail, HTTPError } from "../backend/validation.mjs";
 import {
   transferChunk,
@@ -72,6 +78,7 @@ export default async function handler(req, res) {
         "/v1/state",
         "/v1/providers",
         "/v1/audio/transcribe",
+        "/v1/audio/realtime-token",
       ].includes(route)
     )
       fail(404, "API route not found.");
@@ -97,11 +104,11 @@ export default async function handler(req, res) {
       );
       res.setHeader(
         "Access-Control-Allow-Headers",
-        "Authorization,Content-Type,X-Filename,X-Reva-Upload,Range,If-Match",
+        "Authorization,Content-Type,X-Filename,X-Reva-Upload,Range,If-Match,X-Reva-Gemini-Fallback",
       );
       res.setHeader(
         "Access-Control-Expose-Headers",
-        "X-State-Revision,X-Filename,Retry-After,Content-Range,ETag",
+        "X-State-Revision,X-Filename,Retry-After,Content-Range,ETag,X-Reva-Gemini-Fallback",
       );
     }
     if (method === "OPTIONS") {
@@ -177,22 +184,43 @@ export default async function handler(req, res) {
         if (method !== "POST") fail(405, "Method not supported.");
         await throttle("provider:" + identity.owner, 30, 3600);
         await throttle("provider-global", 200, 86400);
-        if (operation)
-          result = {
-            body: await gemini(
-              operation[1],
-              await readBody(
-                req,
-                operation[1] === "summarize"
-                  ? 256 * 1024
-                  : operation[1] === "profile"
-                    ? 2 * 1024 * 1024
-                    : 1024 * 1024,
-                true,
-              ),
-            ),
+        if (route === "/v1/audio/realtime-token") {
+          await readBody(req, 0, false);
+          result = { body: await realtimeTranscriptionToken() };
+        } else if (operation) {
+          const fallbackOnly = geminiFallbackHeader(
+            req.headers["x-reva-gemini-fallback"],
+          );
+          const controller = new AbortController();
+          const cancel = () => controller.abort();
+          const close = () => {
+            if (!res.writableEnded) cancel();
           };
-        else {
+          req.once("aborted", cancel);
+          res.once("close", close);
+          if (req.aborted || res.destroyed) cancel();
+          try {
+            result = {
+              body: await gemini(
+                operation[1],
+                await readBody(
+                  req,
+                  operation[1] === "summarize"
+                    ? 256 * 1024
+                    : operation[1] === "profile"
+                      ? 2 * 1024 * 1024
+                      : 1024 * 1024,
+                  true,
+                ),
+                fetch,
+                { fallbackOnly, signal: controller.signal },
+              ),
+            };
+          } finally {
+            req.off("aborted", cancel);
+            res.off("close", close);
+          }
+        } else {
           const upload = req.headers["x-reva-upload"];
           result = {
             body: await transcribe(

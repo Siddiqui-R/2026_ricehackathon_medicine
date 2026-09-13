@@ -66,7 +66,8 @@ struct CORSPolicyMiddleware: AsyncMiddleware {
             response.headers.replaceOrAdd(
                 name: .accessControlAllowMethods, value: "GET, PUT, POST, DELETE, OPTIONS")
             response.headers.replaceOrAdd(
-                name: .accessControlAllowHeaders, value: "Authorization, Content-Type, X-Filename")
+                name: .accessControlAllowHeaders,
+                value: "Authorization, Content-Type, X-Filename, X-Reva-Gemini-Fallback")
             response.headers.replaceOrAdd(name: .accessControlMaxAge, value: "600")
             response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
             return response
@@ -78,7 +79,9 @@ struct CORSPolicyMiddleware: AsyncMiddleware {
 
     private func apply(origin: String, to response: Response) {
         response.headers.replaceOrAdd(name: .accessControlAllowOrigin, value: origin)
-        response.headers.replaceOrAdd(name: .accessControlExpose, value: "X-State-Revision, X-Filename")
+        response.headers.replaceOrAdd(
+            name: .accessControlExpose,
+            value: "X-State-Revision, X-Filename, Retry-After, X-Reva-Gemini-Fallback")
         response.headers.add(name: .vary, value: "Origin")
     }
 }

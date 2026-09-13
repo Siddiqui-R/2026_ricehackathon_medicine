@@ -12,7 +12,10 @@ import Foundation
     @Published var snapshot: AppSnapshot? {
         didSet {
             snapshotGeneration = UUID()
-            if !isMutatingSnapshot { workspaceGeneration = UUID() }
+            if !isMutatingSnapshot {
+                workspaceGeneration = UUID()
+                cancelProviderRequests()
+            }
         }
     }
     @Published var errorMessage: String?
@@ -57,8 +60,10 @@ import Foundation
     private(set) var workspaceGeneration = UUID()
     private var isMutatingSnapshot = false
     var providerDiscoveryID = UUID()
+    var providerRequestCancellations: [UUID: () -> Void] = [:]
 
     func closeWorkspace() {
+        cancelProviderRequests()
         stopBackgroundUpdates()
         workspaceGeneration = UUID()
         connectionGeneration = UUID()
@@ -68,6 +73,7 @@ import Foundation
     // MARK: - Invalidate in-flight connection results
     // A generation also catches switching away and back while an old request is suspended.
     private func connectionDidChange() {
+        cancelProviderRequests()
         connectionGeneration = UUID()
         serverIdentity = ""
         serverRevision = 0

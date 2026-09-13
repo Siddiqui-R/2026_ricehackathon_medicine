@@ -24,11 +24,13 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
   const visitDetails = useRef<HTMLFormElement>(null);
   const mounted = useRef(true),
     request = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       request.current++;
+      activeRequest.current?.abort();
     };
   }, []);
   useEffect(
@@ -38,7 +40,11 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
     [result],
   );
   useEffect(() => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
     setResult(null);
+    setWorking(false);
+    setError('');
     request.current++;
   }, [token]);
   const stale = result && snapshot && result.brief.sourceSignature !== briefContextSignature(snapshot);
@@ -64,36 +70,52 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
   );
   async function generate(event: FormEvent) {
     event.preventDefault();
-    if (working) return;
+    if (working || activeRequest.current) return;
     const generation = ++request.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const current = () => mounted.current && generation === request.current && !controller.signal.aborted;
     setWorking(true);
     setError('');
     setResult(null);
     try {
-      const brief = await generateVisitBrief({
-        type,
-        concern,
-        questions: questions
-          .split('\n')
-          .map((q) => q.trim())
-          .filter(Boolean),
-      });
+      const brief = await generateVisitBrief(
+        {
+          type,
+          concern,
+          questions: questions
+            .split('\n')
+            .map((q) => q.trim())
+            .filter(Boolean),
+        },
+        controller.signal,
+      );
+      if (!current()) return;
       const { createBriefPDF } = await import('./briefPDF');
+      if (!current()) return;
       const sourceURLs = Object.fromEntries(
         brief.sources.flatMap((source) =>
           sourceTarget(source).map((target) => [source.id, new URL(target.href, window.location.href).href]),
         ),
       );
       const bytes = await createBriefPDF(brief, undefined, sourceURLs);
-      if (!mounted.current || generation !== request.current) return;
+      if (!current()) return;
       const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
       setResult({ brief, url });
     } catch (failure) {
-      if (mounted.current)
+      if (current())
         setError(failure instanceof Error ? failure.message : 'The brief could not be generated. Try again.');
     } finally {
-      if (mounted.current) setWorking(false);
+      if (activeRequest.current === controller) activeRequest.current = null;
+      if (mounted.current && generation === request.current) setWorking(false);
     }
+  }
+  function stop() {
+    request.current++;
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    setWorking(false);
+    setError('');
   }
   return (
     <div className="visit-preparation stack">
@@ -146,10 +168,17 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
           Prepare for your upcoming appointment. Gemini uses your current records and medical profile when you
           run this brief.
         </p>
-        <Button type="submit" disabled={working}>
-          <Sparkles size={16} />
-          {working ? 'Preparing your visit…' : 'Run pre-visit brief'}
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" disabled={working}>
+            <Sparkles size={16} />
+            {working ? 'Preparing your visit…' : 'Run pre-visit brief'}
+          </Button>
+          {working && (
+            <Button type="button" variant="secondary" onClick={stop}>
+              Stop preparation
+            </Button>
+          )}
+        </div>
       </form>
       {error && (
         <p className="inline-error" role="alert">

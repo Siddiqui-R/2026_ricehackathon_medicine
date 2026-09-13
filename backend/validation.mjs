@@ -2,6 +2,8 @@
 // Inputs: Untrusted JSON values and HTTP metadata.
 // Outputs: Validated fields or typed HTTP errors.
 // Side effects: None.
+import { validSnapshotMetadata } from "./snapshot-metadata.mjs";
+
 // MARK: - Bounded primitive values and sanitized errors
 export class HTTPError extends Error {
   constructor(status, reason, headers = {}) {
@@ -47,6 +49,11 @@ export function snapshot(value) {
     )
       fail(400, "Invalid snapshot arrays.");
   }
+  if (!validSnapshotMetadata(value))
+    fail(
+      400,
+      "Invalid optional record or recording date/title provenance metadata.",
+    );
   function depth(item, level) {
     if (level > 32) fail(400, "Snapshot nesting exceeds 32 levels.");
     if (item && typeof item === "object")
@@ -85,9 +92,15 @@ export function summaryInput(input) {
   if (
     !safeID(input?.recordID) ||
     !text(input.title, 240) ||
-    !text(input.text, 120000)
+    !text(input.text, 120000) ||
+    (input.generateTitle !== undefined &&
+      typeof input.generateTitle !== "boolean") ||
+    (input.date !== undefined && !text(input.date, 40))
   )
-    fail(400, "Provide recordID, title and bounded source text.");
+    fail(
+      400,
+      "Provide recordID, title and bounded source text; optional generateTitle must be boolean and date must be 1-40 bytes.",
+    );
 }
 export function preparationInput(input) {
   const v = input?.visit,

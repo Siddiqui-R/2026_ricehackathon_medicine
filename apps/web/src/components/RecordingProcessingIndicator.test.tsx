@@ -60,4 +60,16 @@ describe('recording processing status', () => {
     expect(html).toContain('aria-label="Dismiss processing status for Session finished"');
     expect(html).not.toMatch(/Try again|is-running/);
   });
+  it('shows a scheduled retry without offering a button that would bypass the delay', () => {
+    const html = render([
+      {
+        ...job('waiting', 'waiting'),
+        retryAt: Date.now() + 60_000,
+        message: 'Analysis will retry at the scheduled time. Your transcript is saved.',
+      },
+    ]);
+    expect(html).toContain('scheduled time');
+    expect(html).not.toMatch(/Try again|is-running|Dismiss processing status/);
+    expect(html).toContain('href="#/recordings/waiting"');
+  });
 });

@@ -16,7 +16,7 @@ extension AppStore {
         do {
             var input = original
             input.summary = ReportEngine.currentSummary(original)
-            let result = try await providerClient().summarize(input)
+            let result = try await withProviderRequest { try await self.providerClient().summarize(input) }
             guard context == providerContext else { return }
             try Task.checkCancellation()
             guard var latest = record(id), latest.text == original.text, latest.version == original.version
@@ -30,6 +30,7 @@ extension AppStore {
             }
             latest.summary = result.summary
             latest.summaryModel = result.model
+            latest.summaryGeneratedAt = RevaDate.now
             try save(latest)
             notice = "AI summary saved. Review it against the original source."
         } catch {
@@ -65,7 +66,9 @@ extension AppStore {
                     "Add readable source text before using connected preparation, or turn off connected AI to prepare locally."
                 )
             }
-            let result = try await providerClient().prepare(original, records: candidates)
+            let result = try await withProviderRequest {
+                try await self.providerClient().prepare(original, records: candidates)
+            }
             guard context == providerContext else { return false }
             try Task.checkCancellation()
             guard var latest = visit(id), signature == ReportEngine.signature(visit: latest, records: records)

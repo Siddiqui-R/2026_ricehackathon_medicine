@@ -193,7 +193,7 @@ extension AppStore {
                 ? NativeProfileResult(
                     allergies: [], medications: [], conditions: [], surgeriesAndImplants: [], careNotes: [],
                     model: "No source reports")
-                : try await providerClient().medicalProfile(sources)
+                : try await withProviderRequest { try await self.providerClient().medicalProfile(sources) }
             try Task.checkCancellation()
             guard backgroundActive, generation == backgroundGeneration, context == providerContext,
                 let current = self.snapshot, NativeMedicalProfile.sources(current) == sources

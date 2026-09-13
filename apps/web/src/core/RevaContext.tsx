@@ -15,7 +15,11 @@ export function RevaProvider({ children, store }: { children: ReactNode; store?:
   useEffect(() => {
     const current = instance.current!;
     void current.initialize();
-    return current.startAutomaticSync();
+    const stopSync = current.startAutomaticSync();
+    return () => {
+      stopSync();
+      void current.cancelProviderWork();
+    };
   }, []);
   return (
     <Context.Provider value={instance.current}>
@@ -37,6 +41,7 @@ export function useReva() {
     notify: store.notify,
     reportError: store.reportError,
     clearFeedback: store.clearFeedback,
+    cancelProviderWork: store.cancelProviderWork,
     resetDemo: store.resetDemo,
     getAttachment: store.getAttachment,
     saveRecord: store.saveRecord,

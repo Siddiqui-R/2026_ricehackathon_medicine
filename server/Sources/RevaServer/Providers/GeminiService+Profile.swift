@@ -8,7 +8,9 @@ import Vapor
 
 // MARK: - Medical-profile extraction separate from diagnosis or recommendations
 extension GeminiService {
-    func profile(_ request: GeminiProfileRequest) async throws -> GeminiProfileResponse {
+    func profile(_ request: GeminiProfileRequest, fallbackOnly: Bool = false) async throws
+        -> GeminiProfileResponse
+    {
         try request.validate()
         let categories = ["allergies", "medications", "conditions", "surgeriesAndImplants", "careNotes"]
         let recordIDs = Set(request.records.map(\.id))
@@ -37,8 +39,9 @@ extension GeminiService {
                     })),
             "required": .array(categories.map(JSONValue.string)), "additionalProperties": .bool(false),
         ])
-        let object = try await generate(
+        let generated = try await generate(
             input: request, schema: schema, maxOutputTokens: 32768, maxStructuredBytes: 256_000,
+            fallbackOnly: fallbackOnly,
             task: """
                 Extract a compact medical profile from ALL supplied report records, using only explicitly documented facts.
                 Return exactly allergies, medications, conditions, surgeriesAndImplants and careNotes, each an array of
@@ -58,6 +61,7 @@ extension GeminiService {
                 """)
 
         // MARK: - Reject unknown fields, unsupported IDs and overlong generated facts
+        let object = generated.object
         guard Set(object.keys) == Set(categories) else { throw invalidResponse() }
         var facts: [String: [GeminiProfileFact]] = [:]
         for category in categories {
@@ -70,12 +74,13 @@ extension GeminiService {
                     let ids = item["recordIDs"] as? [String], !ids.isEmpty, ids.count <= recordIDs.count,
                     Set(ids).count == ids.count, Set(ids).isSubset(of: recordIDs)
                 else { throw invalidResponse() }
+                try validateWriting(text)
                 return GeminiProfileFact(text: text, recordIDs: ids)
             }
         }
         return GeminiProfileResponse(
             allergies: facts["allergies"] ?? [], medications: facts["medications"] ?? [],
             conditions: facts["conditions"] ?? [], surgeriesAndImplants: facts["surgeriesAndImplants"] ?? [],
-            careNotes: facts["careNotes"] ?? [], model: configuration.geminiModel)
+            careNotes: facts["careNotes"] ?? [], model: generated.model)
     }
 }

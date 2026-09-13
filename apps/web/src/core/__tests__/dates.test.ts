@@ -13,9 +13,22 @@ import {
   formatDate,
 } from '../dates';
 import { editedSymptomOccurrence } from '../symptoms';
+import { documentDate, recordDateContext, recordDateLabel } from '../recordDates';
+import { seed } from './fixtures';
 
 // MARK: - Central defaults follow both standard and daylight time
 describe('Central date defaults', () => {
+  it('keeps an unknown document date distinct from a known source date and its upload timestamp', () => {
+    const uploadedAt = '2026-09-13T02:30:00Z';
+    const unknown = { ...seed().records[0], ...documentDate('', uploadedAt), uploadedAt };
+    expect(unknown).toMatchObject({ date: '2026-09-12', dateSource: 'added', uploadedAt });
+    expect(recordDateLabel(unknown)).toBe(`Added ${formatDate('2026-09-12')}`);
+    expect(recordDateContext(unknown)).toBe('Added 2026-09-12; event date unknown');
+    const known = { ...unknown, ...documentDate('2025-12-02', uploadedAt) };
+    expect(known).toMatchObject({ date: '2025-12-02', dateSource: 'document', uploadedAt });
+    expect(recordDateContext(known)).toBe('2025-12-02');
+    expect(recordDateContext({ ...known, dateSource: undefined })).toBe('Date 2025-12-02; source unverified');
+  });
   it('uses the same named zone for inputs and unspecified display zones', () => {
     expect(defaultTimeZone).toBe('America/Chicago');
     expect(displayTimeZone()).toBe('America/Chicago');

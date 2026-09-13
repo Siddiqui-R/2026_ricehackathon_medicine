@@ -19,6 +19,7 @@ vi.mock('react', async (original) => ({
 vi.mock('./RecordingSession', () => ({ useRecordingSession: () => mocks.session }));
 import { RecordingBanner } from './RecordingSessionChrome';
 import { RecordingPage } from './RecordingPage';
+import { notesScrollEdges } from './RecordingNotes';
 
 // MARK: - The synthetic draft has no real consent event, microphone, storage or providers
 const capture = {
@@ -87,6 +88,41 @@ function visualFixture(name: string, body: string) {
 
 // MARK: - Banner controls remain useful outside the recording route; UI does not invent a waveform
 describe('full-page recording interface', () => {
+  it('places muted live text below recording controls and keeps uploaded audio out of live capture', () => {
+    mocks.session.liveTranscript = {
+      status: 'listening',
+      committed: 'A fictional appointment.',
+      partial: 'Next question…',
+    };
+    capture.state = 'recording';
+    mocks.session.active = true;
+    const html = renderToStaticMarkup(<RecordingPage />);
+    expect(html.indexOf('recording-live-preview')).toBeGreaterThan(html.indexOf('Stop recording</button>'));
+    expect(html).toContain('A fictional appointment.');
+    expect(html).toContain('Next question…');
+    expect(html).toContain('recording-notes-editor');
+    visualFixture('-live', html);
+    mocks.session.draft = { ...draft, mode: 'upload' };
+    expect(renderToStaticMarkup(<RecordingPage />)).not.toContain('recording-live-preview');
+  });
+  it('shows notes scroll directions only when content extends beyond the visible space', () => {
+    expect(notesScrollEdges({ scrollTop: 0, scrollHeight: 240, clientHeight: 240 })).toEqual({
+      above: false,
+      below: false,
+    });
+    expect(notesScrollEdges({ scrollTop: 0, scrollHeight: 600, clientHeight: 240 })).toEqual({
+      above: false,
+      below: true,
+    });
+    expect(notesScrollEdges({ scrollTop: 120, scrollHeight: 600, clientHeight: 240 })).toEqual({
+      above: true,
+      below: true,
+    });
+    expect(notesScrollEdges({ scrollTop: 360, scrollHeight: 600, clientHeight: 240 })).toEqual({
+      above: true,
+      below: false,
+    });
+  });
   it('shows a recorder page with a disabled save until original audio is available', () => {
     const html = renderToStaticMarkup(<RecordingPage />);
     expect(html).toContain('recording-workspace');

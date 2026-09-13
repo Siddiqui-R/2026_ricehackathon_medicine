@@ -273,7 +273,7 @@ test("preparation rejects overflow and invalid sources before returning a brief"
     };
     assert.deepEqual(
       await gemini("prepare", briefInput, async () => briefResponse(boundary)),
-      { ...boundary, model: "gemini-flash-lite-latest" },
+      { ...boundary, model: "gemini-flash-latest" },
     );
   } finally {
     if (previousKey === undefined) delete process.env.GEMINI_API_KEY;

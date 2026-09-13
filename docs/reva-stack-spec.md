@@ -33,7 +33,7 @@ Consent notice: **“Get your doctor’s consent and permission from everyone pr
 | API | Swift/Vapor, authenticated REST/JSON, bounded operations, owner revisions and explicit conflicts |
 | Accounts | Bcrypt on worker threads; opaque hashed session tokens; expiry/revocation; atomic password/session checks |
 | Database | Local file adapter or PostgresNIO; migrations 001/002; Tiger-compatible PostgreSQL |
-| AI | All Gemini analysis shares `GEMINI_MODEL`, defaulting to the moving `gemini-flash-lite-latest` alias; prior `gemini-3.8-flash` / `gemini-3.5-flash-lite` pins migrate automatically. OpenAI `whisper-1` remains the Swift transcription provider. |
+| AI | All Gemini analysis shares the `gemini-flash-latest` primary and fixed `gemini-flash-lite-latest` transient-failure fallback. Prior shipped model settings migrate automatically; other explicit `GEMINI_MODEL` values override the shared primary. OpenAI `whisper-1` remains the Swift transcription provider. |
 | Hosting | Vercel static browser configuration; containerized Swift API and Tiger setup instructions. Live API/database readiness is unverified. |
 
 Model IDs describe configuration, not proof of availability. Provider keys stay server-side. The default time zone is `America/Chicago` (CST/CDT); explicit saved zones and date-only calendar values are preserved.

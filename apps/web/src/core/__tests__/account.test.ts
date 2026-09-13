@@ -11,7 +11,16 @@ import { syncMarkerKey } from '../syncMarker.ts';
 import type { APITransport } from '../store.ts';
 import type { ServerState } from '../models.ts';
 import type { AuthTransport } from '../auth.ts';
-import { authTransport, fakeStorage, MemoryRepository, seed, testUser, transport } from './fixtures.ts';
+import {
+  authTransport,
+  deferred,
+  fakeStorage,
+  MemoryRepository,
+  seed,
+  testUser,
+  transport,
+} from './fixtures.ts';
+import type { AISummary } from '../models';
 
 // MARK: - Setup: one signed-in store over injectable boundaries with a very short sync delay.
 const session = (): StoredSession => ({
@@ -62,6 +71,29 @@ const originalCount = (snapshot = seed()) =>
 
 // MARK: - Naming and the empty personal snapshot never borrow the fictional demo.
 describe('account identity helpers', () => {
+  it('unwinds busy provider work before logout even when its transport ignores abort', async () => {
+    const result = deferred<AISummary>();
+    const summarize = vi.fn<APITransport['summarize']>(() => result.promise);
+    const logout = vi.fn(async () => {});
+    const { store } = accountStore({ api: transport({ summarize }), auth: authTransport({ logout }) });
+    await store.initialize();
+    store.setConnectedAI(true);
+    const record = store.getState().snapshot!.records[0];
+    const pending = store.summarizeRecord(record.id);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(summarize).toHaveBeenCalledOnce());
+    expect(store.getState()).toMatchObject({ busy: true, providerWork: true });
+    await store.cancelProviderWork();
+    expect(store.getState()).toMatchObject({ busy: false, providerWork: false });
+    expect(summarize.mock.calls[0][1]!.aborted).toBe(true);
+    await store.logout();
+    expect(logout).toHaveBeenCalledOnce();
+    result.resolve({ summary: 'Late response must never be applied', model: 'fake-model' });
+    await rejected;
+    expect(store.getState().snapshot!.records.find((item) => item.id === record.id)!.summary).toBe(
+      record.summary,
+    );
+  });
   it('derives a stable per-user database name that differs from the demo database', async () => {
     const name = await accountDatabaseName(testUser.id);
     expect(name).toMatch(/^reva-account-[0-9a-f]{16}-v1$/);

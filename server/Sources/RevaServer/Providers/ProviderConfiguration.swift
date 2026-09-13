@@ -12,6 +12,7 @@ public struct ProviderConfiguration: Sendable {
     public let geminiAPIKey: String?
     public let geminiModel: String
     public let openAIAPIKey: String?
+    public let elevenLabsAPIKey: String?
     public let transcriptionModel: String
     public let paidAccessAllowed: Bool
 
@@ -19,18 +20,21 @@ public struct ProviderConfiguration: Sendable {
     public var transcriptionConfigured: Bool {
         paidAccessAllowed && openAIAPIKey != nil && transcriptionModel == "whisper-1"
     }
+    public var realtimeTranscriptionConfigured: Bool { paidAccessAllowed && elevenLabsAPIKey != nil }
     // MARK: - Validate supported summary and transcription models
     public init(environment: [String: String], paidAccessAllowed: Bool) throws {
         self.paidAccessAllowed = paidAccessAllowed
         geminiAPIKey = try Self.secret(environment["GEMINI_API_KEY"], name: "GEMINI_API_KEY")
         openAIAPIKey = try Self.secret(environment["OPENAI_API_KEY"], name: "OPENAI_API_KEY")
+        elevenLabsAPIKey = try Self.secret(environment["ELEVENLABS_API_KEY"], name: "ELEVENLABS_API_KEY")
         let configuredModel =
             environment["GEMINI_MODEL"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // Migrate the former shipped pins; explicit alternatives still apply to every analysis operation.
         geminiModel =
             configuredModel.isEmpty
-                || ["gemini-3.8-flash", "gemini-3.5-flash-lite"].contains(configuredModel)
-            ? "gemini-flash-lite-latest" : configuredModel
+                || ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"].contains(
+                    configuredModel)
+            ? "gemini-flash-latest" : configuredModel
         guard geminiModel.hasPrefix("gemini-"), geminiModel.utf8.count <= 100,
             geminiModel.utf8.allSatisfy({ Self.identifierByte($0) || $0 == 46 })
         else {

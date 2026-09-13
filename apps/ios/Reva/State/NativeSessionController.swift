@@ -110,6 +110,7 @@ private enum NativeSessionKeychain {
     private func expire(_ token: String) {
         guard session?.token == token else { return }
         // Keep the workspace mounted so a recording or open editor cannot be lost on expiry.
+        store?.cancelProviderRequests()
         store?.stopBackgroundUpdates()
         NativeSessionKeychain.clear()
         store?.needsSignIn = true

@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { useReva } from '../../core/RevaContext';
 import { demoDescription, demoLabel } from '../../core/presentation';
 import { localExcerpt } from '../../core/domain';
+import { documentDate } from '../../core/recordDates';
 import type { MedicalRecord } from '../../core/models';
 import { Button, Field, Modal } from '../../components/ui';
 import { MAX_TEXT_BYTES, textByteCount } from './extractDocument';
@@ -38,7 +39,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
     setSaving(true);
     setError('');
     try {
-      if (!draft.title.trim() || !draft.date) throw new Error('Enter a title and source date.');
+      if (!draft.title.trim()) throw new Error('Enter a title.');
       if (changed && textByteCount(draft.text) > MAX_TEXT_BYTES)
         throw new Error('Keep corrected text within 120 KB.');
       const revised = {
@@ -50,6 +51,7 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
       if (changed) {
         revised.summary = localExcerpt(revised.text, revised.isDemo);
         revised.summaryModel = null;
+        revised.summaryGeneratedAt = null;
         revised.pageTexts = null;
       }
       revised.status = 'ready';
@@ -87,12 +89,19 @@ export function RecordEditor({ record, onClose }: { record: MedicalRecord; onClo
                 maxLength={240}
               />
             </Field>
-            <Field label="Source date">
+            <Field
+              label="Source date · optional"
+              hint="Leave blank when the original document's date is unknown."
+            >
               <input
-                required
                 type="date"
-                value={draft.date.slice(0, 10)}
-                onChange={(event) => update('date', event.target.value)}
+                value={draft.dateSource === 'added' ? '' : draft.date.slice(0, 10)}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    ...documentDate(event.target.value, current.uploadedAt),
+                  }))
+                }
               />
             </Field>
             <div className="field-full">

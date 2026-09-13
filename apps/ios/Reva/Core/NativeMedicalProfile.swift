@@ -94,7 +94,11 @@ enum NativeMedicalProfile {
         snapshot.records.filter {
             $0.kind != "Sync recovery" && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        .map { .init(id: $0.id, version: $0.version, title: $0.title, date: $0.date, text: $0.text) }
+        .map {
+            .init(
+                id: $0.id, version: $0.version, title: $0.title, date: $0.providerDateContext,
+                text: $0.text)
+        }
         .sorted { $0.id.compare($1.id, locale: Locale(identifier: "en_US")) == .orderedAscending }
     }
     // JSON property order matches profileSourceKey in the web client, preventing cross-device refresh loops.
