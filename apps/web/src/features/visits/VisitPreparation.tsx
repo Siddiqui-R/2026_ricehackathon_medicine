@@ -10,6 +10,7 @@ import { useReva } from '../../core/RevaContext';
 import { briefContextSignature, type ClinicalBrief, type VisitBriefInput } from '../../core/visitBrief';
 import { formatDate } from '../../core/dates';
 import { Button, Field } from '../../components/ui';
+import { SourceLink, type SourceTarget } from '../../components/SourceLink';
 import './visitPreparation.css';
 
 export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
@@ -20,6 +21,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ brief: ClinicalBrief; url: string } | null>(null);
+  const visitDetails = useRef<HTMLFormElement>(null);
   const mounted = useRef(true),
     request = useRef(0);
   useEffect(() => {
@@ -40,6 +42,26 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
     request.current++;
   }, [token]);
   const stale = result && snapshot && result.brief.sourceSignature !== briefContextSignature(snapshot);
+  const sourceTarget = (source: ClinicalBrief['sources'][number]): SourceTarget[] => {
+    const record = snapshot?.records.find((item) => item.id === source.id);
+    if (record) return [{ label: source.title, href: `#/records/${encodeURIComponent(record.id)}` }];
+    // The preparation service supplies this separate context record for the current profile.
+    return ['Medical profile', 'Patient-provided medical profile'].includes(source.title)
+      ? [{ label: 'Medical profile', href: '#/profile' }]
+      : [];
+  };
+  const sourceTargets = result?.brief.sources.flatMap(sourceTarget) ?? [];
+  const sourceIcon = sourceTargets.length ? (
+    <SourceLink sources={sourceTargets} label="View sources used for this brief" />
+  ) : (
+    <SourceLink
+      label="View source: details entered for this visit"
+      onOpen={() => {
+        visitDetails.current?.scrollIntoView({ block: 'start' });
+        visitDetails.current?.focus({ preventScroll: true });
+      }}
+    />
+  );
   async function generate(event: FormEvent) {
     event.preventDefault();
     if (working) return;
@@ -57,7 +79,12 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
           .filter(Boolean),
       });
       const { createBriefPDF } = await import('./briefPDF');
-      const bytes = await createBriefPDF(brief);
+      const sourceURLs = Object.fromEntries(
+        brief.sources.flatMap((source) =>
+          sourceTarget(source).map((target) => [source.id, new URL(target.href, window.location.href).href]),
+        ),
+      );
+      const bytes = await createBriefPDF(brief, undefined, sourceURLs);
       if (!mounted.current || generation !== request.current) return;
       const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
       setResult({ brief, url });
@@ -71,6 +98,9 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
   return (
     <div className="visit-preparation stack">
       <form
+        ref={visitDetails}
+        tabIndex={-1}
+        aria-label="Details entered for this visit"
         className="stack"
         onSubmit={(event) => {
           void generate(event);
@@ -143,13 +173,24 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
                 {result.brief.visitType} · Prepared {formatDate(result.brief.createdAt)}
               </p>
             </header>
-            <p className="clinical-overview">{result.brief.overview}</p>
+            {result.brief.overview
+              .split(/\r?\n+/)
+              .filter(Boolean)
+              .map((line, index) => (
+                <p className="clinical-overview" key={index}>
+                  {line}
+                  {sourceIcon}
+                </p>
+              ))}
             {!!result.brief.questions.length && (
               <section>
                 <h3>Questions to ask</h3>
                 <ol>
                   {result.brief.questions.map((q, i) => (
-                    <li key={i}>{q}</li>
+                    <li key={i}>
+                      {q}
+                      {sourceIcon}
+                    </li>
                   ))}
                 </ol>
               </section>
@@ -162,6 +203,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
                     <li key={source.id}>
                       {source.title}
                       {source.date && ` · ${formatDate(source.date)}`}
+                      <SourceLink sources={sourceTarget(source)} />
                     </li>
                   ))}
                 </ol>

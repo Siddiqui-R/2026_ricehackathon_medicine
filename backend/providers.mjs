@@ -1,7 +1,7 @@
 // Purpose: Server-only Gemini and ElevenLabs Scribe adapters for the existing app DTOs.
 // Inputs are bounded and untrusted; no source text, credentials or raw provider errors are logged.
 // Inputs: Source DTOs, audio bytes and server-only provider keys.
-// Outputs: Schema-validated summaries, preparation and timestamped transcripts.
+// Outputs: Schema-validated summaries, preparation, source-linked medical history and timestamped transcripts.
 // Side effects: Authenticated HTTPS requests to fixed provider origins.
 import {
   fail,
@@ -10,6 +10,13 @@ import {
   summaryInput,
   preparationInput,
 } from "./validation.mjs";
+import {
+  profileInput,
+  profileFields,
+  profileTask,
+  profileResult,
+} from "./profile.mjs";
+import { providerJSON } from "./provider-http.mjs";
 // MARK: - Configuration discovery and bounded provider responses
 export function providerStatus() {
   return {
@@ -23,71 +30,47 @@ export function providerStatus() {
     },
   };
 }
-async function providerJSON(url, options, fetcher) {
-  let response;
-  try {
-    response = await fetcher(url, {
-      ...options,
-      redirect: "error",
-      signal: AbortSignal.timeout(90000),
-    });
-  } catch {
-    fail(
-      503,
-      "The provider could not be reached. Your saved data is unchanged.",
-    );
-  }
-  if (!response.ok) {
-    await response.body?.cancel();
-    fail(
-      503,
-      `The provider rejected the request (HTTP ${response.status}). Check key permissions and available credits.`,
-    );
-  }
-  let bytes = 0,
-    parts = [];
-  for await (const part of response.body) {
-    bytes += part.length;
-    if (bytes > 4 * 1024 * 1024)
-      fail(502, "The provider response was too large.");
-    parts.push(part);
-  }
-  try {
-    return JSON.parse(Buffer.concat(parts).toString("utf8"));
-  } catch {
-    fail(502, "The provider returned invalid JSON.");
-  }
-}
 // MARK: - Source-grounded Gemini requests and strict output validation
 export async function gemini(operation, input, fetcher = fetch) {
   if (operation === "summarize") summaryInput(input);
-  else preparationInput(input);
-  if (!process.env.GEMINI_API_KEY) fail(503, "Gemini is not configured.");
+  else if (operation === "profile") profileInput(input);
+  else if (operation === "prepare") preparationInput(input);
+  else fail(400, "Unknown Gemini operation.");
+  if (!process.env.GEMINI_API_KEY)
+    fail(424, "Gemini is not configured on the server.");
   const model =
-    operation === "summarize"
-      ? process.env.GEMINI_MODEL || "gemini-3.8-flash"
-      : "gemini-3.8-flash";
+    operation === "prepare"
+      ? "gemini-3.8-flash"
+      : process.env.GEMINI_MODEL || "gemini-3.8-flash";
   if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(model))
-    fail(503, "Invalid Gemini model configuration.");
+    fail(424, "Invalid Gemini model configuration.");
   const fields =
     operation === "summarize"
       ? { summary: { type: "string" } }
-      : {
-          overview: { type: "string" },
-          questions: { type: "array", items: { type: "string" }, maxItems: 3 },
-          selectedRecordIDs: {
-            type: "array",
-            items: {
-              type: "string",
-              enum: input.records.map((record) => record.id),
+      : operation === "profile"
+        ? profileFields(input)
+        : {
+            overview: { type: "string" },
+            questions: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 3,
             },
-            maxItems: 6,
-          },
-        };
+            selectedRecordIDs: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: input.records.map((record) => record.id),
+              },
+              maxItems: 6,
+            },
+          };
   const task =
     operation === "summarize"
       ? "Summarize this supplied document or appointment transcript in a factual patient-readable paragraph (maximum 8000 UTF-8 bytes). Preserve dates, numbers, units, negations and uncertainty. For a transcript, summarize only discussion and follow-up explicitly stated. Do not infer speaker identities or clinician roles. Return only summary."
-      : `Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
+      : operation === "profile"
+        ? profileTask
+        : `Write a concise pre-visit briefing for the patient to read BEFORE their upcoming appointment, using only
 supplied records and patient concerns. Include only the history and prior results relevant to preparing
 for that visit. Never describe the upcoming appointment as completed or invent its findings, decisions,
 treatment or follow-up.
@@ -128,9 +111,9 @@ the stated visit concern only.`;
             required: Object.keys(fields),
             additionalProperties: false,
           },
-          candidateCount: 1,
-          maxOutputTokens: 8192,
-          temperature: 0.2,
+          // Gemini 3+ rejects candidateCount; 3.8 also removes sampling overrides.
+          // https://ai.google.dev/gemini-api/docs/generate-content/latest-model
+          maxOutputTokens: operation === "profile" ? 32768 : 8192,
         },
       }),
     },
@@ -142,7 +125,10 @@ the stated visit concern only.`;
     envelope.candidates?.length !== 1 ||
     candidate?.finishReason !== "STOP"
   )
-    fail(503, "Gemini returned blocked or incomplete output.");
+    fail(
+      422,
+      "Gemini returned blocked or incomplete output. No AI result was saved.",
+    );
   let result;
   try {
     result = JSON.parse(
@@ -152,16 +138,21 @@ the stated visit concern only.`;
         .join(""),
     );
   } catch {
-    fail(503, "Gemini returned invalid structured output.");
+    fail(
+      422,
+      "Gemini returned invalid structured output. No AI result was saved.",
+    );
   }
   if (
     !result ||
     Object.keys(result).sort().join() !== Object.keys(fields).sort().join()
   )
-    fail(503, "Gemini returned unexpected fields.");
+    fail(422, "Gemini returned unexpected fields. No AI result was saved.");
   if (operation === "summarize") {
-    if (!text(result.summary, 8000)) fail(503, "Invalid summary response.");
-  } else if (
+    if (!text(result.summary, 8000))
+      fail(422, "Invalid summary response. No AI result was saved.");
+  } else if (operation === "profile") profileResult(result, input);
+  else if (
     !text(result.overview, 2400) ||
     result.overview.trim().split(/\s+/u).length > 180 ||
     result.overview.split("\n").length > 12 ||
@@ -176,7 +167,10 @@ the stated visit concern only.`;
       (id) => !input.records.some((r) => r.id === id),
     )
   )
-    fail(503, "Invalid preparation response or unknown source IDs.");
+    fail(
+      422,
+      "Invalid preparation response or unknown source IDs. No AI result was saved.",
+    );
   return { ...result, model };
 }
 // MARK: - Scribe timing and neutral speaker normalization
@@ -228,7 +222,7 @@ export function scribeResult(result) {
 // MARK: - Multipart saved-audio transcription
 export async function transcribe(bytes, headers, fetcher = fetch) {
   if (!process.env.ELEVENLABS_API_KEY)
-    fail(503, "ElevenLabs transcription is not configured.");
+    fail(424, "ElevenLabs transcription is not configured on the server.");
   const type = (headers["content-type"] || "").split(";")[0].toLowerCase();
   if (!filename(headers["x-filename"]) || !bytes.length)
     fail(400, "Provide audio bytes and a safe X-Filename.");

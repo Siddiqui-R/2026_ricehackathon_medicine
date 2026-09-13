@@ -35,7 +35,7 @@ describe('on-demand visit brief', () => {
     const sources = (
       provider.mock.calls[0] as unknown as [unknown, { title: string; text: string; date: string }[]]
     )[1];
-    expect(sources.at(-1)?.title).toBe('Patient-provided medical profile');
+    expect(sources.at(-1)?.title).toBe('Medical profile');
     expect(sources.at(-1)?.text).toContain('medications');
     expect(sources.every((source) => Boolean(source.date.trim()))).toBe(true);
     const visit = (provider.mock.calls[0] as unknown as [unknown, unknown])[0];

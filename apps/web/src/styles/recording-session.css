@@ -1,0 +1,434 @@
+/* Purpose: Give recording a calm full-page workspace with clear consent and persistent controls.
+   Inputs: Recording-page, consent-overlay and banner markup plus shared brand tokens.
+   Outputs: Responsive recording/upload layout and visible workspace-wide recording status.
+   Side effects: Native consent dialog covers the viewport; sticky status stays in normal page flow. */
+
+/* MARK: - Full-screen consent, with one deliberate action before the recorder opens */
+.recording-consent {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 48px 24px;
+  background: var(--canvas);
+  color: var(--ink);
+  overflow: auto;
+}
+.recording-consent::backdrop {
+  background: var(--canvas);
+}
+.recording-consent[open] {
+  display: grid;
+  place-items: center;
+}
+.consent-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+}
+.consent-content {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 24px;
+  padding: 24px 0;
+}
+.consent-symbol {
+  background: var(--soft);
+  color: var(--accent);
+  border-radius: 24px;
+  width: 80px;
+  height: 80px;
+  display: grid;
+  place-items: center;
+}
+.consent-kicker {
+  font-size: 12px;
+  color: var(--muted);
+}
+.consent-content h1 {
+  font-size: clamp(30px, 5vw, 42px);
+  line-height: 1.15;
+  letter-spacing: -1.3px;
+}
+.consent-description {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+.consent-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 20px;
+  border-radius: 14px;
+  cursor: pointer;
+  width: 100%;
+}
+.consent-choice.is-checked {
+  border-color: var(--accent);
+  background: #fff8f7;
+}
+.consent-choice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+.consent-choice > svg {
+  color: var(--accent);
+}
+.consent-content > .button {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* MARK: - Sticky controls remain reachable while records and other workspace pages are explored */
+.recording-banner {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 38px;
+  border-bottom: 1px solid #e7c9ce;
+  background: #fcecee;
+  color: var(--ink);
+}
+.recording-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.recording-banner.is-recording .recording-status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 5px #b8425010;
+}
+.recording-banner-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.recording-banner-copy strong {
+  font-size: 12px;
+}
+.recording-banner-copy > span {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28vw;
+}
+.recording-banner-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+}
+.recording-banner-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.recording-banner-controls .button {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 12px;
+}
+.recording-banner-controls .icon-button {
+  width: 34px;
+  padding: 7px;
+}
+.recording-banner-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 0 7px 7px;
+}
+.recording-banner-error {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* MARK: - One audio surface and one notes column replace the long scrolling capture dialog */
+.recording-page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 1220px;
+  margin: 0 auto;
+}
+.recording-page .back-link {
+  align-self: flex-start;
+}
+.recording-page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  justify-content: space-between;
+}
+.recording-page-heading p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.recording-consent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.recording-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(250px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.recording-studio {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.recording-mode-switch {
+  display: flex;
+  gap: 4px;
+  margin: 22px;
+  padding: 4px;
+  background: #f8f3f2;
+  border-radius: 11px;
+}
+.recording-mode-switch button {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+.recording-mode-switch button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: 0 1px 4px #342b2c08;
+  font-weight: 600;
+}
+.recording-mode-switch button:disabled[aria-pressed='true'] {
+  opacity: 1;
+}
+.recording-capture-stage,
+.recording-upload-stage {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+}
+.recording-audio-symbol {
+  height: 78px;
+  width: 78px;
+  display: grid;
+  place-items: center;
+  background: #fbf4f4;
+  color: var(--accent);
+  border-radius: 50%;
+}
+.recording-capture-stage.is-recording .recording-audio-symbol {
+  background: var(--soft);
+  box-shadow: 0 0 0 9px #fae6e550;
+}
+.recording-page-timer {
+  font-size: clamp(48px, 5vw, 66px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+}
+.recording-stage-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+.recording-primary-controls {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 44px;
+}
+.recording-stage-hint {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.recording-upload-stage > p:not(.recording-stage-hint) {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.recording-upload-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.recording-preview {
+  margin: 10px 24px 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.recording-preview h3 {
+  font-size: 13px;
+}
+.recording-preview audio {
+  width: 100%;
+}
+.recording-preview p {
+  color: var(--muted);
+  font-size: 11px;
+}
+.recording-stage-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 22px;
+  background: #fcfaf9;
+  border-top: 1px solid #eee3e1;
+  color: var(--muted);
+  font-size: 10px;
+}
+.recording-stage-footer > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recording-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 8px 0;
+}
+.recording-details .field textarea {
+  resize: vertical;
+  min-height: 180px;
+}
+.recording-next {
+  padding-top: 8px;
+}
+.recording-next h3 {
+  font-size: 13px;
+  margin-bottom: 7px;
+}
+.recording-next p {
+  color: var(--muted);
+  line-height: 1.75;
+  font-size: 12px;
+}
+.recording-details > .button-ghost {
+  margin-top: -16px;
+}
+.recording-page-notice {
+  background: var(--soft);
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.recording-review-page {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.recording-review-page > .card {
+  padding: 28px;
+}
+.recording-review-page audio {
+  width: 100%;
+}
+
+/* MARK: - Controls wrap naturally without hiding the save or return action on small screens */
+@media (max-width: 1000px) {
+  .recording-workspace {
+    gap: 22px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(230px, 1fr);
+  }
+  .recording-banner {
+    padding-inline: 24px;
+  }
+}
+@media (max-width: 740px) {
+  .recording-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .recording-details {
+    padding: 0;
+  }
+  .recording-page {
+    gap: 24px;
+  }
+  .recording-capture-stage,
+  .recording-upload-stage {
+    min-height: 330px;
+  }
+  .recording-banner {
+    gap: 9px;
+    padding: 10px 18px;
+  }
+  .recording-banner-copy > span {
+    max-width: 42vw;
+  }
+  .recording-banner-controls {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+  .recording-banner-link {
+    margin-left: auto;
+  }
+  .recording-consent {
+    padding-inline: 20px;
+  }
+  .consent-content {
+    gap: 20px;
+  }
+  .consent-choice {
+    padding: 16px;
+    font-size: 13px;
+  }
+  .recording-review-page > .card {
+    padding: 20px;
+  }
+}
+@media print {
+  .recording-banner,
+  .recording-consent {
+    display: none !important;
+  }
+}

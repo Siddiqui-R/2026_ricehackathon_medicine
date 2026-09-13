@@ -11,6 +11,7 @@ import { passwordProblem } from '../core/auth';
 import { formatDate } from '../core/domain';
 import { initialsFor } from '../core/account';
 import { Button, Card, Field, Modal } from '../components/ui';
+import { useRecordingSession } from './visits/RecordingSession';
 
 // MARK: - Account identity and sessions; "everywhere" is confirmed because it also ends this session
 export function AccountCard({
@@ -21,6 +22,7 @@ export function AccountCard({
   run: (action: () => Promise<void>) => void;
 }) {
   const store = useReva();
+  const recordingSession = useRecordingSession();
   const [confirm, setConfirm] = useState(false);
   const user = store.accountUser;
   if (!user) return null;
@@ -46,23 +48,36 @@ export function AccountCard({
           <dd>{expiry ? `Expires ${formatDate(expiry, true)}` : 'Expiry unknown'}</dd>
         </div>
         <div>
-          <dt>Server copy</dt>
-          <dd>
-            {store.serverRevision == null
-              ? 'Not checked yet'
-              : `Revision ${store.serverRevision}${store.busy ? ' · syncing' : ''}`}
+          <dt>Account sync</dt>
+          <dd role="status">
+            {store.syncStatus === 'saved'
+              ? 'Up to date'
+              : store.syncStatus === 'offline'
+                ? 'Saved here · reconnecting'
+                : 'Syncing automatically…'}
           </dd>
         </div>
       </dl>
+      {store.syncError && (
+        <p className="muted small" role="status">
+          {store.syncError}
+        </p>
+      )}
       <p>
-        Changes you save here are sent to your account about a second later. Log out on a shared computer;
-        this browser keeps a private copy until you delete the account.
+        Changes sync automatically to your account, and updates from your other devices arrive here too. Log
+        out on a shared computer; this browser keeps a private copy until you delete the account.
       </p>
       <div className="form-actions account-actions">
         <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm(true)}>
           Log out everywhere
         </Button>
-        <Button variant="secondary" disabled={working || store.busy} onClick={() => run(store.logout)}>
+        <Button
+          variant="secondary"
+          disabled={working || store.busy}
+          onClick={() => {
+            if (recordingSession.allowWorkspaceExit()) run(store.logout);
+          }}
+        >
           <LogOut size={16} />
           Log out
         </Button>
@@ -79,12 +94,13 @@ export function AccountCard({
             </Button>
             <Button
               disabled={working}
-              onClick={() =>
+              onClick={() => {
+                if (!recordingSession.allowWorkspaceExit()) return;
                 run(async () => {
                   await store.logoutAll();
                   setConfirm(false);
-                })
-              }
+                });
+              }}
             >
               {working ? 'Working…' : 'Log out everywhere'}
             </Button>
@@ -186,6 +202,7 @@ export function DeleteAccountCard({
   run: (action: () => Promise<void>) => void;
 }) {
   const store = useReva();
+  const recordingSession = useRecordingSession();
   const [typed, setTyped] = useState('');
   const [password, setPassword] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -200,6 +217,7 @@ export function DeleteAccountCard({
         : null;
     setProblem(issue);
     if (issue) return;
+    if (!recordingSession.allowWorkspaceExit()) return;
     run(() => store.deleteAccount(password));
   }
   return (

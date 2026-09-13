@@ -6,7 +6,7 @@
 // MARK: - Fictional handout fixtures and PDF bounds
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { it, expect } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFName, PDFString } from 'pdf-lib';
 import { createBriefPDF } from './briefPDF';
 import type { ClinicalBrief } from '../../core/visitBrief';
 const font = new Uint8Array(await readFile(new URL('../../../public/fonts/NotoSans.ttf', import.meta.url)));
@@ -62,4 +62,16 @@ it('rejects excess content instead of clipping it or creating additional pages',
       font,
     ).then(() => null),
   ).rejects.toThrow('exceeds one page');
+});
+it('embeds verified source destinations in exported briefs without inventing missing URLs', async () => {
+  const url = 'https://reva.example/app#/records/ecg';
+  const pdf = await PDFDocument.load(await createBriefPDF(brief, font, { ecg: url }));
+  const annotations = pdf.getPage(0).node.Annots()!;
+  expect(annotations.size()).toBe(1);
+  const annotation = pdf.context.lookup(annotations.get(0), PDFDict);
+  const action = annotation.lookup(PDFName.of('A'), PDFDict);
+  expect(action.lookup(PDFName.of('URI'), PDFString).decodeText()).toBe(url);
+  await expect(createBriefPDF(brief, font, { ecg: 'javascript:alert(1)' })).rejects.toThrow(
+    'unsupported address',
+  );
 });

@@ -168,6 +168,8 @@ test("preparation keeps the fixed concise model while summaries use the configur
     });
     assert.equal(result.model, "gemini-3.8-flash");
     assert.match(destination, /models\/gemini-3\.8-flash:generateContent$/);
+    assert.equal(payload.generationConfig.candidateCount, undefined);
+    assert.equal(payload.generationConfig.temperature, undefined);
     assert.deepEqual(JSON.parse(payload.contents[0].parts[0].text), briefInput);
     const summary = await gemini("summarize", source, async (url) => {
       assert.match(url, /models\/gemini-other-summary-model:generateContent$/);

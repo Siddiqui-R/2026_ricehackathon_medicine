@@ -1,11 +1,11 @@
 // Purpose: Render a concise, readable pre-visit handout on one letter-size PDF page.
-// Inputs: Validated transient brief content and an optional embedded Unicode font.
-// Outputs: PDF bytes, or an explicit error for unsupported characters or page overflow.
+// Inputs: Validated brief content, verified source URLs, and an optional embedded Unicode font.
+// Outputs: PDF bytes with clickable source titles, or an error for unsupported characters/page overflow.
 // Side effects: Loads the bundled font when needed and builds the document in memory.
 
 // MARK: - Measured text wrapping and bounded PDF composition
 // One letter-size medical handout. Overflow is an error, never clipped text or a second page.
-import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
+import { PDFDocument, PDFString, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import type { ClinicalBrief } from '../../core/visitBrief';
 import { validateBriefText } from '../../core/visitBrief';
@@ -28,7 +28,11 @@ export function wrapText(text: string, font: PDFFont, size: number, width: numbe
   }
   return lines;
 }
-export async function createBriefPDF(brief: ClinicalBrief, fontBytes?: Uint8Array): Promise<Uint8Array> {
+export async function createBriefPDF(
+  brief: ClinicalBrief,
+  fontBytes?: Uint8Array,
+  sourceURLs: Readonly<Record<string, string>> = {},
+): Promise<Uint8Array> {
   validateBriefText(brief);
   if (!fontBytes) {
     const response = await fetch('/fonts/NotoSans.ttf');
@@ -45,7 +49,7 @@ export async function createBriefPDF(brief: ClinicalBrief, fontBytes?: Uint8Arra
   const left = 48,
     width = 516;
   let y = 740;
-  function write(text: string, size = 11, gap = 5, color = ink) {
+  function write(text: string, size = 11, gap = 5, color = ink, sourceURL?: string) {
     for (const character of text.replace(/[\r\n]/gu, '')) {
       if (!supported.has(character.codePointAt(0)!))
         throw new Error(
@@ -56,6 +60,16 @@ export async function createBriefPDF(brief: ClinicalBrief, fontBytes?: Uint8Arra
     for (const line of lines) {
       if (y < 84) throw new Error('This brief exceeds one page. Generate a shorter brief.');
       page.drawText(line, { x: left, y, size, font, color });
+      if (sourceURL) {
+        const annotation = document.context.obj({
+          Type: 'Annot',
+          Subtype: 'Link',
+          Rect: [left, y - 2, left + font.widthOfTextAtSize(line, size), y + size],
+          Border: [0, 0, 0],
+          A: { Type: 'Action', S: 'URI', URI: PDFString.of(sourceURL) },
+        });
+        page.node.addAnnot(document.context.register(annotation));
+      }
       y -= size * 1.42;
     }
     y -= gap;
@@ -82,14 +96,23 @@ export async function createBriefPDF(brief: ClinicalBrief, fontBytes?: Uint8Arra
   }
   if (brief.sources.length) {
     write('SOURCES', 8.5, 4, gray);
-    brief.sources.forEach((source, index) =>
+    brief.sources.forEach((source, index) => {
+      const suppliedURL = sourceURLs[source.id];
+      let sourceURL: string | undefined;
+      if (suppliedURL) {
+        const url = new URL(suppliedURL);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:')
+          throw new Error('A source link has an unsupported address. Generate the brief again.');
+        sourceURL = url.href;
+      }
       write(
         `${index + 1}. ${source.title}${source.date ? ` · ${formatDate(source.date)}` : ''}`,
         8.5,
         2,
-        gray,
-      ),
-    );
+        sourceURL ? rgb(0.14, 0.42, 0.82) : gray,
+        sourceURL,
+      );
+    });
   }
   page.drawLine({ start: { x: left, y: 61 }, end: { x: left + width, y: 61 }, thickness: 0.4, color: gray });
   page.drawText(

@@ -1,0 +1,95 @@
+/* Purpose: Present account actions beside the patient plaque without additional sidebar rows.
+   Inputs: AccountMenu disclosure state and desktop/phone layout.
+   Outputs: Compact, clearly focused controls and a bounded account popup.
+   Side effects: Presentation only. */
+
+/* MARK: - Plaque and popup share consistent, quiet control styling */
+.account-menu {
+  position: relative;
+  min-width: 0;
+}
+.account-menu-trigger {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.account-menu-trigger:hover,
+.account-menu-trigger[aria-expanded='true'] {
+  background: var(--canvas);
+}
+.account-menu-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 50;
+  width: max(100%, 210px);
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px #30252616;
+}
+.account-menu-panel .account-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.account-menu-panel .account-menu-item:hover:not(:disabled) {
+  background: var(--canvas);
+}
+.account-menu-panel .account-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.account-menu-panel .demo-switch-label {
+  display: inline;
+}
+.account-menu-trigger:focus-visible,
+.account-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.account-menu-compact {
+  display: none;
+}
+
+/* MARK: - The phone avatar exposes the same actions when the sidebar is hidden */
+@media (max-width: 760px) {
+  .account-menu-compact {
+    display: block;
+    flex-shrink: 0;
+  }
+  .account-menu-compact .account-menu-trigger {
+    width: 40px;
+    padding: 2px;
+  }
+  .account-menu-compact .account-menu-identity,
+  .account-menu-compact .account-menu-trigger > svg {
+    display: none;
+  }
+  .account-menu-compact .account-menu-panel {
+    bottom: auto;
+    top: calc(100% + 10px);
+    left: auto;
+    right: 0;
+  }
+}

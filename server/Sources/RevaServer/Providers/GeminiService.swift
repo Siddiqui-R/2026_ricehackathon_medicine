@@ -1,4 +1,4 @@
-// Purpose: Turn supplied source records into reviewed summary/preparation JSON through Gemini.
+// Purpose: Turn supplied source records into bounded summaries, visit preparation and medical history through Gemini.
 // Inputs: Validated request DTOs, server-only Gemini settings, and an injectable HTTP transport.
 // Outputs: Strictly checked model-labelled responses or sanitized provider/structured-output errors.
 // Side effects: Sends one configured Google request per operation. The service does not persist client state.
@@ -92,19 +92,22 @@ struct GeminiService: Sendable {
 
     // MARK: - Separate untrusted source JSON from server instructions
     // Configuration gates run before the single external request. No client state is changed by this service.
-    private func generate<Input: Encodable>(input: Input, schema: JSONValue, model: String? = nil, task: String) async throws
+    func generate<Input: Encodable>(
+        input: Input, schema: JSONValue, model: String? = nil,
+        maxOutputTokens: Int64 = 8192, maxStructuredBytes: Int = 64_000, task: String
+    ) async throws
         -> [String: Any]
     {
         guard configuration.paidAccessAllowed else {
             throw Abort(
-                .serviceUnavailable,
+                .failedDependency,
                 reason:
                     "Provider access requires a private REVA_TOKENS mapping; the public local demo token cannot activate paid providers."
             )
         }
         guard let key = configuration.geminiAPIKey else {
             throw Abort(
-                .serviceUnavailable,
+                .failedDependency,
                 reason: "Gemini is not configured. Set GEMINI_API_KEY on the server and restart.")
         }
         let userJSON = String(decoding: try JSONEncoder().encode(input), as: UTF8.self)
@@ -121,7 +124,9 @@ struct GeminiService: Sendable {
             ]),
             "generationConfig": .object([
                 "responseMimeType": .string("application/json"), "responseJsonSchema": schema,
-                "candidateCount": .integer(1), "maxOutputTokens": .integer(8192), "temperature": .number(0.2),
+                // Gemini 3+ rejects candidateCount; 3.8 also removes sampling overrides.
+                // https://ai.google.dev/gemini-api/docs/generate-content/latest-model
+                "maxOutputTokens": .integer(maxOutputTokens),
             ]),
         ])
         // MARK: - Fixed Google endpoint and one bounded request
@@ -148,11 +153,7 @@ struct GeminiService: Sendable {
             )
         }
         guard (200..<300).contains(response.status) else {
-            throw Abort(
-                .serviceUnavailable,
-                reason:
-                    "Gemini rejected the request. Check server model/key access and provider quota; no provider error details are exposed."
-            )
+            throw geminiFailure(response)
         }
         // MARK: - Reject blocked, truncated, thought-only, or malformed output
         guard response.data.count <= 1_048_576,
@@ -163,18 +164,18 @@ struct GeminiService: Sendable {
             let parts = candidate.content?.parts
         else { throw invalidResponse() }
         let text = parts.filter { $0.thought != true }.compactMap(\.text).joined()
-        guard !text.isEmpty, text.utf8.count <= 64_000,
+        guard !text.isEmpty, text.utf8.count <= maxStructuredBytes,
             let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
         else { throw invalidResponse() }
         return object
     }
 
     // MARK: - Sanitized failure surfaced to local fallback UI
-    private func invalidResponse() -> Abort {
+    func invalidResponse() -> Abort {
         Abort(
-            .serviceUnavailable,
+            .unprocessableEntity,
             reason:
-                "Gemini returned incomplete, blocked or invalid structured output. No AI result was saved; retry."
+                "Gemini returned incomplete, blocked or invalid structured output. No AI result was saved."
         )
     }
 }

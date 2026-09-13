@@ -5,7 +5,7 @@
 
 import { createServer, request as requestHTTP } from 'node:http';
 import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,8 @@ if (
 const port = Number(process.env.PORT || 4173);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid TCP port.');
 const host = process.env.HOST || '127.0.0.1';
+const contentSecurityPolicy =
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -113,7 +115,7 @@ function appRoute(pathname) {
   return appRoutes.has(pathname.length > 1 ? pathname.replace(/\/+$/u, '') : pathname);
 }
 function publicAsset(pathname) {
-  if (appRoute(pathname) || pathname === '/index.html' || pathname === '/reva.svg') return true;
+  if (appRoute(pathname) || ['/index.html', '/404.html', '/reva.svg'].includes(pathname)) return true;
   const parts = pathname.split('/').slice(1);
   if (parts.some((part) => !part || part.startsWith('.'))) return false;
   const extensions = {
@@ -132,6 +134,22 @@ function failure(response, status, reason) {
   }
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify({ error: true, reason }));
+}
+// Unknown page URLs get the same static 404 used by hosting, without loading the app or any data.
+async function pageNotFound(response, method) {
+  try {
+    const file = await realpath(path.join(root, '404.html'));
+    if (!file.startsWith(root + path.sep)) throw new Error('Invalid fallback path.');
+    const html = await readFile(file);
+    response.writeHead(404, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Length': String(html.length),
+      'Content-Security-Policy': contentSecurityPolicy,
+    });
+    response.end(method === 'HEAD' ? undefined : html);
+  } catch {
+    failure(response, 404, 'Page not found.');
+  }
 }
 const server = createServer(async (incoming, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -222,7 +240,7 @@ const server = createServer(async (incoming, response) => {
     return;
   }
   if (!publicAsset(pathname)) {
-    failure(response, 404, 'File not found.');
+    await pageNotFound(response, incoming.method);
     return;
   }
   try {
@@ -230,13 +248,10 @@ const server = createServer(async (incoming, response) => {
     const file = await realpath(candidate);
     const metadata = await stat(file);
     if (!file.startsWith(root + path.sep) || !metadata.isFile()) {
-      failure(response, 404, 'File not found.');
+      await pageNotFound(response, incoming.method);
       return;
     }
-    response.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-    );
+    response.setHeader('Content-Security-Policy', contentSecurityPolicy);
     response.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');
     response.setHeader('Content-Length', String(metadata.size));
     if (incoming.method === 'HEAD') {
@@ -247,7 +262,7 @@ const server = createServer(async (incoming, response) => {
     stream.on('error', () => failure(response, 500, 'File could not be read.'));
     stream.pipe(response);
   } catch {
-    failure(response, 404, 'File not found.');
+    await pageNotFound(response, incoming.method);
   }
 });
 

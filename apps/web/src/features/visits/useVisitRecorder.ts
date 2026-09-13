@@ -51,6 +51,28 @@ export function useVisitRecorder() {
     if (recorder.current && recorder.current.state !== 'inactive') recorder.current.stop();
     stopTracks();
   }
+  function reset() {
+    // Invalidate pending permission and queued media events before releasing the old draft.
+    generation.current += 1;
+    if (recorder.current) {
+      recorder.current.ondataavailable = null;
+      recorder.current.onstop = null;
+      recorder.current.onerror = null;
+      if (recorder.current.state !== 'inactive') recorder.current.stop();
+      recorder.current = null;
+    }
+    stopTracks();
+    activeSince.current = null;
+    elapsed.current = 0;
+    chunks.current = [];
+    byteCount.current = 0;
+    overflow.current = false;
+    setState('idle');
+    setSeconds(0);
+    setBlob(null);
+    setError('');
+    setNotice('');
+  }
   function pause() {
     if (recorder.current?.state !== 'recording') return;
     recorder.current.pause();
@@ -194,5 +216,5 @@ export function useVisitRecorder() {
       stopTracks();
     };
   }, []);
-  return { state, seconds, blob, error, notice, supported, start, pause, resume, stop };
+  return { state, seconds, blob, error, notice, supported, start, pause, resume, stop, reset };
 }

@@ -126,15 +126,23 @@ describe('workspace attachment ownership', () => {
     expect(await (await getAttachment(savedRecording.audioFilename!)).arrayBuffer()).toEqual(
       await audio.arrayBuffer(),
     );
-    await vi.waitFor(() => expect(push.mock.calls.at(-1)?.[0].recordings).toEqual([savedRecording]));
+    await vi.waitFor(() => expect(push.mock.calls.at(-1)?.[0].recordings[0]?.id).toBe(savedRecording.id));
+    const syncedRecording = push.mock.calls.at(-1)![0].recordings[0];
+    expect(syncedRecording).toEqual({
+      ...savedRecording,
+      audioFilename: expect.stringMatching(/^reva-[a-f0-9]{64}\.webm$/),
+    });
+    expect(await (await getAttachment(syncedRecording.audioFilename!)).arrayBuffer()).toEqual(
+      await audio.arrayBuffer(),
+    );
     const uploadedAudio = uploadAttachment.mock.calls.find(
-      ([filename]) => filename === savedRecording.audioFilename,
+      ([filename]) => filename === syncedRecording.audioFilename,
     )?.[1];
     expect(uploadedAudio).toBeDefined();
     expect(await uploadedAudio!.arrayBuffer()).toEqual(await audio.arrayBuffer());
     await vi.waitFor(() => expect(store.getState().busy).toBe(false));
     await store.transcribeRecording(savedRecording.id);
-    expect(transcribe.mock.calls[0][0]).toBe(savedRecording.audioFilename);
+    expect(transcribe.mock.calls[0][0]).toBe(syncedRecording.audioFilename);
     expect(await transcribe.mock.calls[0][1].arrayBuffer()).toEqual(await audio.arrayBuffer());
     await vi.waitFor(() =>
       expect(push.mock.calls.at(-1)?.[0].recordings[0].segments[0]?.text).toBe(

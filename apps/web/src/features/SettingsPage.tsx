@@ -1,29 +1,19 @@
-// Purpose: Make browser persistence and explicit shared-server operations understandable and controllable.
+// Purpose: Explain automatic account persistence and configure connected services.
 // Inputs: Reva connection state; in demo mode a session-only owner token, in account mode the signed-in user.
-// Outputs: Configuration status, deliberate push/pull, a reviewed demo reset (demo only), and account cards
+// Outputs: Service configuration, a reviewed demo reset (demo only), and account cards
 //          (identity, password change, deletion) in account mode.
-// Side effects: May contact the Swift server or replace active browser state after confirmation.
+// Side effects: May check server configuration or reset the local demo after confirmation.
 
 import { useState } from 'react';
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  CheckCircle2,
-  Database,
-  KeyRound,
-  Link2,
-  RefreshCw,
-  RotateCcw,
-  ShieldCheck,
-} from 'lucide-react';
+import { CheckCircle2, KeyRound, Link2, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useReva } from '../core/RevaContext';
 import { Badge, Button, Card, Field, Modal, PageHeading } from '../components/ui';
 import { AccountCard, ChangePasswordCard, DeleteAccountCard } from './AccountSettings';
 
-// MARK: - Explicit actions separate configuration discovery from data replacement
+// MARK: - Service configuration and account management; synchronization runs automatically
 export function SettingsPage() {
   const store = useReva();
-  const [confirm, setConfirm] = useState<'pull' | 'reset' | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [working, setWorking] = useState(false);
   const account = store.mode === 'account';
   async function run(action: () => Promise<void>) {
@@ -42,8 +32,8 @@ export function SettingsPage() {
         title="Settings & connections"
         description={
           account
-            ? 'Your account, your sessions, and when this browser talks to the server.'
-            : 'Choose when to connect and when to share your latest changes.'
+            ? 'Your account, your sessions, and connected services. Changes sync automatically.'
+            : 'Explore the local demo and configure connected services.'
         }
       />
       <div className="settings-grid">
@@ -58,12 +48,12 @@ export function SettingsPage() {
                 </span>
                 <div>
                   <h2>Connect to Reva</h2>
-                  <p className="muted">Use the same workspace as your iPhone.</p>
+                  <p className="muted">Configure services for this demo.</p>
                 </div>
               </div>
               <p>
-                The browser keeps its own saved copy. Connect to the Reva server to exchange records,
-                appointments, and your medical profile.
+                Demo records stay in this browser. Connect to use the services configured on your Reva server,
+                or sign in to keep your own records up to date across devices.
               </p>
               <Field
                 label="Workspace access token"
@@ -80,7 +70,7 @@ export function SettingsPage() {
               <div className="form-actions">
                 <span className="small muted">
                   {store.serverRevision == null
-                    ? 'Check your connection before syncing.'
+                    ? 'Check which services are available.'
                     : `Server revision ${store.serverRevision}`}
                 </span>
                 <Button disabled={working || store.busy} onClick={() => run(store.checkServer)}>
@@ -90,68 +80,6 @@ export function SettingsPage() {
               </div>
             </Card>
           )}
-          <Card className="settings-card">
-            <div className="card-title">
-              <Database size={23} />
-              <div>
-                <h2>Keep your devices in step</h2>
-                <p className="muted">
-                  {account
-                    ? 'Saves sync on their own; use these to send or fetch right now.'
-                    : 'Transfers happen when you choose.'}
-                </p>
-              </div>
-            </div>
-            {account && (
-              <div className="form-actions">
-                <span className="small muted">
-                  {store.serverRevision == null
-                    ? 'Check your connection before syncing.'
-                    : `Server revision ${store.serverRevision}`}
-                </span>
-                <Button
-                  variant="secondary"
-                  disabled={working || store.busy}
-                  onClick={() => run(store.checkServer)}
-                >
-                  <RefreshCw size={16} />
-                  Check connection
-                </Button>
-              </div>
-            )}
-            <div className="sync-options">
-              <div>
-                <h3>Send this browser’s changes</h3>
-                <p>
-                  Replace the server’s snapshot with this browser’s records and profile. A newer server
-                  revision requires review first.
-                </p>
-                <Button
-                  variant="secondary"
-                  disabled={working || store.busy || store.serverRevision == null}
-                  onClick={() => run(store.pushToServer)}
-                >
-                  <ArrowUpFromLine size={16} />
-                  Push to server
-                </Button>
-              </div>
-              <div>
-                <h3>Get the server’s latest copy</h3>
-                <p>
-                  Download originals and replace this browser’s active records, visits, and profile with the
-                  server copy.
-                </p>
-                <Button
-                  variant="secondary"
-                  disabled={working || store.busy}
-                  onClick={() => setConfirm('pull')}
-                >
-                  <ArrowDownToLine size={16} />
-                  Pull from server
-                </Button>
-              </div>
-            </div>
-          </Card>
           {account ? (
             <>
               <ChangePasswordCard working={working} run={run} />
@@ -164,7 +92,7 @@ export function SettingsPage() {
                 Restore the original demonstration records in this browser. This replaces active local
                 changes; it does not change the server or your iPhone.
               </p>
-              <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirm('reset')}>
+              <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirmReset(true)}>
                 <RotateCcw size={16} />
                 Restore demo
               </Button>
@@ -178,9 +106,16 @@ export function SettingsPage() {
               <h2>Connected services</h2>
             </div>
             <p className="muted small">
-              Availability appears after checking your connection. Provider accounts are configured on the
-              Reva server.
+              Provider accounts are configured on the Reva server. Check availability if a service is missing.
             </p>
+            <Button
+              variant="secondary"
+              disabled={working || store.busy}
+              onClick={() => run(store.checkServer)}
+            >
+              <RefreshCw size={16} />
+              Check services
+            </Button>
             {[
               { key: 'gemini', title: 'Document & visit AI', detail: 'Relevant summaries and preparation' },
               {
@@ -219,51 +154,46 @@ export function SettingsPage() {
           <div className="storage-note">
             <CheckCircle2 size={21} />
             <div>
-              <strong>{account ? 'Saved to your account' : 'Saved in this browser'}</strong>
+              <strong>{account ? 'Automatic account sync' : 'Saved in this browser'}</strong>
               <p>
                 {account
-                  ? 'Your records and originals live in your account on the Reva server, with a private copy in this browser for speed and offline reading. Clearing site data removes only the browser copy.'
-                  : 'Records and originals use local browser storage. Clearing site data removes this copy. Push to your server before switching browsers if you want to bring your history with you.'}
+                  ? 'Records and originals sync automatically to your account and between signed-in devices. This browser keeps a private copy for offline reading. Changes made offline sync when you reconnect.'
+                  : 'Demo records and originals stay in this browser. Clearing site data removes this copy. Sign in to use your own account with automatic syncing across devices.'}
               </p>
             </div>
           </div>
           <div className="storage-note">
             <KeyRound size={21} />
             <div>
-              <strong>Your choice, every time</strong>
+              <strong>Connected services, explained</strong>
               <p>
-                Provider keys stay on the server. Importing and reviewing a document can work locally;
-                connected requests use the services you enable.
+                Provider keys stay on the server. In your account, configured AI keeps your medical profile up
+                to date from your reports. Visit briefs and document summaries run when you request them.
               </p>
             </div>
           </div>
         </div>
       </div>
-      {confirm && (
-        <Modal
-          title={confirm === 'pull' ? 'Replace this browser’s copy?' : 'Restore the demo?'}
-          onClose={() => !working && setConfirm(null)}
-        >
+      {confirmReset && (
+        <Modal title="Restore the demo?" onClose={() => !working && setConfirmReset(false)}>
           <p>
-            {confirm === 'pull'
-              ? 'Your active browser records, appointments, and medical profile will be replaced by the server copy. Unsynced local edits will leave the active snapshot.'
-              : 'Your active local edits will be replaced with the original demo data. Other devices and the server are unchanged.'}
+            Your active local edits will be replaced with the original demo data. Other devices and the server
+            are unchanged.
           </p>
           <div className="form-actions">
-            <Button variant="secondary" disabled={working} onClick={() => setConfirm(null)}>
+            <Button variant="secondary" disabled={working} onClick={() => setConfirmReset(false)}>
               Keep my current copy
             </Button>
             <Button
               disabled={working}
               onClick={() =>
                 run(async () => {
-                  if (confirm === 'pull') await store.pullFromServer();
-                  else await store.resetDemo();
-                  setConfirm(null);
+                  await store.resetDemo();
+                  setConfirmReset(false);
                 })
               }
             >
-              {working ? 'Working…' : confirm === 'pull' ? 'Pull and replace' : 'Restore demo'}
+              {working ? 'Working…' : 'Restore demo'}
             </Button>
           </div>
         </Modal>

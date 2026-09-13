@@ -14,7 +14,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { RevaProvider } from './core/RevaContext';
 import { RevaStore } from './core/store';
 import { RevaAPI } from './core/api';
@@ -23,6 +23,7 @@ import { accountDatabaseName } from './core/account';
 import { readSession } from './core/session';
 import { App } from './App';
 import { Brand } from './components/Brand';
+import { NotFound } from './components/NotFound';
 import { HomeLanding } from './landing/HomeLanding';
 import { Login } from './landing/Login';
 import { Signup } from './landing/Signup';
@@ -75,12 +76,8 @@ function Entry() {
   if (path === '/login') return <Login />;
   if (path === '/signup') return <Signup />;
   return (
-    <main className="startup-state">
-      <Brand />
-      <h1>Page not found.</h1>
-      <a className="button button-primary" href="/">
-        Back to home
-      </a>
+    <main className="not-found-page">
+      <NotFound />
     </main>
   );
 }
@@ -145,7 +142,10 @@ class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolea
     return this.props.children;
   }
 }
-createRoot(document.getElementById('root')!).render(
+// Keep one React root when Vite refreshes this entry module during local editing.
+const root = (import.meta.hot?.data.root as Root | undefined) ?? createRoot(document.getElementById('root')!);
+if (import.meta.hot) import.meta.hot.data.root = root;
+root.render(
   <StrictMode>
     <RenderBoundary>
       <Entry />

@@ -18,6 +18,29 @@ struct PatientProfile: Codable, Equatable {
     var isDemo: Bool
     var surgeriesAndImplants: [String]? = nil
     var careNotes: String? = nil
+    var aiMedicalHistory: AIMedicalHistory? = nil
+}
+
+// MARK: - Generated history provenance retained across native and browser sync
+struct AIProfileFact: Codable, Equatable {
+    var text: String
+    var recordIDs: [String]
+}
+
+struct AIMedicalHistory: Codable, Equatable {
+    struct Facts: Codable, Equatable {
+        var allergies: [AIProfileFact]
+        var medications: [AIProfileFact]
+        var conditions: [AIProfileFact]
+        var surgeriesAndImplants: [AIProfileFact]
+        var careNotes: [AIProfileFact]
+    }
+    var sourceSignature: String
+    var generatedAt: String
+    var model: String
+    var facts: Facts
+    var suppressed: [String: [String]]? = nil
+    var suppressedRecordIDs: [String: [String]]? = nil
 }
 
 // MARK: - Versioned source record

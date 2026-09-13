@@ -6,6 +6,7 @@ secrets/
 *.key
 *.pem
 .build/
+.local-data/
 build/
 DerivedData/
 *.xcuserstate

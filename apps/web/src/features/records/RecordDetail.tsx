@@ -3,7 +3,7 @@
 // Outputs: Structured source details, review status, and explicit edit/delete/summarize actions.
 // Side effects: Opens local originals and delegates confirmed mutations or provider calls to context.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, FileText, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { demoDescription, demoLabel } from '../../core/presentation';
@@ -16,6 +16,7 @@ import {
 } from '../../core/domain';
 import type { SymptomEntry } from '../../core/models';
 import { Badge, Button, Card, EmptyState, Modal, PageHeading } from '../../components/ui';
+import { SourceLink } from '../../components/SourceLink';
 import { RecordEditor } from './RecordEditor';
 import { SymptomDialog } from './SymptomDialog';
 import { SourcePreview } from './SourcePreview';
@@ -63,6 +64,7 @@ export function RecordDetail({ id }: { id: string }) {
   const [preview, setPreview] = useState(() => queryParameter('page') !== null);
   const [page, setPage] = useState(() => Math.max(1, Number(queryParameter('page')) || 1));
   const [error, setError] = useState('');
+  const sourceText = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     setEditing(false);
     setDeleting(false);
@@ -96,6 +98,30 @@ export function RecordDetail({ id }: { id: string }) {
   const linkedRecording = record.sourceRecordingID
     ? snapshot?.recordings.find((item) => item.id === record.sourceRecordingID)
     : undefined;
+  const summarySource = linkedRecording ? (
+    <SourceLink
+      sources={[
+        {
+          label: demoLabel(linkedRecording.title, linkedRecording.isSample),
+          href: `#/recordings/${encodeURIComponent(linkedRecording.id)}`,
+        },
+      ]}
+    />
+  ) : (
+    <SourceLink
+      label={`View source: ${record.sourceFilename ? 'original document' : 'saved record text'}`}
+      onOpen={() => {
+        if (record.sourceFilename) {
+          setPage(1);
+          setPreview(true);
+        } else if (sourceText.current) {
+          sourceText.current.open = true;
+          sourceText.current.scrollIntoView({ block: 'center' });
+          sourceText.current.focus({ preventScroll: true });
+        }
+      }}
+    />
+  );
   const remove = async () => {
     setRemoving(true);
     setError('');
@@ -138,10 +164,18 @@ export function RecordDetail({ id }: { id: string }) {
           ) : (
             <Card className="stack">
               <h2>{record.summaryModel ? 'AI summary' : authoredDemo ? 'Demo summary' : 'Local excerpt'}</h2>
-              <p className="prose">
-                {(authoredDemo ? demoDescription(currentSummary(record), true) : currentSummary(record)) ||
-                  'No complete source line fits in this excerpt. Open the source to review its text.'}
-              </p>
+              {(
+                (authoredDemo ? demoDescription(currentSummary(record), true) : currentSummary(record)) ||
+                'No complete source line fits in this excerpt. Open the source to review its text.'
+              )
+                .split(/\r?\n+/)
+                .filter(Boolean)
+                .map((line, index) => (
+                  <p className="prose" key={index}>
+                    {line}
+                    {record.text.trim() && summarySource}
+                  </p>
+                ))}
               {!record.summaryModel &&
                 !authoredDemo &&
                 localExcerptDetails(record.text, record.isDemo).omitted && (
@@ -159,12 +193,20 @@ export function RecordDetail({ id }: { id: string }) {
           {record.symptomEntry && record.summaryModel && (
             <Card>
               <h2>AI summary · review</h2>
-              <p className="prose">{record.summary}</p>
+              {record.summary
+                .split(/\r?\n+/)
+                .filter(Boolean)
+                .map((line, index) => (
+                  <p className="prose" key={index}>
+                    {line}
+                    {summarySource}
+                  </p>
+                ))}
               <p className="small muted">{record.summaryModel}</p>
             </Card>
           )}
           <Card>
-            <details>
+            <details ref={sourceText} tabIndex={-1}>
               <summary>
                 {record.symptomEntry ? 'Entry text used in visit preparation' : 'Full source text'}
               </summary>
@@ -210,7 +252,7 @@ export function RecordDetail({ id }: { id: string }) {
               </Button>
             )}
             {linkedRecording ? (
-              <a className="text-link" href={`#/visits/${encodeURIComponent(linkedRecording.visitID)}`}>
+              <a className="text-link" href={`#/recordings/${encodeURIComponent(linkedRecording.id)}`}>
                 Open the source visit transcript
               </a>
             ) : (

@@ -19,20 +19,19 @@ import {
 import { useReva } from '../core/RevaContext';
 import { defaultTimeZone, formatDate } from '../core/domain';
 import { demoLabel } from '../core/presentation';
-import { Card, Modal } from '../components/ui';
+import { Button, Card, Modal } from '../components/ui';
+import { SourceLink } from '../components/SourceLink';
+import { profileSources } from './profile/profileSources';
 import { VisitPreparation } from './visits/VisitPreparation';
-import { RecordingCapture } from './visits/RecordingCapture';
-import { RecordingDetail } from './visits/RecordingDetail';
+import { useRecordingSession } from './visits/RecordingSession';
 
 // MARK: - Dashboard projections never mutate the underlying clinical data
 export function Dashboard() {
   const { snapshot } = useReva();
+  const recordingSession = useRecordingSession();
   const [prepare, setPrepare] = useState(false);
-  const [capture, setCapture] = useState(false);
-  const [recordingID, setRecordingID] = useState<string | null>(null);
   if (!snapshot) return null;
   const { profile, records, recordings } = snapshot;
-  const recording = recordings.find((item) => item.id === recordingID);
   const sessions = [...recordings].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const recent = [...records]
     .sort((a, b) => b.date.localeCompare(a.date) || b.uploadedAt.localeCompare(a.uploadedAt))
@@ -62,32 +61,28 @@ export function Dashboard() {
         </span>
       </div>
       <div className="home-care-actions" aria-label="Visit actions">
-        <button onClick={() => setPrepare(true)}>
-          <CalendarDays size={26} />
-          <span>
-            <strong>Upcoming visit</strong>
-            <small>Run a pre-visit brief</small>
-          </span>
-        </button>
-        <button onClick={() => setCapture(true)}>
+        <div className="home-prepare-action">
+          <div className="home-prepare-copy">
+            <CalendarDays size={26} aria-hidden="true" />
+            <div>
+              <strong>Upcoming visit</strong>
+              <small>Your records and questions, ready for the conversation.</small>
+            </div>
+          </div>
+          <Button onClick={() => setPrepare(true)}>Prepare for this visit</Button>
+        </div>
+        <button className="home-record-action" onClick={() => recordingSession.requestSession()}>
           <Mic size={26} />
           <span>
             <strong>Record session</strong>
             <small>Record, transcribe, summarize</small>
           </span>
+          <span className="home-record-open">
+            Open recorder <ArrowRight size={19} aria-hidden="true" />
+          </span>
         </button>
       </div>
       <div className="quick-actions" aria-label="Quick actions">
-        <a href="#/records?add=import">
-          <span className="action-icon">
-            <FilePlus2 size={23} />
-          </span>
-          <span>
-            <strong>Add a health record</strong>
-            <small>Upload a document or scan</small>
-          </span>
-          <ChevronRight size={18} />
-        </a>
         <a href="#/records?add=symptom">
           <span className="action-icon warm">
             <Activity size={23} />
@@ -95,6 +90,16 @@ export function Dashboard() {
           <span>
             <strong>Log a symptom</strong>
             <small>Remember how you’re feeling</small>
+          </span>
+          <ChevronRight size={18} />
+        </a>
+        <a href="#/records?add=import">
+          <span className="action-icon">
+            <FilePlus2 size={23} />
+          </span>
+          <span>
+            <strong>Add a health record</strong>
+            <small>Upload a document or scan</small>
           </span>
           <ChevronRight size={18} />
         </a>
@@ -110,10 +115,10 @@ export function Dashboard() {
               <Card className="recent-records">
                 <div className="record-list">
                   {sessions.map((session) => (
-                    <button
+                    <a
                       className="record-row session-row"
                       key={session.id}
-                      onClick={() => setRecordingID(session.id)}
+                      href={`#/recordings/${encodeURIComponent(session.id)}`}
                     >
                       <span className="record-icon">
                         <Mic size={20} />
@@ -126,7 +131,7 @@ export function Dashboard() {
                         </span>
                       </span>
                       <ChevronRight size={17} />
-                    </button>
+                    </a>
                   ))}
                 </div>
               </Card>
@@ -199,7 +204,12 @@ export function Dashboard() {
                 Allergies <span>{profile.allergies.length}</span>
               </h4>
               {profile.allergies.length ? (
-                profile.allergies.map((value) => <p key={value}>{demoLabel(value, profile.isDemo)}</p>)
+                profile.allergies.map((value) => (
+                  <p key={value}>
+                    {demoLabel(value, profile.isDemo)}
+                    <SourceLink sources={profileSources(profile, records, 'allergies', value)} />
+                  </p>
+                ))
               ) : (
                 <p className="muted">None recorded</p>
               )}
@@ -210,7 +220,10 @@ export function Dashboard() {
                 Medications <span>{profile.medications.length}</span>
               </h4>
               {profile.medications.slice(0, 2).map((value) => (
-                <p key={value}>{demoLabel(value, profile.isDemo)}</p>
+                <p key={value}>
+                  {demoLabel(value, profile.isDemo)}
+                  <SourceLink sources={profileSources(profile, records, 'medications', value)} />
+                </p>
               ))}
               {!profile.medications.length && <p className="muted">None recorded</p>}
             </div>
@@ -225,8 +238,6 @@ export function Dashboard() {
           <VisitPreparation />
         </Modal>
       )}
-      {capture && <RecordingCapture onClose={() => setCapture(false)} onSaved={setRecordingID} />}
-      {recording && <RecordingDetail recording={recording} onClose={() => setRecordingID(null)} />}
     </div>
   );
 }

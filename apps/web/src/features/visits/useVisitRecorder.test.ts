@@ -238,4 +238,45 @@ describe('visit recorder lifecycle', () => {
     expect(render().error).toContain('Microphone access was not allowed');
     expect(FakeRecorder.instances).toHaveLength(0);
   });
+
+  it('keeps recording when a different workspace hash is opened', async () => {
+    const source = microphone();
+    requestMicrophone.mockResolvedValue(source.stream);
+    await render().start();
+    vi.stubGlobal('location', { hash: '#/records/synthetic-report' });
+    const result = render();
+    expect(result.state).toBe('recording');
+    expect(FakeRecorder.instances).toHaveLength(1);
+    expect(source.track.stop).not.toHaveBeenCalled();
+    expect(FakeRecorder.instances[0].pause).not.toHaveBeenCalled();
+  });
+
+  it('releases the microphone and original bytes when a draft is discarded', async () => {
+    const source = microphone();
+    requestMicrophone.mockResolvedValue(source.stream);
+    await render().start();
+    const media = FakeRecorder.instances[0];
+    media.emit([1, 2, 3]);
+    elapsed = 2500;
+    render().stop();
+    expect(render().blob?.size).toBe(3);
+    render().reset();
+    expect(render().state).toBe('idle');
+    expect(render().seconds).toBe(0);
+    expect(render().blob).toBeNull();
+    expect(source.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a pending permission request when its shared draft is discarded', async () => {
+    const request = deferred<MediaStream>();
+    requestMicrophone.mockReturnValue(request.promise);
+    const pending = render().start();
+    render().reset();
+    const source = microphone();
+    request.resolve(source.stream);
+    await pending;
+    expect(render().state).toBe('idle');
+    expect(source.track.stop).toHaveBeenCalledOnce();
+    expect(FakeRecorder.instances).toHaveLength(0);
+  });
 });

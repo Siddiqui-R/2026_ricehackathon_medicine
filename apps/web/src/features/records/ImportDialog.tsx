@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Camera, Check, FileText, LoaderCircle, Upload } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
+import { APIError } from '../../core/api';
 import { uid, nowISO, localExcerpt, localExcerptDetails, excerptOmissionNotice } from '../../core/domain';
 import type { MedicalRecord } from '../../core/models';
 import { Badge, Button, Card, Field, Modal } from '../../components/ui';
@@ -142,7 +143,16 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       };
       await saveRecord(record, undefined, file);
       notify('Record saved with its original file and a local excerpt.');
-      if (connectedAI && text.trim()) void summarizeRecord(record.id).catch(reportError);
+      if (connectedAI && text.trim())
+        void summarizeRecord(record.id).catch((failure) => {
+          if (failure instanceof APIError && failure.status === 401) reportError(failure);
+          else
+            reportError(
+              new Error(
+                `Your file was saved successfully. The AI summary could not be created. ${failure instanceof Error ? failure.message : 'Try the summary again from this record.'}`,
+              ),
+            );
+        });
       onClose();
       location.hash = `/records/${encodeURIComponent(record.id)}`;
     } catch (reason) {

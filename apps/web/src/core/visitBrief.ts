@@ -53,12 +53,12 @@ export function briefVisit(input: VisitBriefInput): Visit {
     status: 'upcoming',
   };
 }
-// The profile is explicitly patient-provided context, never presented as a clinician's record.
+// The profile is context, never presented as an original clinician's record.
 export function briefSources(snapshot: AppSnapshot): MedicalRecord[] {
   const profile = snapshot.profile;
   const context: MedicalRecord = {
     id: uid(),
-    title: 'Patient-provided medical profile',
+    title: 'Medical profile',
     kind: 'Profile',
     provider: '',
     date: nowISO(),
@@ -72,7 +72,7 @@ export function briefSources(snapshot: AppSnapshot): MedicalRecord[] {
     version: 1,
     text: JSON.stringify({
       source:
-        'Current patient-provided profile, dated when supplied for this request. Empty lists mean not documented, not confirmed absent.',
+        'Current medical profile containing patient-entered details and report-derived AI facts, dated when supplied for this request. Review report-derived facts against their linked original records. Empty lists mean not documented, not confirmed absent.',
       allergies: profile.allergies,
       medications: profile.medications,
       conditions: profile.conditions,

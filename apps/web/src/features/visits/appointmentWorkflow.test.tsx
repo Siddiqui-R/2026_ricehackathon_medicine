@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { RevaProvider } from '../../core/RevaContext';
 import { RevaStore } from '../../core/store';
 import { MemoryRepository, sample, transport } from '../../core/__tests__/fixtures';
-import { RecordingCapture } from './RecordingCapture';
+import { RecordingSessionProvider } from './RecordingSession';
+import { RecordingConsentDialog } from './RecordingSessionChrome';
 import { RecordingDetail } from './RecordingDetail';
 import { VisitDetail } from './VisitDetail';
 import { Dashboard } from '../Dashboard';
@@ -35,37 +36,27 @@ describe('appointment recording interface', () => {
     const store = await ready();
     const html = renderToStaticMarkup(
       <RevaProvider store={store}>
-        <Dashboard />
+        <RecordingSessionProvider>
+          <Dashboard />
+        </RecordingSessionProvider>
       </RevaProvider>,
     );
-    expect(button(html, 'Upcoming visit')).toBeDefined();
+    expect(button(html, 'Prepare for this visit')).toBeDefined();
     expect(button(html, 'Record session')).toBeDefined();
     expect(html).toContain('Session recordings');
     expect(html).not.toMatch(/Your next appointment|Add an appointment|All appointments/);
   });
 
-  it('requires doctor and everyone consent before starting, uploading or saving', async () => {
-    const store = await ready();
-    vi.stubGlobal('window', { isSecureContext: true });
-    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn() } });
-    vi.stubGlobal('MediaRecorder', class {});
-    try {
-      const html = renderToStaticMarkup(
-        <RevaProvider store={store}>
-          <RecordingCapture onClose={() => {}} />
-        </RevaProvider>,
-      );
-      expect(html).toContain(
-        'Get your doctor’s consent and permission from everyone present before recording.',
-      );
-      expect(html).toContain('My doctor and everyone present agreed to recording.');
-      expect(button(html, 'Start recording')).toContain('disabled=""');
-      expect(button(html, 'Save recording')).toContain('disabled=""');
-      expect(html.match(/<input\b[^>]*type="file"[^>]*>/)?.[0]).toContain('disabled=""');
-      expect(html).not.toContain('Microphone recording is unavailable');
-    } finally {
-      vi.unstubAllGlobals();
-    }
+  it('requires doctor and everyone consent before entering the full-page recorder', () => {
+    const html = renderToStaticMarkup(<RecordingConsentDialog onCancel={() => {}} onContinue={() => {}} />);
+    expect(html).toContain(
+      'Get your doctor’s consent and permission from everyone present before recording.',
+    );
+    expect(html).toContain('My doctor and everyone present agreed to recording.');
+    expect(button(html, 'Continue to recording')).toContain('disabled=""');
+    expect(html).toContain('recording-consent');
+    expect(html).not.toContain('type="file"');
+    expect(html).not.toContain('Start recording</button>');
   });
 
   it('shows Record appointment with no booking or calling controls', async () => {
@@ -74,7 +65,9 @@ describe('appointment recording interface', () => {
     try {
       const html = renderToStaticMarkup(
         <RevaProvider store={store}>
-          <VisitDetail id={store.getState().snapshot!.visits[0].id} />
+          <RecordingSessionProvider>
+            <VisitDetail id={store.getState().snapshot!.visits[0].id} />
+          </RecordingSessionProvider>
         </RevaProvider>,
       );
       expect(button(html, 'Record appointment')).toBeDefined();

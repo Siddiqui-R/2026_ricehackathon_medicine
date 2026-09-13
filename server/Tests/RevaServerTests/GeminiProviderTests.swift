@@ -72,24 +72,31 @@ struct GeminiProviderTests {
         let requests = GeminiRequests()
         let mock = GeminiHTTPTransport { request in
             await requests.append(request)
-            return .init(status: 200, data: try providerEnvelope([
-                "overview": "Reason: Follow-up.", "questions": [], "selectedRecordIDs": []
-            ]))
+            return .init(
+                status: 200,
+                data: try providerEnvelope([
+                    "overview": "Reason: Follow-up.", "questions": [], "selectedRecordIDs": [],
+                ]))
         }
         let configuration = try ProviderConfiguration(
             environment: ["GEMINI_API_KEY": fakeGeminiKey, "GEMINI_MODEL": "gemini-other-summary-model"],
             paidAccessAllowed: true)
-        let result = try await GeminiService(configuration: configuration, transport: mock).prepare(preparationInput)
+        let result = try await GeminiService(configuration: configuration, transport: mock).prepare(
+            preparationInput)
         #expect(result.model == "gemini-3.8-flash")
         let request = try #require(await requests.values.first)
         #expect(request.url?.absoluteString.hasSuffix("models/gemini-3.8-flash:generateContent") == true)
         let oversized = GeminiHTTPTransport { _ in
-            .init(status: 200, data: try providerEnvelope([
-                "overview": String(repeating: "word ", count: 181), "questions": [], "selectedRecordIDs": []
-            ]))
+            .init(
+                status: 200,
+                data: try providerEnvelope([
+                    "overview": String(repeating: "word ", count: 181), "questions": [],
+                    "selectedRecordIDs": [],
+                ]))
         }
         await #expect(throws: (any Error).self) {
-            try await GeminiService(configuration: configuration, transport: oversized).prepare(preparationInput)
+            try await GeminiService(configuration: configuration, transport: oversized).prepare(
+                preparationInput)
         }
     }
 
@@ -154,7 +161,7 @@ struct GeminiProviderTests {
                         try request.content.encode(summaryInput)
                     },
                     afterResponse: { response async in
-                        #expect(response.status == .serviceUnavailable)
+                        #expect(response.status == .failedDependency)
                         #expect(!response.body.string.contains(fakeGeminiKey))
                     })
             }
@@ -197,6 +204,8 @@ struct GeminiProviderTests {
         #expect(
             decoded.recordID == input.recordID && decoded.title == input.title && decoded.text == transcript)
         let generation = try #require(payload["generationConfig"] as? [String: Any])
+        #expect(generation["candidateCount"] == nil)
+        #expect(generation["temperature"] == nil)
         let schema = try #require(generation["responseJsonSchema"] as? [String: Any])
         #expect(schema["required"] as? [String] == ["summary"])
         #expect(schema["additionalProperties"] as? Bool == false)
@@ -353,7 +362,7 @@ struct GeminiProviderTests {
                     .POST, "v1/ai/prepare", headers: providerHeaders(),
                     beforeRequest: { request in
                         try request.content.encode(preparationInput)
-                    }, afterResponse: { response async in #expect(response.status == .serviceUnavailable) })
+                    }, afterResponse: { response async in #expect(response.status == .unprocessableEntity) })
             }
         }
     }
@@ -379,7 +388,9 @@ struct GeminiProviderTests {
                         try request.content.encode(summaryInput)
                     },
                     afterResponse: { response async in
-                        #expect(response.status == .serviceUnavailable)
+                        #expect(
+                            response.status
+                                == (result.status == 429 ? .tooManyRequests : .unprocessableEntity))
                         #expect(!response.body.string.contains(fakeGeminiKey))
                         #expect(!response.body.string.contains("provider-error-secret"))
                     })

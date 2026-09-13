@@ -5,6 +5,7 @@
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 
 // MARK: - Fixed local API destination and explicit proxy paths
 const target = new URL(process.env.REVA_API_ORIGIN || 'http://127.0.0.1:8080');
@@ -28,5 +29,13 @@ export default defineConfig({
     strictPort: true,
     proxy: { '/v1': { target: target.origin }, '/health': { target: target.origin } },
   },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
+      },
+    },
+  },
 });

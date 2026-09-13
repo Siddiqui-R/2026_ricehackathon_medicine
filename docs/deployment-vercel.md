@@ -47,6 +47,8 @@ The Vercel browser build uploads originals/audio in 3 MiB chunks and downloads o
 
 Provider calls require authentication and share limits of 30 per owner per hour and 200 total per day. Failures preserve saved originals. Gemini output is validated against a strict schema and supplied source IDs. Scribe supplies recording-relative times and neutral speaker labels. Users review transcript accuracy and confirm everyone's consent before recording.
 
+The adapters omit `candidateCount` and sampling overrides such as `temperature`: Google's current Gemini 3.8 migration instructions require their removal. An upstream 400 is a request/configuration error, not evidence of exhausted credits. The API reports permanent provider request/output failures as 422, key/model/setup failures as 424, quota limits as 429, and temporary network/provider outages as 503; it never returns raw upstream messages. Check the configured model and API permissions when an operation needs configuration changes, and only retry transient failures with a bounded backoff. [Gemini migration instructions](https://ai.google.dev/gemini-api/docs/generate-content/latest-model), [API errors](https://ai.google.dev/gemini-api/docs/generate-content/api-errors), [retry guidance](https://ai.google.dev/gemini-api/docs/troubleshooting).
+
 ## Verification checklist
 
 - [x] Browser suite: 224 tests, including chunked transfers and changed-original rejection.

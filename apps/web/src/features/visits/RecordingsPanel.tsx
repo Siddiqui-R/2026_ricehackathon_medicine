@@ -11,13 +11,13 @@ import type { Visit, VisitRecording } from '../../core/models';
 import { durationLabel, formatDate, uid } from '../../core/domain';
 import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Card } from '../../components/ui';
-import { RecordingCapture } from './RecordingCapture';
+import { useRecordingSession } from './RecordingSession';
 import { RecordingDetail } from './RecordingDetail';
 
 // MARK: - Visit recordings and explicit fictional sample loading
 export function RecordingsPanel({ visit }: { visit: Visit }) {
   const { snapshot, mutate, reportError } = useReva();
-  const [capturing, setCapturing] = useState(false);
+  const recordingSession = useRecordingSession();
   const [selected, setSelected] = useState<string | null>(() =>
     new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('recording'),
   );
@@ -68,7 +68,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
         </div>
         <Mic size={21} />
       </div>
-      <Button onClick={() => setCapturing(true)}>
+      <Button onClick={() => recordingSession.requestSession(visit)}>
         <Mic size={17} /> Record appointment
       </Button>
       {recordings.length ? (
@@ -122,7 +122,6 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
           {sampleBusy ? 'Opening…' : 'Open sample'}
         </Button>
       </details>
-      {capturing && <RecordingCapture visit={visit} onClose={() => setCapturing(false)} />}
       {selectedRecording && (
         <RecordingDetail recording={selectedRecording} onClose={() => setSelected(null)} />
       )}

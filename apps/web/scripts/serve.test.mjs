@@ -122,6 +122,10 @@ test(
       path.join(temporary, 'scripts', 'serve.mjs'),
     );
     await Promise.all([
+      copyFile(
+        fileURLToPath(new URL('../404.html', import.meta.url)),
+        path.join(temporary, 'dist', '404.html'),
+      ),
       writeFile(
         path.join(temporary, 'dist', 'index.html'),
         '<!doctype html><title>Synthetic Reva wrapper test</title>',
@@ -350,6 +354,24 @@ test(
       assert.equal(result.status, 502);
       assert.equal(result.headers.location, undefined);
       assert.equal(trapHits, 0);
+    });
+
+    await t.test('unknown pages return a useful HTML 404 while missing API routes stay JSON', async () => {
+      for (const target of ['/hospital', '/hospital/ward?visit=1', '/app/missing', '/missing.html']) {
+        const result = await send(webPort, target);
+        assert.equal(result.status, 404, target);
+        assert.equal(result.headers['content-type'], 'text/html; charset=utf-8');
+        assert.match(result.bytes.toString(), /This page doesn’t exist/);
+        assert.match(result.bytes.toString(), /href="\/">Back to home<\/a>/);
+        assert.match(result.headers['content-security-policy'], /frame-ancestors 'none'/);
+      }
+      const head = await send(webPort, '/hospital', { method: 'HEAD' });
+      assert.equal(head.status, 404);
+      assert.equal(head.bytes.length, 0);
+      assert.ok(Number(head.headers['content-length']) > 0);
+      const api = await send(webPort, '/v1/hospital');
+      assert.equal(api.status, 404);
+      assert.equal(api.headers['content-type'], 'application/json');
     });
 
     // MARK: - Compiled assets retain browser security headers and realpath confinement

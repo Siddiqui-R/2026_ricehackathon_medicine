@@ -1,0 +1,61 @@
+/* Shared by the static hosting fallback and the in-app recovery message. */
+.not-found-page {
+  margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 32px 24px;
+  background: #fbf7f5;
+  color: #30292a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.not-found-content {
+  width: 100%;
+  max-width: 520px;
+  margin: auto;
+  padding: 48px 0;
+  text-align: center;
+}
+.not-found-content .not-found-code {
+  margin: 0 0 18px;
+  color: #b84250;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 3px;
+}
+.not-found-content h1 {
+  margin: 0 0 18px;
+  font-size: clamp(30px, 5vw, 44px);
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.not-found-content p {
+  margin: 0;
+  color: #716164;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.not-found-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 28px;
+  padding: 13px 24px;
+  border-radius: 999px;
+  background: #b84250;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.not-found-home:hover {
+  background: #9e3542;
+}
+.not-found-home:focus-visible {
+  outline: 3px solid #9e3542;
+  outline-offset: 4px;
+}

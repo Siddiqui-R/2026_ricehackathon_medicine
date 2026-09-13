@@ -1,6 +1,6 @@
 // Purpose: Coordinate responsive navigation, global record search, and shared status feedback.
 // Inputs: Browser hash routes and the current Reva context (demo or signed-in account mode).
-// Outputs: Desktop sidebar, tablet/mobile navigation, a Log out item in account mode, and the selected screen.
+// Outputs: Desktop sidebar, tablet/mobile navigation, an account action menu, and the selected screen.
 // Side effects: Changes routes, announces operation feedback, moves focus after navigation, and in account
 //               mode asks the store to revoke the session on Log out.
 
@@ -12,25 +12,28 @@ import {
   ChevronRight,
   FileText,
   LayoutDashboard,
-  LogOut,
   Search,
-  Settings,
   ShieldCheck,
   UserRound,
   X,
 } from 'lucide-react';
 import { useReva } from './core/RevaContext';
 import { Brand } from './components/Brand';
+import { NotFound } from './components/NotFound';
+import { readWorkspaceRoute } from './routing';
 import { Button } from './components/ui';
 import { Dashboard } from './features/Dashboard';
-import { DemoSwitcher } from './features/demo/DemoSwitcher';
-import { demoLabel } from './core/presentation';
+import { AccountMenu } from './components/AccountMenu';
 import { SettingsPage } from './features/SettingsPage';
 import { RecordsPage } from './features/records/RecordsPage';
 import { RecordDetail } from './features/records/RecordDetail';
 import { MedicalProfilePage } from './features/profile/MedicalProfilePage';
 import { VisitsPage } from './features/visits/VisitsPage';
 import { VisitDetail } from './features/visits/VisitDetail';
+import { RecordingSessionProvider, useRecordingSession } from './features/visits/RecordingSession';
+import { RecordingBanner, RecordingConsent } from './features/visits/RecordingSessionChrome';
+import { RecordingPage } from './features/visits/RecordingPage';
+import { SavedRecordingPage } from './features/visits/SavedRecordingPage';
 
 // MARK: - Small hash router supports bookmarks and native browser history
 const navigation = [
@@ -39,14 +42,19 @@ const navigation = [
   { id: 'profile', title: 'Medical profile', mobile: 'Profile', icon: UserRound },
 ];
 function readRoute() {
-  const hash = location.hash.slice(1) || '/summary';
-  const [path, query] = hash.split('?');
-  const [section = 'summary', id] = path.split('/').filter(Boolean);
-  return { section, id: id ? decodeURIComponent(id) : undefined, query: new URLSearchParams(query), hash };
+  return readWorkspaceRoute(location.hash);
 }
 
 export function App() {
+  return (
+    <RecordingSessionProvider>
+      <Workspace />
+    </RecordingSessionProvider>
+  );
+}
+function Workspace() {
   const store = useReva();
+  const recordingSession = useRecordingSession();
   const [route, setRoute] = useState(readRoute);
   const [search, setSearch] = useState('');
   const content = useRef<HTMLElement>(null);
@@ -61,7 +69,13 @@ export function App() {
   useEffect(() => {
     const name =
       navigation.find((item) => item.id === route.section)?.title ??
-      (route.section === 'visits' ? 'Pre-visit brief' : 'Settings');
+      (route.section === 'visits'
+        ? 'Pre-visit brief'
+        : route.section.startsWith('recording')
+          ? 'Session recording'
+          : route.section === 'settings'
+            ? 'Settings'
+            : 'Page not found');
     document.title = `${name} · Reva`;
     content.current?.focus({ preventScroll: true });
   }, [route.hash]);
@@ -91,11 +105,21 @@ export function App() {
   const profile = store.snapshot.profile;
   const navTitle =
     navigation.find((item) => item.id === route.section)?.title ??
-    (route.section === 'visits' ? 'Pre-visit brief' : 'Settings');
+    (route.section === 'visits'
+      ? 'Pre-visit brief'
+      : route.section.startsWith('recording')
+        ? 'Session recording'
+        : route.section === 'settings'
+          ? 'Settings'
+          : 'Page not found');
   const account = store.mode === 'account';
   const demo = store.mode === 'demo' && profile.isDemo;
   // The store reports a failed revoke in the feedback banner; a successful one leaves this page.
-  const logout = () => void store.logout().catch(() => undefined);
+  const logout = () => {
+    if (!recordingSession.allowWorkspaceExit()) return;
+    if (account) void store.logout().catch(() => undefined);
+    else location.assign('/');
+  };
 
   // MARK: - Desktop navigation and phone tabs share the same active route and labels
   return (
@@ -142,43 +166,8 @@ export function App() {
           <ArrowUpRight size={16} />
         </a>
         <div className="sidebar-bottom">
-          <a
-            className={`nav-item ${route.section === 'settings' ? 'active' : ''}`}
-            href="#/settings"
-            aria-label="Settings & connections"
-            title="Settings & connections"
-            aria-current={route.section === 'settings' ? 'page' : undefined}
-          >
-            <Settings size={19} />
-            <span>Settings & connections</span>
-          </a>
-          {account && (
-            <button
-              type="button"
-              className="nav-item nav-button"
-              aria-label="Log out"
-              title="Log out"
-              onClick={logout}
-              disabled={store.busy}
-            >
-              <LogOut size={19} />
-              <span>Log out</span>
-            </button>
-          )}
           <div className="sidebar-divider" />
-          <a
-            href="#/profile"
-            className="patient-link"
-            aria-label={`${demoLabel(profile.name, profile.isDemo)} — medical profile`}
-          >
-            <span className="avatar">{profile.initials}</span>
-            <span>
-              <strong>{demoLabel(profile.name, profile.isDemo)}</strong>
-              <small>{account || !profile.isDemo ? 'Your medical profile' : 'Demo profile'}</small>
-            </span>
-            <ChevronRight size={16} />
-          </a>
-          {demo && <DemoSwitcher disabled={store.busy} />}
+          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} />
         </div>
       </aside>
       <div className="workspace">
@@ -202,32 +191,13 @@ export function App() {
               <ChevronRight size={17} />
             </button>
           </form>
-          <a
-            href="#/settings"
-            className="workspace-status"
-            aria-label={
-              account ? 'Account settings' : profile.isDemo ? 'Demo settings' : 'Browser storage settings'
-            }
-          >
+          <span className="workspace-status">
             <ShieldCheck size={17} />
             <span>{account ? 'Your account' : profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
-          </a>
-          {demo && <DemoSwitcher disabled={store.busy} className="mobile-demo-switch" />}
-          <a href="#/settings" className="mobile-settings icon-button" aria-label="Settings">
-            <Settings size={21} />
-          </a>
-          {account && (
-            <button
-              type="button"
-              className="mobile-settings mobile-logout icon-button"
-              onClick={logout}
-              disabled={store.busy}
-              aria-label="Log out"
-            >
-              <LogOut size={21} />
-            </button>
-          )}
+          </span>
+          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} compact />
         </header>
+        <RecordingBanner onRecordingPage={route.section === 'recording'} />
         <main ref={content} id="main-content" className="main-content" tabIndex={-1}>
           {route.section === 'records' ? (
             route.id ? (
@@ -250,12 +220,18 @@ export function App() {
             ) : (
               <VisitsPage key={route.hash} />
             )
+          ) : route.section === 'recording' ? (
+            <RecordingPage />
+          ) : route.section === 'recordings' && route.id ? (
+            <SavedRecordingPage id={route.id} />
           ) : route.section === 'profile' ? (
             <MedicalProfilePage />
           ) : route.section === 'settings' ? (
             <SettingsPage />
-          ) : (
+          ) : route.section === 'summary' ? (
             <Dashboard />
+          ) : (
+            <NotFound />
           )}
           <footer className="workspace-footer">
             <span>
@@ -282,6 +258,7 @@ export function App() {
           </a>
         ))}
       </nav>
+      <RecordingConsent />
       {(store.error || store.notice) && (
         <div
           className={`feedback ${store.error ? 'feedback-error' : ''}`}
