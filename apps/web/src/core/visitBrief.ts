@@ -9,7 +9,7 @@ import type { AIPreparation, AppSnapshot, MedicalRecord, PatientProfile, Visit }
 import { nowISO, uid } from './domain';
 import { defaultTimeZone } from './dates';
 
-export const BRIEF_MODEL = 'gemini-3.8-flash';
+export const BRIEF_MODEL = 'gemini-flash-lite-latest';
 export interface VisitBriefInput {
   type: string;
   concern: string;
@@ -24,6 +24,8 @@ export interface ClinicalBrief {
   sources: { id: string; title: string; date: string }[];
   model: string;
   sourceSignature: string;
+  example?: boolean;
+  overviewSourceIDs?: string[];
 }
 export function briefContextSignature(snapshot: AppSnapshot): string {
   return JSON.stringify([snapshot.profile, snapshot.records]);
@@ -106,8 +108,15 @@ export function clinicalBrief(
   result: AIPreparation,
 ): ClinicalBrief {
   validateBriefText(result);
-  if (result.model !== BRIEF_MODEL)
-    throw new Error('The brief requires Gemini 3.8 Flash. Update the server and try again.');
+  if (
+    typeof result.model !== 'string' ||
+    !result.model.trim() ||
+    result.model.length > 100 ||
+    result.model.includes('\0')
+  )
+    throw new Error(
+      'The brief is missing valid provider model information. Update the server and try again.',
+    );
   if (
     result.selectedRecordIDs.length > 6 ||
     new Set(result.selectedRecordIDs).size !== result.selectedRecordIDs.length ||

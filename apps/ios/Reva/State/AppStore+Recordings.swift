@@ -25,53 +25,62 @@ extension AppStore {
     // MARK: - Appointment transcript summary
     // Publish only against the same recording and exact transcript; unrelated notes stay authoritative.
     func summarizeRecording(_ id: String) async {
-        guard !isProviderBusy, let original = recording(id) else { return }
-        guard providerStatus?.gemini.configured == true else {
-            errorMessage = "Connect Gemini in Profile & settings to summarize this appointment."
-            return
-        }
-        guard !original.segments.isEmpty,
-            original.segments.contains(where: {
-                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            })
-        else {
-            errorMessage = "Transcribe the appointment before generating its summary."
-            return
-        }
+        guard !isProviderBusy, recordingProcessingID != id, recording(id) != nil else { return }
         let context = providerContext
         isProviderBusy = true
         defer { isProviderBusy = false }
         do {
-            let source = MedicalRecord(
-                id: original.id, title: original.title, kind: "Recording", provider: "",
-                date: original.createdAt, text: original.transcriptText, summary: "")
-            let result = try await providerClient().summarize(source)
-            guard context == providerContext else { return }
-            try Task.checkCancellation()
-            guard var latest = recording(id), latest.visitID == original.visitID,
-                latest.createdAt == original.createdAt, latest.title == original.title,
-                latest.audioFilename == original.audioFilename, latest.duration == original.duration,
-                latest.isSample == original.isSample, latest.segments == original.segments
-            else {
-                throw RevaError.invalid(
-                    "The recording or transcript changed while summarizing. Your edits were kept; summarize the current transcript again."
-                )
-            }
-            guard !result.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                !result.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else {
-                throw RevaError.invalid(
-                    "No appointment summary was returned. Your transcript and notes were kept.")
-            }
-            latest.aiSummary = result.summary
-            latest.aiSummaryModel = result.model
-            latest.aiSummaryGeneratedAt = RevaDate.now
-            try saveRecordingWithExistingMemory(latest)
+            try await processRecordingSummary(id)
             notice = "AI appointment summary saved. Review it against the transcript and recording."
         } catch {
             guard context == providerContext else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    func processRecordingSummary(_ id: String) async throws {
+        guard let original = recording(id), !original.segments.isEmpty,
+            original.segments.allSatisfy({ !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+        else {
+            throw RevaError.invalid("A complete saved transcript is required for the appointment summary.")
+        }
+        guard providerStatus?.gemini.configured == true else {
+            throw RevaError.invalid("The summary service is not available yet.")
+        }
+        let context = providerContext
+        var source = MedicalRecord(
+            id: original.id, title: original.title, kind: "Recording", provider: "",
+            date: original.createdAt, text: original.transcriptText, summary: "")
+        if let capturedAt = original.capturedAt {
+            source.date = capturedAt
+            source.dateSource = "recorded"
+        } else if let savedAt = original.savedAt {
+            source.date = RevaDate.day(RevaDate.parse(savedAt), zone: RevaDate.defaultTimeZone)
+            source.dateSource = "added"
+        }
+        let result = try await withProviderRequest { try await self.providerClient().summarize(source) }
+        guard context == providerContext else { throw CancellationError() }
+        try Task.checkCancellation()
+        guard var latest = recording(id), latest.visitID == original.visitID,
+            latest.createdAt == original.createdAt, latest.title == original.title,
+            latest.capturedAt == original.capturedAt, latest.savedAt == original.savedAt,
+            latest.audioFilename == original.audioFilename, latest.duration == original.duration,
+            latest.isSample == original.isSample, latest.segments == original.segments
+        else {
+            throw RevaError.invalid(
+                "The recording or transcript changed while summarizing. Your edits were kept; summarize the current transcript again."
+            )
+        }
+        guard !result.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            !result.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw RevaError.invalid(
+                "No appointment summary was returned. Your transcript and notes were kept.")
+        }
+        latest.aiSummary = result.summary
+        latest.aiSummaryModel = result.model
+        latest.aiSummaryGeneratedAt = RevaDate.now
+        try saveRecordingWithExistingMemory(latest)
     }
     // MARK: - Separate notes merge
     // Resolve the current recording by identity; saving notes cannot replace a newer transcript or audio link.
@@ -110,6 +119,17 @@ extension AppStore {
         try mutate { data in
             try Self.reconcileMemory(
                 recordingID: recordingID, correctedSegmentTexts: correctedSegmentTexts, data: &data)
+            if correctedSegmentTexts != nil,
+                let index = data.recordings.firstIndex(where: { $0.id == recordingID }),
+                !data.recordings[index].isSample, data.recordings[index].audioFilename != nil,
+                !data.recordings[index].hasAISummary
+            {
+                data.recordings[index].status = "processing-analyzing"
+            }
+        }
+        if correctedSegmentTexts != nil {
+            recordingProcessingErrors.removeValue(forKey: recordingID)
+            considerRecordingProcessing()
         }
         notice =
             correctedSegmentTexts == nil
@@ -194,6 +214,16 @@ extension AppStore {
         record.summary =
             recording.hasAISummary ? recording.aiSummary! : ReportEngine.localExcerpt(sourceText)
         record.summaryModel = recording.hasAISummary ? recording.aiSummaryModel : nil
+        record.summaryGeneratedAt = recording.hasAISummary ? recording.aiSummaryGeneratedAt : nil
+        if existingIndex == nil {
+            if let capturedAt = recording.capturedAt {
+                record.date = RevaDate.day(RevaDate.parse(capturedAt), zone: RevaDate.defaultTimeZone)
+                record.dateSource = "recorded"
+            } else if let savedAt = recording.savedAt {
+                record.date = RevaDate.day(RevaDate.parse(savedAt), zone: RevaDate.defaultTimeZone)
+                record.dateSource = "added"
+            }
+        }
         let origin =
             recording.isSample
             ? "Fictional sample transcript. No matching audio."
@@ -215,6 +245,7 @@ extension AppStore {
         if let existingIndex {
             if previous.text != record.text || previous.summary != record.summary
                 || previous.summaryModel != record.summaryModel
+                || previous.date != record.date || previous.dateSource != record.dateSource
             {
                 record.version = previous.version + 1
             }
@@ -224,6 +255,161 @@ extension AppStore {
         }
     }
 
+}
+
+// MARK: - Durable automatic recording processing
+// A single app-owned task survives navigation, resumes pending stages on reopen, and never trusts live previews.
+extension AppStore {
+    static let pendingRecordingStates: Set<String> = [
+        "processing-queued", "processing-transcribing", "processing-analyzing", "processing-retranscribing",
+    ]
+    var hasPendingRecordings: Bool {
+        recordings.contains {
+            !$0.isSample && $0.audioFilename != nil && Self.pendingRecordingStates.contains($0.status)
+        }
+    }
+    func queueRecording(_ recording: VisitRecording) throws {
+        guard !recording.isSample, let name = recording.audioFilename, sourceURL(name) != nil,
+            recording.duration.isFinite, recording.duration > 0
+        else { throw RevaError.invalid("Save a valid original audio recording first.") }
+        var queued = recording
+        queued.status = "processing-queued"
+        queued.segments = []
+        queued.clearAISummary()
+        queued.savedAt = queued.savedAt ?? RevaDate.now
+        try save(queued)
+        notice = "Recording saved. Its transcript and summary are being prepared automatically."
+        considerRecordingProcessing()
+    }
+    func stopRecordingProcessing(clearErrors: Bool = false) {
+        recordingProcessingGeneration = UUID()
+        recordingProcessingTask?.cancel()
+        recordingProcessingTask = nil
+        recordingProcessingID = nil
+        if clearErrors { recordingProcessingErrors.removeAll() }
+    }
+    func recordingProcessingMessage(_ recording: VisitRecording) -> String? {
+        if let failure = recordingProcessingErrors[recording.id] { return failure }
+        switch recording.status {
+        case "processing-complete": return "Transcript and summary ready."
+        case "processing-failed", "processing-reprocess-failed":
+            return "Processing could not finish. Your audio and completed steps are saved."
+        case "processing-queued", "processing-transcribing", "processing-retranscribing",
+            "processing-analyzing":
+            if recording.segments.isEmpty || recording.status == "processing-retranscribing" {
+                return providerStatus?.transcription.configured == true
+                    ? "Preparing your final transcript automatically…"
+                    : "Audio saved. Waiting for transcription service."
+            }
+            return providerStatus?.gemini.configured == true
+                ? "Preparing your appointment summary automatically…"
+                : "Transcript saved. Waiting for summary service."
+        default: return nil
+        }
+    }
+    func retryRecordingProcessing(_ id: String, reprocess: Bool = false) {
+        guard recordingProcessingID != id, let original = recording(id), !original.isSample,
+            original.audioFilename != nil
+        else { return }
+        recordingProcessingErrors.removeValue(forKey: id)
+        perform {
+            try mutate { data in
+                guard let index = data.recordings.firstIndex(where: { $0.id == id }) else { return }
+                data.recordings[index].status =
+                    reprocess
+                        || ["processing-reprocess-failed", "processing-retranscribing"].contains(
+                            original.status)
+                    ? "processing-retranscribing" : "processing-queued"
+            }
+        }
+        considerRecordingProcessing()
+    }
+    func considerRecordingProcessing() {
+        guard backgroundActive, !needsSignIn, !providerWorkSuspended, !isProviderBusy,
+            recordingProcessingTask == nil
+        else { return }
+        guard
+            let next = recordings.first(where: {
+                guard !$0.isSample, $0.audioFilename != nil, Self.pendingRecordingStates.contains($0.status),
+                    recordingProcessingErrors[$0.id] == nil
+                else { return false }
+                return $0.segments.isEmpty || $0.status == "processing-retranscribing"
+                    ? providerStatus?.transcription.configured == true
+                    : $0.hasAISummary || providerStatus?.gemini.configured == true
+            })
+        else { return }
+        let generation = UUID()
+        recordingProcessingGeneration = generation
+        recordingProcessingID = next.id
+        let context = providerContext
+        recordingProcessingTask = Task { [weak self] in
+            guard let self else { return }
+            await self.processQueuedRecording(next.id, context: context, generation: generation)
+        }
+    }
+    private func processQueuedRecording(_ id: String, context: ProviderContext, generation: UUID) async {
+        func valid() -> Bool {
+            !Task.isCancelled && backgroundActive && !needsSignIn && !providerWorkSuspended
+                && context == providerContext
+                && generation == recordingProcessingGeneration
+        }
+        var rebuilding = false
+        defer {
+            if generation == recordingProcessingGeneration {
+                recordingProcessingTask = nil
+                recordingProcessingID = nil
+                considerRecordingProcessing()
+            }
+        }
+        do {
+            guard valid(), let original = recording(id), Self.pendingRecordingStates.contains(original.status)
+            else { return }
+            rebuilding = original.status == "processing-retranscribing"
+            if original.segments.isEmpty || rebuilding {
+                try mutate { data in
+                    guard valid(), let index = data.recordings.firstIndex(where: { $0.id == id }) else {
+                        throw CancellationError()
+                    }
+                    data.recordings[index].status =
+                        rebuilding ? "processing-retranscribing" : "processing-transcribing"
+                }
+                try await processRecordingTranscript(id, automatic: true)
+                rebuilding = false
+            }
+            guard valid(), let transcribed = recording(id) else { return }
+            guard transcribed.hasAISummary || providerStatus?.gemini.configured == true else { return }
+            try mutate { data in
+                guard valid(), let index = data.recordings.firstIndex(where: { $0.id == id }) else {
+                    throw CancellationError()
+                }
+                data.recordings[index].status = "processing-analyzing"
+            }
+            if !transcribed.hasAISummary { try await processRecordingSummary(id) }
+            guard valid() else { return }
+            try mutate { data in
+                guard valid(), let index = data.recordings.firstIndex(where: { $0.id == id }),
+                    data.recordings[index].hasAISummary
+                else { throw CancellationError() }
+                try Self.reconcileMemory(recordingID: id, preserveNotes: true, data: &data)
+                data.recordings[index].status = "processing-complete"
+            }
+        } catch {
+            guard valid(), recording(id) != nil else { return }
+            recordingProcessingErrors[id] =
+                error is CancellationError
+                ? "Processing stopped. Your audio and completed steps are saved."
+                : error.localizedDescription
+            if !(error is CancellationError) {
+                try? mutate { data in
+                    guard valid(), let index = data.recordings.firstIndex(where: { $0.id == id }) else {
+                        return
+                    }
+                    data.recordings[index].status =
+                        rebuilding ? "processing-reprocess-failed" : "processing-failed"
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Finalized recording save draft
@@ -239,7 +425,7 @@ extension AppStore {
 
     mutating func save(to store: AppStore) throws -> String {
         guard let recording else { throw RevaError.invalid("There is no finished recording to save.") }
-        try store.save(recording)
+        try store.queueRecording(recording)
         self.recording = nil
         audioURL = nil
         return recording.id

@@ -77,7 +77,10 @@ export function RecordingConsentDialog({
         <Button disabled={!agreed} onClick={() => onContinue(agreed)}>
           Continue to recording <ArrowRight size={18} />
         </Button>
-        <p className="muted small">Your microphone stays off until you choose Start recording.</p>
+        <p className="muted small">
+          Your microphone stays off until you choose Start recording. While recording, audio is sent for live
+          transcription when available.
+        </p>
       </div>
     </dialog>
   );

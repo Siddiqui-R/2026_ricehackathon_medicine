@@ -7,13 +7,14 @@ import Foundation
 
 // MARK: - Controlled service boundaries
 // Transport callbacks suspend requests while the real store processes a connection switch or edit.
-struct ServerState {
+struct ServerState: Codable {
     var revision: Int
     var snapshot: AppSnapshot
 }
 enum ServerFailure: LocalizedError {
     case conflict
     case empty(Int)
+    case response(Int)
     var errorDescription: String? { "Synthetic server failure" }
 }
 @MainActor struct ServerClient {
@@ -29,7 +30,7 @@ enum ServerFailure: LocalizedError {
     static var pushes = 0
     static var lastPushed: AppSnapshot?
     static var files: [String: Data] = [:]
-    init(baseURL: URL, token: String) throws {}
+    init(baseURL: URL, token: String, session: URLSession = .shared) throws {}
     func health() async throws -> String {
         try await Self.onHealth?()
         return "Connected"
@@ -62,13 +63,17 @@ enum ServerFailure: LocalizedError {
 }
 @MainActor struct ProviderClient {
     static var duringRequest: (() async throws -> Void)?
+    static var duringTranscription: (() async throws -> Void)?
+    static var duringSummary: (() async throws -> Void)?
+    static var recordingOperations: [String] = []
+    static var transcriptionInputs: [String: Data] = [:]
     static var requestCount = 0
     static var summaryInput: MedicalRecord?
     static var preparationInput: [MedicalRecord] = []
     static let capabilities = ProviderStatus(
         gemini: .init(configured: true, model: "native-repair-double"),
         transcription: .init(configured: false, model: "native-repair-double"))
-    init(url: String, token: String) throws {}
+    init(url: String, token: String, session: URLSession = .shared) throws {}
     private func wait() async throws {
         Self.requestCount += 1
         await Task.yield()
@@ -78,9 +83,17 @@ enum ServerFailure: LocalizedError {
         try await wait()
         return Self.capabilities
     }
+    func medicalProfile(_ sources: [NativeProfileSource]) async throws -> NativeProfileResult {
+        try await wait()
+        return NativeProfileResult(
+            allergies: [], medications: [], conditions: [], surgeriesAndImplants: [], careNotes: [],
+            model: "native-repair-double")
+    }
     func summarize(_ record: MedicalRecord) async throws -> AISummary {
+        Self.recordingOperations.append("summary:" + record.id)
         Self.summaryInput = record
         try await wait()
+        try await Self.duringSummary?()
         return AISummary(summary: "Current provider summary", model: "native-repair-double")
     }
     func prepare(_ visit: Visit, records: [MedicalRecord]) async throws -> AIPreparation {
@@ -91,7 +104,10 @@ enum ServerFailure: LocalizedError {
             model: "native-repair-double")
     }
     func transcribe(bytes: Data, filename: String) async throws -> AudioTranscription {
+        Self.recordingOperations.append("transcribe:" + filename)
+        Self.transcriptionInputs[filename] = bytes
         try await wait()
+        try await Self.duringTranscription?()
         return AudioTranscription(
             text: "Current transcript", segments: [Self.segment], model: "native-repair-double")
     }
@@ -112,13 +128,84 @@ enum ServerFailure: LocalizedError {
         try await checkProviders(fixture, root: scratch)
         try await checkProviderInputs(fixture, root: scratch)
         try await checkProviderCancellation(fixture, root: scratch)
+        try await checkProviderIdentitySwitchDuringBackoff(fixture, root: scratch)
+        try checkSummaryInputInvalidation(fixture, root: scratch)
         try await checkEditorMerges(fixture, root: scratch)
         try checkEditorConflicts(fixture, root: scratch)
         try checkRecordingPersistence(fixture, root: scratch)
         try await checkAppointmentSummaries(fixture, root: scratch)
+        try await checkAutomaticRecordingProcessing(fixture, root: scratch)
+        try await checkRecordingQueueRecovery(fixture, root: scratch)
+        try await checkRecordingQueueCancellation(fixture, root: scratch)
+        try await checkAutomaticAccountSync(root: scratch)
         print("ALL NATIVE REPAIR STATE CHECKS PASSED")
     }
 
+    @MainActor static func checkAutomaticAccountSync(root: URL) async throws {
+        let user = NativeAccountUser(
+            id: "sync-test", email: "judge@example.test", name: "Native Judge", createdAt: RevaDate.now)
+        let session = NativeAccountSession(token: "synthetic", expiresAt: "2099-01-01T00:00:00Z", user: user)
+        let repository = LocalRepository(directory: root.appendingPathComponent("account-sync"))
+        let store = AppStore(repository: repository, account: session)
+        let empty = NativeAccount.emptySnapshot(user)
+        precondition(
+            store.snapshot == empty && store.useConnectedAI && store.connectionToken == session.token)
+        ServerClient.onPull = nil
+        ServerClient.onPush = nil
+        ServerClient.onUpload = nil
+        ServerClient.onAttachment = nil
+        ServerClient.remote = empty
+        var remote = empty
+        remote.profile.allergies = ["Remote allergy"]
+        ServerClient.remote = remote
+        try store.mutate { $0.profile.medications = ["Local medication"] }
+        store.backgroundActive = true
+        await store.synchronizeAccount()
+        precondition(store.snapshot?.profile.medications == ["Local medication"])
+        precondition(store.snapshot?.profile.allergies == ["Remote allergy"])
+        precondition(ServerClient.lastPushed == store.snapshot && store.syncBase?.snapshot == store.snapshot)
+        precondition(store.syncStatus == "All changes saved")
+        let persisted = AppStore(repository: repository, account: session)
+        precondition(persisted.syncBase?.snapshot == store.syncBase?.snapshot)
+        ServerClient.onPush = {
+            try store.mutate { $0.profile.careNotes = "Typed during upload" }
+        }
+        try store.mutate { $0.profile.conditions = ["Another edit"] }
+        await store.synchronizeAccount()
+        precondition(store.snapshot?.profile.careNotes == "Typed during upload")
+        precondition(store.syncBase?.snapshot.profile.careNotes == nil)
+        precondition(store.syncStatus == "Saving newer changes…")
+        ServerClient.onPush = nil
+        ServerClient.onPull = { throw ServerFailure.response(401) }
+        var expired = false
+        let retained = store.snapshot
+        store.sessionExpired = {
+            expired = true
+            store.stopBackgroundUpdates()
+            store.needsSignIn = true
+        }
+        await store.synchronizeAccount()
+        precondition(expired && store.snapshot == retained && store.needsSignIn)
+        ServerClient.onPull = nil
+        let demo = try makeStore(empty, root: root)
+        demo.backgroundActive = true
+        demo.providerStatus = ProviderClient.capabilities
+        demo.useConnectedAI = true
+        try demo.mutate {
+            $0.records = [
+                MedicalRecord(
+                    title: "Report", kind: "Notes", provider: "", date: RevaDate.now,
+                    text: "Synthetic original", summary: "")
+            ]
+        }
+        precondition(demo.profileDebounce != nil)
+        demo.useConnectedAI = false
+        precondition(demo.profileDebounce?.isCancelled == true && demo.profileObserved.isEmpty)
+        demo.stopBackgroundUpdates()
+        print(
+            "PASS native accounts: isolated empty workspace, automatic merge and baseline persistence, edits during upload, expiry preserves state, and AI opt-out cancels work"
+        )
+    }
     @MainActor static func makeStore(_ fixture: AppSnapshot, root: URL) throws -> AppStore {
         let repository = LocalRepository(directory: root.appendingPathComponent(UUID().uuidString))
         try repository.save(fixture)
@@ -387,6 +474,84 @@ enum ServerFailure: LocalizedError {
         )
     }
 
+    @MainActor static func checkProviderIdentitySwitchDuringBackoff(_ fixture: AppSnapshot, root: URL)
+        async throws
+    {
+        for boundary in ["token", "url", "replace", "close"] {
+            let store = try makeStore(fixture, root: root)
+            var waiting = false
+            var cancelled = false
+            var escapedWait = false
+            let requests = ProviderClient.requestCount
+            ProviderClient.duringRequest = {
+                waiting = true
+                do {
+                    try await Task.sleep(nanoseconds: 60_000_000_000)
+                    escapedWait = true
+                } catch {
+                    cancelled = Task.isCancelled
+                    throw error
+                }
+            }
+            let operation = Task { @MainActor in await store.summarizeWithAI(fixture.records[0].id) }
+            while !waiting { await Task.yield() }
+            switch boundary {
+            case "token": store.connectionToken = "new-synthetic-owner"
+            case "url": store.connectionURL = "http://localhost:9191"
+            case "replace": store.snapshot = fixture
+            default: store.closeWorkspace()
+            }
+            var watchdogFired = false
+            let watchdog = Task { @MainActor in
+                do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
+                watchdogFired = true
+                operation.cancel()
+            }
+            await operation.value
+            watchdog.cancel()
+            precondition(
+                !watchdogFired && cancelled && !escapedWait, "\(boundary) did not cancel provider backoff")
+            precondition(ProviderClient.requestCount == requests + 1)
+            precondition(store.providerRequestCancellations.isEmpty && !store.isProviderBusy)
+            precondition(store.snapshot == fixture)
+        }
+        ProviderClient.duringRequest = nil
+        print(
+            "PASS provider ownership: token, URL, workspace replacement and account closure cancel backoff immediately without retry/publication"
+        )
+    }
+
+    @MainActor static func checkSummaryInputInvalidation(_ fixture: AppSnapshot, root: URL) throws {
+        for field in ["title", "text", "date", "dateSource", "notes"] {
+            var source = fixture
+            source.records[0].summary = "Synthetic generated summary."
+            source.records[0].summaryModel = "synthetic-ai"
+            source.records[0].summaryGeneratedAt = "2026-09-12T15:30:00Z"
+            let store = try makeStore(source, root: root)
+            let original = store.record(source.records[0].id)!
+            var revised = original
+            switch field {
+            case "title": revised.title = "Updated source title"
+            case "text": revised.text = "Corrected source text."
+            case "date": revised.date = "2026-09-01"
+            case "dateSource": revised.dateSource = "document"
+            default: revised.notes = "Independent user notes."
+            }
+            try store.save(revised)
+            let saved = store.record(original.id)!
+            if field == "notes" {
+                precondition(saved.summary == original.summary && saved.summaryModel == original.summaryModel)
+                precondition(saved.summaryGeneratedAt == original.summaryGeneratedAt)
+            } else {
+                precondition(saved.summaryModel == nil && saved.summaryGeneratedAt == nil)
+                precondition(saved.summary == ReportEngine.localExcerpt(revised.text, isDemo: revised.isDemo))
+            }
+        }
+        print(
+            "PASS summary provenance: title, text, date and date-source changes invalidate generated summary/model/time; notes preserve them"
+        )
+    }
+
     // MARK: - Field-specific editor preservation
     @MainActor static func checkEditorMerges(_ fixture: AppSnapshot, root: URL) async throws {
         let store = try makeStore(fixture, root: root)
@@ -396,9 +561,11 @@ enum ServerFailure: LocalizedError {
         ProviderClient.duringRequest = nil
         await store.summarizeWithAI(original.id)
         let summarized = store.record(original.id)!
+        precondition(summarized.summaryGeneratedAt != nil)
         try store.saveRecordEdits(draft, original: original)
         let saved = store.record(original.id)!
         precondition(saved.summary == summarized.summary && saved.summaryModel == summarized.summaryModel)
+        precondition(saved.summaryGeneratedAt == summarized.summaryGeneratedAt)
         precondition(
             saved.version == summarized.version && saved.notes == draft.notes
                 && saved.pageTexts == original.pageTexts)
@@ -408,6 +575,7 @@ enum ServerFailure: LocalizedError {
         let edited = store.record(original.id)!
         precondition(
             edited.summary == ReportEngine.localExcerpt(corrected.text) && edited.summaryModel == nil
+                && edited.summaryGeneratedAt == nil
                 && edited.pageTexts == nil && edited.status == "ready")
         var conflicting = draft
         conflicting.text = "Competing correction from the old source"
@@ -661,6 +829,282 @@ enum ServerFailure: LocalizedError {
             ProviderClient.requestCount == beforeEmpty && store.recording(recording.id)?.aiSummary == nil)
         print(
             "PASS appointment summaries: configured transcript-only requests; newer notes, full source, summary provenance and timestamps preserved; corrections invalidate AI; stale/deleted/empty sources rejected"
+        )
+    }
+
+    // MARK: - Automatic saved-audio processing
+    // Keep the real persistence/task ownership boundary; only the provider transport is synthetic.
+    @MainActor static var recordingCapabilities: ProviderStatus {
+        ProviderStatus(
+            gemini: .init(configured: true, model: "native-repair-double"),
+            transcription: .init(configured: true, model: "native-repair-double"))
+    }
+
+    @MainActor static func waitForRecordingState(
+        _ message: String, until condition: () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition() {
+            guard Date() < deadline else { throw RevaError.invalid("Timed out: " + message) }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+    }
+
+    @MainActor static func queuedRecording(
+        in store: AppStore, id: String, duration: Double = 0.35
+    ) throws -> VisitRecording {
+        let bytes = Data(
+            ("Synthetic original audio " + id + ": " + String(repeating: "abcd", count: 800)).utf8)
+        let url = try store.repository.storeAttachment(bytes, filename: id + ".m4a")
+        let recording = VisitRecording(
+            id: id, visitID: store.visits[0].id, title: "Saved " + id, duration: duration,
+            audioFilename: url.lastPathComponent, segments: [ProviderClient.segment],
+            summary: "Separate notes")
+        // Even a nonempty live preview must be replaced by the saved original's batch transcript.
+        var draft = RecordingSaveDraft()
+        draft.retain(recording, audioURL: url)
+        let savedID = try draft.save(to: store)
+        precondition(savedID == id && draft.recording == nil && draft.audioURL == nil)
+        return store.recording(id)!
+    }
+
+    @MainActor static func finishRecordingQueue(_ store: AppStore) async throws {
+        try await waitForRecordingState("recording queue finish") {
+            store.recordingProcessingTask == nil
+        }
+    }
+
+    @MainActor static func checkAutomaticRecordingProcessing(_ fixture: AppSnapshot, root: URL) async throws {
+        ProviderClient.duringRequest = nil
+        ProviderClient.recordingOperations = []
+        ProviderClient.transcriptionInputs = [:]
+        let store = try makeStore(fixture, root: root)
+        defer { store.stopBackgroundUpdates() }
+        let initialRequests = ProviderClient.requestCount
+        let first = try queuedRecording(in: store, id: "short-automatic")
+        let second = try queuedRecording(in: store, id: "second-automatic", duration: 3)
+        precondition(!store.useConnectedAI && ProviderClient.requestCount == initialRequests)
+        precondition(first.status == "processing-queued" && first.segments.isEmpty && first.savedAt != nil)
+        let checkpoint = try store.repository.load()!.snapshot
+        precondition(checkpoint.recordings.first(where: { $0.id == first.id }) == first)
+        precondition(store.recordingProcessingID == nil && store.hasPendingRecordings)
+        // Publishing a stage must be durable before its next external operation starts.
+        ProviderClient.duringSummary = {
+            let id = ProviderClient.summaryInput!.id
+            let saved = try store.repository.load()!.snapshot.recordings.first(where: { $0.id == id })!
+            precondition(saved.status == "processing-analyzing" && saved.segments == [ProviderClient.segment])
+            precondition(!saved.hasAISummary && store.recordingProcessingID == id)
+            try store.saveRecordingNotes("Notes typed during processing", recordingID: id)
+        }
+        store.backgroundActive = true
+        store.providerStatus = recordingCapabilities
+        try await finishRecordingQueue(store)
+        ProviderClient.duringSummary = nil
+        precondition(!store.useConnectedAI && ProviderClient.requestCount == initialRequests + 4)
+        let operations = ProviderClient.recordingOperations
+        precondition(operations.count == 4)
+        for offset in stride(from: 0, to: operations.count, by: 2) {
+            let id = String(operations[offset + 1].dropFirst("summary:".count))
+            precondition(operations[offset] == "transcribe:" + store.recording(id)!.audioFilename!)
+        }
+        for source in [first, second] {
+            let finished = store.recording(source.id)!
+            let memory = store.record("memory-" + source.id)!
+            let bytes = try Data(contentsOf: store.sourceURL(source.audioFilename!)!)
+            precondition(ProviderClient.transcriptionInputs[source.audioFilename!] == bytes)
+            precondition(finished.status == "processing-complete" && finished.hasAISummary)
+            precondition(
+                finished.segments == [ProviderClient.segment]
+                    && finished.summary == "Notes typed during processing")
+            precondition(
+                finished.aiSummaryGeneratedAt != nil && finished.transcriptionModel == "native-repair-double")
+            precondition(memory.text == finished.transcriptText && memory.sourceRecordingID == finished.id)
+            precondition(
+                memory.summary == finished.aiSummary && memory.summaryModel == finished.aiSummaryModel)
+            precondition(
+                memory.summaryGeneratedAt == finished.aiSummaryGeneratedAt && memory.dateSource == "added")
+        }
+        precondition(store.recordingProcessingErrors.isEmpty)
+        print(
+            "PASS native recording queue: short saves are durable before providers, ignore live previews, send full original audio, process one job at a time without AI opt-in, and automatically create sourced memories"
+        )
+    }
+
+    @MainActor static func checkRecordingQueueRecovery(_ fixture: AppSnapshot, root: URL) async throws {
+        // A transcription failure retains the original, while an analysis retry reuses completed transcription.
+        for failure in ["transcription", "summary"] {
+            let store = try makeStore(fixture, root: root)
+            let queued = try queuedRecording(in: store, id: "failed-" + failure)
+            ProviderClient.recordingOperations = []
+            let reject = { @MainActor () async throws -> Void in
+                throw RevaError.invalid("Synthetic " + failure + " failure")
+            }
+            if failure == "transcription" {
+                ProviderClient.duringTranscription = reject
+            } else {
+                ProviderClient.duringSummary = reject
+            }
+            store.backgroundActive = true
+            store.providerStatus = recordingCapabilities
+            try await finishRecordingQueue(store)
+            precondition(store.recording(queued.id)?.status == "processing-failed")
+            precondition(
+                store.recordingProcessingErrors[queued.id] != nil
+                    && store.sourceURL(queued.audioFilename!) != nil)
+            precondition(store.recording(queued.id)!.segments.isEmpty == (failure == "transcription"))
+            precondition(store.record("memory-" + queued.id) == nil)
+            ProviderClient.duringTranscription = nil
+            ProviderClient.duringSummary = nil
+            store.retryRecordingProcessing(queued.id)
+            try await finishRecordingQueue(store)
+            precondition(store.recording(queued.id)?.status == "processing-complete")
+            precondition(store.recordingProcessingErrors[queued.id] == nil)
+            let transcriptions = ProviderClient.recordingOperations.filter { $0.hasPrefix("transcribe:") }
+                .count
+            precondition(transcriptions == (failure == "transcription" ? 2 : 1))
+            store.stopBackgroundUpdates()
+        }
+
+        // Availability changes resume the saved analysis stage without asking for another confirmation.
+        let store = try makeStore(fixture, root: root)
+        defer { store.stopBackgroundUpdates() }
+        let queued = try queuedRecording(in: store, id: "waiting-summary")
+        ProviderClient.recordingOperations = []
+        store.backgroundActive = true
+        store.providerStatus = ProviderStatus(
+            gemini: .init(configured: false, model: "native-repair-double"),
+            transcription: .init(configured: true, model: "native-repair-double"))
+        try await finishRecordingQueue(store)
+        precondition(store.recording(queued.id)?.status == "processing-analyzing")
+        precondition(store.recordingProcessingErrors.isEmpty && store.hasPendingRecordings)
+        store.providerStatus = recordingCapabilities
+        try await finishRecordingQueue(store)
+        precondition(store.recording(queued.id)?.status == "processing-complete")
+        precondition(ProviderClient.recordingOperations.count == 2)
+
+        // Reprocessing failure cannot erase the prior usable result. A successful identical transcript still reruns AI.
+        let completed = store.recording(queued.id)!
+        let memory = store.record("memory-" + queued.id)!
+        ProviderClient.duringTranscription = { throw RevaError.invalid("Synthetic reprocessing failure") }
+        store.retryRecordingProcessing(queued.id, reprocess: true)
+        try await finishRecordingQueue(store)
+        let failed = store.recording(queued.id)!
+        precondition(failed.status == "processing-reprocess-failed" && failed.segments == completed.segments)
+        precondition(failed.aiSummary == completed.aiSummary && store.record(memory.id) == memory)
+        ProviderClient.duringTranscription = nil
+        ProviderClient.recordingOperations = []
+        store.retryRecordingProcessing(queued.id)
+        try await finishRecordingQueue(store)
+        precondition(store.recording(queued.id)?.status == "processing-complete")
+        precondition(
+            ProviderClient.recordingOperations == [
+                "transcribe:" + queued.audioFilename!, "summary:" + queued.id,
+            ])
+
+        // Correcting transcript words automatically analyzes the correction, retaining edited memory metadata.
+        var editedMemory = store.record(memory.id)!
+        editedMemory.notes = "My own memory notes"
+        editedMemory.date = "2026-09-01"
+        editedMemory.dateSource = "observed"
+        try store.save(editedMemory)
+        ProviderClient.recordingOperations = []
+        try store.saveMemory(
+            recordingID: queued.id,
+            correctedSegmentTexts: [ProviderClient.segment.id: "Corrected final words"])
+        precondition(store.recording(queued.id)?.status == "processing-analyzing")
+        precondition(store.recording(queued.id)?.hasAISummary == false)
+        try await finishRecordingQueue(store)
+        precondition(ProviderClient.recordingOperations == ["summary:" + queued.id])
+        precondition(ProviderClient.summaryInput?.text == store.recording(queued.id)?.transcriptText)
+        precondition(store.recording(queued.id)?.status == "processing-complete")
+        precondition(store.record(memory.id)?.notes == editedMemory.notes)
+        precondition(store.record(memory.id)?.date == editedMemory.date)
+        precondition(store.record(memory.id)?.dateSource == editedMemory.dateSource)
+
+        // Exact source edits win over a late provider result at either stage.
+        for stage in ["transcription", "summary"] {
+            let editedStore = try makeStore(fixture, root: root)
+            let source = try queuedRecording(in: editedStore, id: "source-edit-" + stage)
+            let edit = { @MainActor () async throws -> Void in
+                var latest = editedStore.recording(source.id)!
+                latest.segments = [ProviderClient.segment]
+                latest.segments[0].text = "Current corrected transcript"
+                try editedStore.save(latest)
+            }
+            if stage == "transcription" {
+                ProviderClient.duringTranscription = edit
+            } else {
+                ProviderClient.duringSummary = edit
+            }
+            editedStore.backgroundActive = true
+            editedStore.providerStatus = recordingCapabilities
+            try await finishRecordingQueue(editedStore)
+            precondition(editedStore.recording(source.id)?.segments[0].text == "Current corrected transcript")
+            precondition(editedStore.recording(source.id)?.hasAISummary == false)
+            precondition(editedStore.recordingProcessingErrors[source.id] != nil)
+            ProviderClient.duringTranscription = nil
+            ProviderClient.duringSummary = nil
+            editedStore.stopBackgroundUpdates()
+        }
+        print(
+            "PASS native recording recovery: failures preserve completed stages, availability resumes analysis, identical reprocessing and corrections regenerate AI, edited memory metadata survives, and stale sources are rejected"
+        )
+    }
+
+    @MainActor static func checkRecordingQueueCancellation(_ fixture: AppSnapshot, root: URL) async throws {
+        for stage in ["transcription", "summary"] {
+            for boundary in ["stop", "close", "suspend", "token", "replacement"] {
+                let store = try makeStore(fixture, root: root)
+                let queued = try queuedRecording(in: store, id: "cancel-" + stage + "-" + boundary)
+                var release: CheckedContinuation<Void, Never>?
+                var transportCancelled = false
+                let suspend = { @MainActor () async throws -> Void in
+                    // Deliberately emulate a transport delivering its result even after cancellation.
+                    await withCheckedContinuation { release = $0 }
+                    transportCancelled = Task.isCancelled
+                }
+                if stage == "transcription" {
+                    ProviderClient.duringTranscription = suspend
+                } else {
+                    ProviderClient.duringSummary = suspend
+                }
+                store.backgroundActive = true
+                store.providerStatus = recordingCapabilities
+                try await waitForRecordingState("suspended " + stage) { release != nil }
+                let task = store.recordingProcessingTask!
+                switch boundary {
+                case "stop": store.stopBackgroundUpdates()
+                case "close": store.closeWorkspace()
+                case "suspend": store.suspendProviderWork()
+                case "token": store.connectionToken = "different-synthetic-account"
+                default:
+                    let sameIDs = store.snapshot
+                    store.snapshot = sameIDs
+                }
+                precondition(store.recordingProcessingID == nil && store.recordingProcessingTask == nil)
+                let retained = store.snapshot
+                release?.resume()
+                await task.value
+                ProviderClient.duringTranscription = nil
+                ProviderClient.duringSummary = nil
+                precondition(transportCancelled && store.snapshot == retained)
+                precondition(
+                    store.recordingProcessingErrors.isEmpty && store.providerRequestCancellations.isEmpty)
+                store.closeWorkspace()
+                // Simulated relaunch retains the durable stage and completes it from the original file.
+                let reopened = AppStore(repository: store.repository)
+                ProviderClient.recordingOperations = []
+                reopened.backgroundActive = true
+                reopened.providerStatus = recordingCapabilities
+                try await finishRecordingQueue(reopened)
+                precondition(reopened.recording(queued.id)?.status == "processing-complete")
+                precondition(reopened.record("memory-" + queued.id)?.sourceRecordingID == queued.id)
+                precondition(ProviderClient.recordingOperations.count == (stage == "transcription" ? 2 : 1))
+                reopened.closeWorkspace()
+            }
+        }
+        print(
+            "PASS native recording ownership: stop, workspace close, sign-out suspension, token changes, and snapshot replacement cancel both stages; late results cannot publish and reopen resumes only unfinished work"
         )
     }
 }

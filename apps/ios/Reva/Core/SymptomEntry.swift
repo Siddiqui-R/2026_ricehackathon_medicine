@@ -109,6 +109,7 @@ struct SymptomEntry: Codable, Equatable {
         record.text = entry.recordText
         record.summary = entry.localSummary
         record.summaryModel = nil
+        record.summaryGeneratedAt = nil
         record.symptomEntry = entry
         record.status = "ready"
         record.isDemo = false

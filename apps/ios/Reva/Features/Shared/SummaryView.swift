@@ -1,32 +1,17 @@
-// Purpose: Present the next visit and shortcuts into records, symptoms, and medical profile.
-// Inputs: AppStore plus callbacks selecting the Records and Medical profile tabs.
-// Outputs: Summary cards and routes into appointment, record, and symptom workflows.
-// Side effects: Dismisses notices and opens editors; child screens own saved mutations.
-
+// Overview matches the web's preparation, standalone recording, recent records and saved sessions.
 import SwiftUI
 
-// MARK: - SummaryView
-/// Present the next visit and shortcuts into records, symptoms, and medical profile.
 struct SummaryView: View {
-    // MARK: - Inputs and view state
-
     @EnvironmentObject private var store: AppStore
     let showAllRecords: () -> Void
-    let showMedicalProfile: () -> Void
     @State private var addRecord = false
-    @State private var addVisit = false
     @State private var logSymptoms = false
-    // MARK: - Derived display and validation
-    var nextVisit: Visit? { store.visits.first { $0.status == "upcoming" } }
-    // MARK: - Rendering and navigation
+    @State private var recording = false
     var body: some View {
         Page {
-            HStack {
-                Text("A little preparation.\nA clearer conversation.").font(.subheadline).foregroundStyle(
-                    .secondary)
-                Spacer()
-                ModeBadge()
-            }
+            Text("A little preparation. A clearer conversation.").font(.subheadline).foregroundStyle(
+                .secondary)
+            if store.account != nil { Text(store.syncStatus).font(.caption).foregroundStyle(.secondary) }
             if let notice = store.notice {
                 HStack(alignment: .top) {
                     Text(notice).font(.footnote)
@@ -34,68 +19,51 @@ struct SummaryView: View {
                     Button {
                         store.notice = nil
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                     }.accessibilityLabel("Dismiss notice")
-                }.padding(14).background(RevaTheme.soft, in: RoundedRectangle(cornerRadius: 14))
+                }.padding(14).background(RevaTheme.soft, in: RoundedRectangle(cornerRadius: 10))
             }
-            SectionHeading(title: "Your next visit")
-            if let visit = nextVisit {
-                RevaCard {
-                    HStack {
-                        Label(visit.type.uppercased(), systemImage: "calendar").font(.caption.weight(.bold))
-                            .tracking(0.7).foregroundStyle(RevaTheme.accent)
-                        Spacer()
-                        StatusChip(text: "Upcoming")
-                    }
-                    Text(visit.title).font(.title2.bold())
-                    DetailLine(
-                        symbol: "clock", text: RevaDate.display(visit.date, time: true, zone: visit.timeZone))
-                    DetailLine(symbol: "person.crop.circle", text: visit.provider + " · " + visit.clinic)
-                    Divider()
-                    Text(visit.concern).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-                    NavigationLink {
-                        VisitDetailView(id: visit.id)
-                    } label: {
-                        Label("Prepare for this visit", systemImage: "list.bullet.clipboard")
-                    }.buttonStyle(PrimaryButtonStyle())
+            RevaCard {
+                Label("Before your visit", systemImage: "list.bullet.clipboard").font(.headline)
+                Text("Bring your relevant history and the questions that matter to you.").font(.subheadline)
+                    .foregroundStyle(.secondary)
+                NavigationLink {
+                    NativeVisitPreparation()
+                } label: {
+                    Label("Prepare for this visit", systemImage: "arrow.right")
                 }
-            } else {
-                RevaCard {
-                    Text("Make room for your next conversation.").font(.headline)
-                    Button("Add an appointment") { addVisit = true }.buttonStyle(PrimaryButtonStyle())
-                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            RevaCard {
+                Label("Keep the conversation", systemImage: "waveform").font(.headline)
+                Text(
+                    "Record with permission. Your transcript and summary are prepared automatically after saving."
+                ).font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Button {
+                    recording = true
+                } label: {
+                    Label("Record session", systemImage: "mic")
+                }.buttonStyle(PrimaryButtonStyle())
             }
             HStack(spacing: 12) {
                 Button {
                     addRecord = true
                 } label: {
-                    quickAction("Add record", symbol: "plus.rectangle.on.folder")
+                    Label("Add record", systemImage: "plus.rectangle.on.folder").frame(maxWidth: .infinity)
+                        .padding(14).outlined()
                 }
                 Button {
-                    addVisit = true
+                    logSymptoms = true
                 } label: {
-                    quickAction("Add visit", symbol: "calendar.badge.plus")
+                    Label("Log a symptom", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
+                        .padding(14).outlined()
                 }
-            }.buttonStyle(.plain)
-            Button {
-                logSymptoms = true
-            } label: {
-                HStack(spacing: 14) {
-                    IconTile(symbol: "square.and.pencil")
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Log symptoms").font(.headline)
-                        Text("Keep track of what you’re feeling.").font(.subheadline).foregroundStyle(
-                            .secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(RevaTheme.accent)
-                }.padding(18).outlined()
-            }.buttonStyle(.plain)
+            }.font(.subheadline.weight(.semibold)).buttonStyle(.plain)
             SectionHeading(title: "Recent records")
             RevaCard {
                 if store.records.isEmpty {
-                    Text("Add your first document to start building your history.").foregroundStyle(
-                        .secondary)
+                    Text("Add a document to start building your history.").foregroundStyle(.secondary)
                 }
                 ForEach(Array(store.records.prefix(3).enumerated()), id: \.element.id) { index, record in
                     if index > 0 { Divider() }
@@ -105,36 +73,45 @@ struct SummaryView: View {
                         RecordRow(record: record)
                     }.buttonStyle(.plain)
                 }
-                Divider()
-                Button(action: showAllRecords) {
-                    HStack {
-                        Text("View all records").font(.headline)
-                        Spacer()
-                        Image(systemName: "arrow.right")
-                    }
-                    .frame(minHeight: 32).contentShape(Rectangle())
-                }.accessibilityHint("Opens the Records tab with all records")
+                Button(action: showAllRecords) { Label("View all records", systemImage: "arrow.right") }.font(
+                    .subheadline.weight(.semibold))
             }
-        }
-        .navigationTitle("Summary")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: showMedicalProfile) {
-                    Text(store.snapshot?.profile.initials ?? "R").font(.caption.bold()).foregroundStyle(
-                        RevaTheme.accentText
-                    ).frame(width: 36, height: 36).background(RevaTheme.soft, in: Circle())
-                }.accessibilityLabel("Medical profile")
+            SectionHeading(title: "Session recordings")
+            RevaCard {
+                if store.recordings.isEmpty {
+                    Text("Your saved sessions will appear here.").font(.subheadline).foregroundStyle(
+                        .secondary)
+                }
+                ForEach(store.recordings.sorted { $0.createdAt > $1.createdAt }) { item in
+                    NavigationLink {
+                        RecordingDetailView(id: item.id)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "waveform").foregroundStyle(RevaTheme.accent)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.title).font(.subheadline.weight(.semibold))
+                                Text(
+                                    RevaDate.display(item.createdAt) + " · "
+                                        + RevaDate.duration(item.duration)
+                                ).font(.caption).foregroundStyle(.secondary)
+                                if let progress = store.recordingProcessingMessage(item) {
+                                    Text(progress).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 5)
+                    }.buttonStyle(.plain)
+                }
             }
-        }
-        .sheet(isPresented: $addRecord) { NavigationStack { AddRecordView() } }
-        .sheet(isPresented: $addVisit) { NavigationStack { VisitEditorView() } }
-        .sheet(isPresented: $logSymptoms) { NavigationStack { SymptomEntryEditorView() } }
-    }
-    // MARK: - Shortcut presentation
-    private func quickAction(_ title: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: symbol).font(.title2).foregroundStyle(RevaTheme.accent)
-            Text(title).font(.headline)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).outlined()
+            NavigationLink {
+                VisitsView()
+            } label: {
+                Label("Visit history", systemImage: "clock.arrow.circlepath")
+            }.font(.subheadline)
+        }.navigationTitle("Overview")
+            .sheet(isPresented: $addRecord) { NavigationStack { AddRecordView() } }
+            .sheet(isPresented: $logSymptoms) { NavigationStack { SymptomEntryEditorView() } }
+            .fullScreenCover(isPresented: $recording) { NavigationStack { RecordingSessionView() } }
     }
 }

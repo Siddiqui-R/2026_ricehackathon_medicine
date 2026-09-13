@@ -1,0 +1,18 @@
+Asthma history and medication context
+Jordan Avery | DOB: 1991-04-16
+Source: Grove Primary Care
+Source date: 2026-05-12
+
+DOCUMENTED HISTORY
+Intermittent asthma appears in the health history. The encounter note
+records an albuterol inhaler on the existing medication list. No hospital stay
+or acute respiratory complaint is documented in this particular encounter.
+
+PATIENT-REPORTED MEDICATION CONTEXT
+Albuterol inhaler, 90 mcg per actuation: as-needed use documented in the source
+medication list. Cetirizine, 10 mg: seasonal use reported by the patient.
+This note does not introduce a new medicine or change an existing instruction.
+
+SOURCE BOUNDARY
+This note gives historical context for medication reconciliation. It contains
+no attribution of symptoms to a medicine and no separate symptom assessment.

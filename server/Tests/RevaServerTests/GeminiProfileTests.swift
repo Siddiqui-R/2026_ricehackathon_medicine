@@ -28,7 +28,7 @@ private func profileObject() -> [String: Any] {
     object["allergies"] = [
         [
             "text":
-                "2024: sample allergen — rash; 2026 records no known allergies (conflicting documentation).",
+                "2024: sample allergen, rash; 2026 records no known allergies (conflicting documentation).",
             "recordIDs": ["report-1", "report-2"],
         ]
     ]
@@ -229,7 +229,7 @@ struct GeminiProfileTests {
                 #expect(response.status == .ok)
                 let result = try response.content.decode(GeminiProfileResponse.self)
                 #expect(result.allergies.first?.recordIDs == ["report-1", "report-2"])
-                #expect(result.model == "gemini-3.8-flash")
+                #expect(result.model == "gemini-flash-latest")
             }
         }
         #expect(await requests.values.count == 1)

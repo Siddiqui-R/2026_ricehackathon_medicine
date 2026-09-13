@@ -34,6 +34,28 @@ const callRequest = (): BookingRequest => {
 
 // MARK: - State never publishes an edit that storage failed to commit.
 describe('local state publication', () => {
+  it('aborts a pending provider request when the workspace token changes and ignores its late result', async () => {
+    const response = deferred<AISummary>();
+    const summarize = vi.fn<APITransport['summarize']>(() => response.promise);
+    const { store } = await ready(transport({ summarize }));
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const source = store.getState().snapshot!.records[0];
+    const pending = store.summarizeRecord(source.id);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(summarize).toHaveBeenCalledOnce());
+    store.setToken('new-workspace-token');
+    await rejected;
+    expect(summarize.mock.calls[0][1]!.aborted).toBe(true);
+    expect(store.getState()).toMatchObject({
+      token: 'new-workspace-token',
+      busy: false,
+      providerWork: false,
+    });
+    response.resolve({ summary: 'Late source summary', model: 'synthetic-model' });
+    await Promise.resolve();
+    expect(store.getState().snapshot!.records[0].summary).toBe(source.summary);
+  });
   it('refreshes old demo labels once while preserving source wording and edited samples', async () => {
     const repository = new MemoryRepository();
     const records = repository.saved!.snapshot.records;
@@ -114,6 +136,68 @@ describe('local state publication', () => {
 
 // MARK: - Connected results cannot overwrite sources or the user's question/notes authority.
 describe('provider result publication', () => {
+  it.each(['title', 'date', 'dateSource'] as const)(
+    'invalidates an old AI summary after %s correction while preserving notes-only edits',
+    async (field) => {
+      const { store } = await ready(
+        transport({
+          summarize: async () => ({
+            summary: 'Generated from the original date and title',
+            model: 'mock-gemini',
+          }),
+        }),
+      );
+      await store.checkServer();
+      store.setConnectedAI(true);
+      const source = store.getState().snapshot!.records[0];
+      await store.summarizeRecord(source.id);
+      const generated = store.getState().snapshot!.records.find((item) => item.id === source.id)!;
+      await store.saveRecord({ ...generated, notes: 'My new private note' }, generated.version);
+      const noted = store.getState().snapshot!.records.find((item) => item.id === source.id)!;
+      expect(noted).toMatchObject({
+        summary: generated.summary,
+        summaryModel: generated.summaryModel,
+        summaryGeneratedAt: generated.summaryGeneratedAt,
+      });
+      const corrected = { ...noted };
+      if (field === 'dateSource') corrected.dateSource = 'document';
+      else corrected[field] = field === 'date' ? '2026-08-01' : 'Corrected source title';
+      await store.saveRecord(corrected, noted.version);
+      const result = store.getState().snapshot!.records.find((item) => item.id === source.id)!;
+      expect(result.summaryModel).toBeUndefined();
+      expect(result.summaryGeneratedAt).toBeUndefined();
+      expect(result.summary).not.toBe(generated.summary);
+      expect(result.notes).toBe('My new private note');
+    },
+  );
+  it('dates generated summaries separately from medical source dates and clears attribution after source edits', async () => {
+    const { store } = await ready(
+      transport({
+        summarize: async () => ({ summary: 'Synthetic generated summary', model: 'mock-gemini' }),
+      }),
+    );
+    await store.checkServer();
+    store.setConnectedAI(true);
+    const original = store.getState().snapshot!.records[0];
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-13T02:30:00Z'));
+    try {
+      await store.summarizeRecord(original.id);
+      const generated = store.getState().snapshot!.records.find((item) => item.id === original.id)!;
+      expect(generated).toMatchObject({
+        summaryGeneratedAt: '2026-09-13T02:30:00Z',
+        date: original.date,
+        uploadedAt: original.uploadedAt,
+      });
+      await store.saveRecord({ ...generated, text: 'Corrected original source text' }, generated.version);
+      const revised = store.getState().snapshot!.records.find((item) => item.id === original.id)!;
+      expect(revised.summaryModel).toBeUndefined();
+      expect(revised.summaryGeneratedAt).toBeUndefined();
+      expect(revised.summary).not.toBe(generated.summary);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('sends safe current local excerpts without replacing attributed summaries or saved sources', async () => {
     const prepare = vi.fn<APITransport['prepare']>().mockResolvedValue({
         overview: 'Fictional overview',

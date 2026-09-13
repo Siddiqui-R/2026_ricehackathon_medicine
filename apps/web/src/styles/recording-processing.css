@@ -1,0 +1,198 @@
+/* Purpose: Place a quiet recording progress card just above the account plaque and compact navigation.
+   Inputs: Explicit job stage classes, queue disclosure state, and workspace breakpoints.
+   Outputs: Persistent, responsive processing status with visible actions and named destinations.
+   Side effects: Rotates only active work indicators, honoring reduced-motion preferences. */
+
+/* MARK: - Current job and optional queue stay compact in the sidebar */
+.processing-indicator {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.processing-job {
+  padding: 10px;
+}
+.processing-job-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--ink);
+  border-radius: 4px;
+}
+.processing-job-symbol {
+  display: grid;
+  place-items: center;
+  flex: 0 0 25px;
+  height: 30px;
+  color: var(--accent-text);
+}
+.processing-job-symbol.is-running svg {
+  animation: processing-spin 1.6s linear infinite;
+}
+.is-complete .processing-job-symbol {
+  color: #357452;
+}
+.processing-job-copy {
+  min-width: 0;
+  flex: 1;
+}
+.processing-job-copy strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.processing-stage {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.processing-job-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.processing-job-link:hover .processing-job-copy strong,
+.processing-job-link:hover .processing-job-arrow {
+  color: var(--accent-text);
+}
+.processing-job-message {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.processing-job-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.processing-job-actions button,
+.processing-job-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent-text);
+  padding: 5px 4px;
+  min-height: 28px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.processing-job-actions .processing-dismiss {
+  margin-left: auto;
+  color: var(--muted);
+  width: 28px;
+}
+.processing-job-actions button:hover,
+.processing-job-actions a:hover {
+  background: var(--canvas);
+}
+.processing-queue {
+  border-top: 1px solid var(--line);
+}
+.processing-queue > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 11px;
+  font-size: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+.processing-queue > summary::-webkit-details-marker {
+  display: none;
+}
+.processing-queue[open] > summary svg {
+  transform: rotate(180deg);
+}
+.processing-queue ul {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 100%;
+  min-width: 220px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  max-height: min(260px, 35dvh);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 5px 22px #30252614;
+}
+.processing-queue li + li {
+  border-top: 1px solid var(--line);
+}
+.processing-indicator a:focus-visible,
+.processing-indicator button:focus-visible,
+.processing-indicator summary:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+.processing-indicator-compact {
+  display: none;
+}
+@keyframes processing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* MARK: - Compact rails and phones keep progress accessible above navigation */
+@media (max-width: 979px) {
+  .processing-indicator-sidebar {
+    display: none;
+  }
+  .processing-indicator-compact {
+    display: block;
+    position: fixed;
+    z-index: 25;
+    left: 96px;
+    bottom: 14px;
+    width: 250px;
+    max-width: calc(100vw - 110px);
+    box-shadow: 0 5px 22px #30252614;
+  }
+  .processing-indicator-compact .processing-job-message {
+    -webkit-line-clamp: 2;
+  }
+}
+@media (max-width: 760px) {
+  .processing-indicator-compact {
+    left: 12px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .processing-job-symbol.is-running svg {
+    animation: none;
+  }
+}
+@media print {
+  .processing-indicator {
+    display: none !important;
+  }
+}

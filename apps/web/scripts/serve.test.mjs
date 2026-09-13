@@ -116,6 +116,7 @@ test(
     await mkdir(path.join(temporary, 'scripts'));
     await mkdir(path.join(temporary, 'dist', 'assets'), { recursive: true });
     await mkdir(path.join(temporary, 'dist', 'demo'));
+    await mkdir(path.join(temporary, 'dist', 'fonts'));
     await mkdir(path.join(temporary, 'dist', 'ocr', 'core'), { recursive: true });
     await copyFile(
       fileURLToPath(new URL('./serve.mjs', import.meta.url)),
@@ -136,6 +137,7 @@ test(
         '{"synthetic":"source map must not be served"}',
       ),
       writeFile(path.join(temporary, 'dist', 'demo', 'seed.json'), '{"synthetic":true}'),
+      writeFile(path.join(temporary, 'dist', 'fonts', 'NotoSans.ttf'), Buffer.from([0, 1, 0, 0])),
       writeFile(path.join(temporary, 'dist', 'ocr', 'core', 'fixture.wasm'), Buffer.from([0, 97, 115, 109])),
       writeFile(path.join(temporary, 'dist', 'private-settings.txt'), 'synthetic private fixture'),
       writeFile(path.join(temporary, 'dist', 'assets', '.hidden.txt'), 'synthetic hidden fixture'),
@@ -216,6 +218,22 @@ test(
     });
 
     // MARK: - Auth, exact binary bodies, query strings and CAS metadata survive safe forwarding
+    await t.test('allows only an empty authenticated POST for a live transcription token', async () => {
+      const result = await send(webPort, '/v1/audio/realtime-token', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer synthetic-owner' },
+      });
+      assert.equal(result.status, 200);
+      assert.equal(requests.at(-1).headers.authorization, 'Bearer synthetic-owner');
+      assert.equal(requests.at(-1).body.length, 0);
+      const before = requests.length;
+      assert.equal((await send(webPort, '/v1/audio/realtime-token')).status, 405);
+      assert.equal(
+        (await send(webPort, '/v1/audio/realtime-token', { method: 'POST', body: 'x' })).status,
+        413,
+      );
+      assert.equal(requests.length, before);
+    });
     await t.test('forwards exact auth/body/path while stripping cookies and unsafe headers', async () => {
       const body = Buffer.from([0, 255, 7, 12]);
       const result = await send(webPort, '/v1/attachments/synthetic_id?part=one%20two', {
@@ -388,6 +406,7 @@ test(
         ['/app/', 'text/html; charset=utf-8'],
         ['/assets/app.js', 'text/javascript'],
         ['/demo/seed.json', 'application/json'],
+        ['/fonts/NotoSans.ttf', 'font/ttf'],
         ['/ocr/core/fixture.wasm', 'application/wasm'],
       ]) {
         const result = await send(webPort, target);

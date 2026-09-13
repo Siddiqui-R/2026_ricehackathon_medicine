@@ -11,7 +11,7 @@ import { demoPeople, demoPersonURL, selectedDemoPerson } from '../../core/demoPr
 export function DemoSwitcher({
   disabled,
   className = '',
-  label = 'Switch demo account',
+  label = 'Switch account',
 }: {
   disabled: boolean;
   className?: string;
@@ -33,8 +33,8 @@ export function DemoSwitcher({
         <span className="demo-switch-label">{label}</span>
       </button>
       {open && (
-        <Modal title="Switch demo account" onClose={() => setOpen(false)}>
-          <p className="muted">Choose a person to explore. Each example keeps its own saved changes.</p>
+        <Modal title="Switch account" onClose={() => setOpen(false)}>
+          <p className="muted">Choose an account. Each account keeps its own saved changes.</p>
           <div className="demo-people">
             {demoPeople.map((person) => (
               <button
@@ -50,7 +50,7 @@ export function DemoSwitcher({
                   <strong>{person.name}</strong>
                   <small>{person.description}</small>
                 </span>
-                {selected === person.id && <Check size={18} aria-label="Current example" />}
+                {selected === person.id && <Check size={18} aria-label="Current account" />}
               </button>
             ))}
           </div>

@@ -17,7 +17,7 @@ import {
 import { useReva } from '../../core/RevaContext';
 import { useMedicalProfileUpdate } from '../../core/MedicalProfileUpdates';
 import { formatDate } from '../../core/domain';
-import { demoLabel } from '../../core/presentation';
+import { demoDescription, demoLabel } from '../../core/presentation';
 import type { MedicalProfileField, PatientProfile } from '../../core/models';
 import { Button, Card, Field, Modal } from '../../components/ui';
 import { SourceLink } from '../../components/SourceLink';
@@ -153,7 +153,7 @@ export function MedicalProfilePage() {
             .filter(Boolean)
             .map((line, index) => (
               <p className="prose" key={index}>
-                {demoLabel(line, profile.isDemo)}
+                {demoDescription(line, profile.isDemo)}
                 {sources('careNotes', line)}
               </p>
             ))
@@ -376,7 +376,7 @@ function ProfileEditor({
                   <textarea
                     autoFocus
                     rows={4}
-                    value={demoLabel(notes, profile.isDemo)}
+                    value={demoDescription(notes, profile.isDemo)}
                     onChange={(event) => setNotes(event.target.value)}
                     maxLength={12000}
                     placeholder="Anything else you want handy at an appointment"

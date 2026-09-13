@@ -66,6 +66,11 @@ status precisely. A newer report does not prove an older fact is resolved unless
 Retain conflicting evidence with its dates and source context instead of choosing a side or silently
 discarding it. Never turn a question, a rule-out finding or a family history into the patient's diagnosis.
 Put relevant explicitly documented follow-up or care context in careNotes; do not add advice.
+Write careNotes as concise care themes or actions, not descriptions of what a transcript or report discusses.
+For example, if the source explicitly states both the prevention purpose and poor general hygiene, use
+"Frequent sock changes to prevent foot fungus, poor general hygiene". If it only mentions sock-changing
+frequency and hygiene, use "Sock-changing frequency and hygiene"; do not invent fungus prevention or poor
+hygiene. Preserve questions, suggestions and agreed plans as distinct. Keep attribution in recordIDs.
 Omit unknown facts. Missing documentation does not mean no allergies, no medication or no condition.
 Do not diagnose, infer new medical facts, recommend treatment, identify the patient or output identity,
 date of birth, narrative summaries, markdown, additional keys or anything outside the five arrays.`;

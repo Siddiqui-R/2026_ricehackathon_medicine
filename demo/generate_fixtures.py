@@ -214,13 +214,18 @@ not a clinical recommendation or a real patient document.
 """
 
 
+# The web presentation renderer can format fixture labels without rewriting canonical sources.
+def display_text(text: str) -> str:
+    return text
+
+
 # --- Render factual PDF content and reject footer overflow ---
 def paragraph(c: canvas.Canvas, content: str, x: float, y: float, width: float,
               font_size: float = 10.8, leading: float = 15, color=INK) -> float:
     style = ParagraphStyle("body", fontName="DemoSans", fontSize=font_size,
                            leading=leading, textColor=color, alignment=TA_LEFT,
                            spaceAfter=0)
-    p = Paragraph(escape(content).replace("\n", "<br/>"), style)
+    p = Paragraph(escape(display_text(content)).replace("\n", "<br/>"), style)
     _, h = p.wrap(width, 1000)
     p.drawOn(c, x, y - h)
     return y - h
@@ -229,18 +234,18 @@ def paragraph(c: canvas.Canvas, content: str, x: float, y: float, width: float,
 def create_pdf(doc: dict) -> None:
     path = SOURCES / doc["filename"]
     c = canvas.Canvas(str(path), pagesize=(612, 792), invariant=1, pageCompression=1)
-    c.setTitle(LABEL + " | " + doc["title"])
-    c.setAuthor("Reva Synthetic Fixture Generator")
-    c.setSubject(DISCLAIMER)
+    c.setTitle(display_text(LABEL + " | " + doc["title"]))
+    c.setAuthor(display_text("Reva Synthetic Fixture Generator"))
+    c.setSubject(display_text(DISCLAIMER))
     for index, sections in enumerate(doc["pages"], start=1):
         c.setFillColor(TEAL)
         c.rect(0, 748, 612, 44, fill=1, stroke=0)
         c.setFillColor(colors.white)
         c.setFont("DemoSansBold", 10)
-        c.drawString(42, 766, LABEL)
+        c.drawString(42, 766, display_text(LABEL))
         c.setFillColor(TEAL)
         c.setFont("DemoSansBold", 11)
-        c.drawString(42, 720, "REVA / SYNTHETIC SOURCE LIBRARY")
+        c.drawString(42, 720, display_text("REVA / SYNTHETIC SOURCE LIBRARY"))
         y = paragraph(c, doc["title"], 42, 698, 528, 22, 26, INK)
         c.setStrokeColor(GOLD)
         c.setLineWidth(2)
@@ -252,7 +257,7 @@ def create_pdf(doc: dict) -> None:
         for heading, body in sections:
             c.setFillColor(TEAL)
             c.setFont("DemoSansBold", 10.8)
-            c.drawString(42, y, heading.upper())
+            c.drawString(42, y, display_text(heading.upper()))
             y = paragraph(c, body, 42, y - 10, 528) - 21
         if y < 95:
             raise ValueError(f"Content overflows footer: {doc['filename']} page {index}: y={y}")
@@ -261,7 +266,7 @@ def create_pdf(doc: dict) -> None:
         paragraph(c, DISCLAIMER, 51, 74, 510, 8.5, 11, MUTED)
         c.setFont("DemoSans", 8)
         c.setFillColor(MUTED)
-        c.drawString(42, 35, "Synthetic source ID: " + doc["id"])
+        c.drawString(42, 35, display_text("Synthetic source ID: " + doc["id"]))
         c.drawRightString(570, 35, f"Page {index} of {len(doc['pages'])}")
         c.showPage()
     c.save()
@@ -283,22 +288,24 @@ def create_diary() -> None:
     # This is a generated document scan, not a captured patient document.
     im = Image.new("RGB", (1650, 2136), (248, 247, 242))
     d = ImageDraw.Draw(im)
+    def draw_text(position, content, **kwargs):
+        d.text(position, display_text(content), **kwargs)
     regular_path, bold_path = find_font(), find_font(True)
     body = ImageFont.truetype(regular_path, 28)
     small = ImageFont.truetype(regular_path, 23)
     bold = ImageFont.truetype(bold_path, 28)
     title = ImageFont.truetype(bold_path, 49)
     d.rectangle((70, 70, 1580, 162), fill=(10, 91, 108))
-    d.text((102, 98), LABEL, font=bold, fill="white")
-    d.text((102, 215), "Patient symptom diary", font=title, fill=(25, 42, 47))
+    draw_text((102, 98), LABEL, font=bold, fill="white")
+    draw_text((102, 215), "Patient symptom diary", font=title, fill=(25, 42, 47))
     y = 310
     for line in [f"{PATIENT} | DOB: {DOB}", "Source: Patient-authored sample (Fictional)",
                  "Week ending: September 7, 2026"]:
-        d.text((102, y), line, font=body, fill=(40, 48, 50))
+        draw_text((102, y), line, font=body, fill=(40, 48, 50))
         y += 48
     y += 18
     prefix = "Entry date: September 0"
-    d.text((102, y), prefix, font=body, fill=(40, 48, 50))
+    draw_text((102, y), prefix, font=body, fill=(40, 48, 50))
     digit_x = round(102 + d.textlength(prefix, font=body))
     d.text((digit_x + 25, y), ", 2026", font=body, fill=(40, 48, 50))
     # The missing digit is intentionally unreadable; neither seed nor OCR should guess it.
@@ -310,7 +317,7 @@ def create_diary() -> None:
     smudge = smudge.filter(ImageFilter.GaussianBlur(2.8))
     im.paste(smudge, (digit_x, y), smudge)
     y += 53
-    d.text((102, y), "The final date digit is obscured in this synthetic scan.", font=small, fill=(76, 70, 60))
+    draw_text((102, y), "The final date digit is obscured in this synthetic scan.", font=small, fill=(76, 70, 60))
     sections = [
         ("PATIENT OBSERVATIONS", ["Morning: brief racing-heart sensation while sitting after breakfast.",
                                   "Estimated duration: about 2 minutes. Nausea at the same time.",
@@ -324,21 +331,21 @@ def create_diary() -> None:
     ]
     for heading, lines in sections:
         y += 92
-        d.text((102, y), heading, font=bold, fill=(10, 91, 108))
+        draw_text((102, y), heading, font=bold, fill=(10, 91, 108))
         y += 52
         for line in lines:
-            d.text((102, y), line, font=body, fill=(40, 48, 50))
+            draw_text((102, y), line, font=body, fill=(40, 48, 50))
             y += 45
     d.line((102, 1925, 1548, 1925), fill=(162, 183, 188), width=3)
-    d.text((102, 1950), "Invented for Reva software demonstration.", font=small, fill=(65, 73, 75))
-    d.text((102, 1987), "Not a real patient record or medical advice.", font=small, fill=(65, 73, 75))
-    d.text((102, 2043), "SYNTHETIC SCAN | 1 page | no real patient data", font=small, fill=(65, 73, 75))
+    draw_text((102, 1950), "Invented for Reva software demonstration.", font=small, fill=(65, 73, 75))
+    draw_text((102, 1987), "Not a real patient record or medical advice.", font=small, fill=(65, 73, 75))
+    draw_text((102, 2043), "SYNTHETIC SCAN | 1 page | no real patient data", font=small, fill=(65, 73, 75))
     im.save(SOURCES / source("symptom-diary-scan", "png"), optimize=False)
     scan_pdf = canvas.Canvas(str(SOURCES / source("symptom-diary-image-only")),
                              pagesize=(612, 792), invariant=1, pageCompression=1)
-    scan_pdf.setTitle(LABEL + " | Image-only symptom diary")
-    scan_pdf.setAuthor("Reva Synthetic Fixture Generator")
-    scan_pdf.setSubject("Synthetic raster-only PDF; text requires actual OCR.")
+    scan_pdf.setTitle(display_text(LABEL + " | Image-only symptom diary"))
+    scan_pdf.setAuthor(display_text("Reva Synthetic Fixture Generator"))
+    scan_pdf.setSubject(display_text("Synthetic raster-only PDF; text requires actual OCR."))
     scan_pdf.drawImage(ImageReader(im), 0, 0, 612, 792)
     scan_pdf.save()
 

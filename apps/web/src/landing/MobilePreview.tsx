@@ -12,14 +12,18 @@ export function MobilePreview() {
     url.hash = location.hash.startsWith('#/') ? location.hash : '/summary';
     return url.pathname + url.search + url.hash;
   });
-  useEffect(() => { document.title = 'Mobile preview · Reva'; }, []);
+  useEffect(() => {
+    document.title = 'Mobile preview · Reva';
+  }, []);
   return (
     <div className="mobile-preview">
       <header className="mobile-preview-header">
-        <a href="/" aria-label="Reva home"><Brand /></a>
+        <a href="/" aria-label="Reva home">
+          <Brand />
+        </a>
         <div className="mobile-preview-heading">
           <h1>Mobile preview</h1>
-          <p>Explore the interactive demo at phone size.</p>
+          <p>Explore Reva at phone size.</p>
         </div>
         <a href={source} className="mobile-preview-open">
           Open full screen <ArrowUpRight size={16} aria-hidden="true" />
@@ -27,7 +31,7 @@ export function MobilePreview() {
       </header>
       <main className="mobile-preview-stage">
         <div className="mobile-preview-phone">
-          <iframe title="Reva mobile demo" src={source} allow="camera; microphone" />
+          <iframe title="Reva mobile app" src={source} allow="camera; microphone" />
         </div>
       </main>
     </div>

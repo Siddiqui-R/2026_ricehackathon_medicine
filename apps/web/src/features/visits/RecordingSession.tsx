@@ -1,14 +1,17 @@
 // Purpose: Keep a single consented recording draft alive across workspace navigation.
 // Inputs: Explicit consent, recording controls, title/notes edits and uploaded original audio.
-// Outputs: Shared draft state and an atomic saved recording, available to both page and banner.
+// Outputs: Shared draft state and an atomic audio save queued for background transcription and analysis.
 // Side effects: Owns microphone lifecycle; guards unsaved browser exits and saves originals through Reva.
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useReva } from '../../core/RevaContext';
 import { nowISO, uid } from '../../core/domain';
 import type { Visit, VisitRecording } from '../../core/models';
+import { recordingDateTitle } from '../../core/recordingDates';
 import { audioExtension, MAX_AUDIO_BYTES, useVisitRecorder } from './useVisitRecorder';
 import { inspectAudio, type UploadedAudio } from './recordingAudio';
+import { RevaAPI } from '../../core/api';
+import { useLiveTranscription } from './useLiveTranscription';
 
 interface RecordingDraft {
   id: string;
@@ -26,8 +29,12 @@ interface PendingSession {
 
 // MARK: - The provider is mounted outside the route switch, so screens never own the microphone
 export function useRecordingSessionDraft() {
-  const { snapshot, saveRecording, notify } = useReva();
-  const capture = useVisitRecorder();
+  const { snapshot, saveRecording, notify, token, providers } = useReva();
+  const live = useLiveTranscription(async (signal) => {
+    if (!providers?.realtimeTranscription?.configured) throw new Error('Live transcription is unavailable.');
+    return new RevaAPI(token).realtimeTranscriptionToken(signal);
+  });
+  const capture = useVisitRecorder(live);
   const [draft, setDraft] = useState<RecordingDraft | null>(null);
   const [pending, setPending] = useState<PendingSession | null>(null);
   const [upload, setUpload] = useState<UploadedAudio | null>(null);
@@ -44,7 +51,9 @@ export function useRecordingSessionDraft() {
   const detachedVisit = Boolean(
     draft?.visit && !snapshot?.visits.some((visit) => visit.id === draft.visit?.id),
   );
-  const hasUnsaved = Boolean(draft && (active || original || reading || saving || draft.notes.trim()));
+  const hasUnsaved = Boolean(
+    draft && (active || original || reading || saving || draft.title.trim() || draft.notes.trim()),
+  );
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -87,7 +96,7 @@ export function useRecordingSessionDraft() {
     setDraft({
       ...pending,
       id: uid(),
-      title: pending.visit ? `${pending.visit.title} · recording` : 'Session recording',
+      title: '',
       notes: '',
       mode: 'microphone',
       consented: true,
@@ -125,17 +134,6 @@ export function useRecordingSessionDraft() {
       const selected = await inspectAudio(file);
       if (!alive.current || attempt !== version.current) return;
       setUpload(selected);
-      const defaultTitle = draft.visit ? `${draft.visit.title} · recording` : 'Session recording';
-      setDraft(
-        (value) =>
-          value && {
-            ...value,
-            title:
-              !value.title.trim() || value.title === defaultTitle
-                ? file.name.replace(/\.[^.]+$/, '')
-                : value.title,
-          },
-      );
     } catch (failure) {
       if (alive.current && attempt === version.current)
         setError(failure instanceof Error ? failure.message : 'This audio could not be opened.');
@@ -177,32 +175,38 @@ export function useRecordingSessionDraft() {
     setSaving(true);
     setError('');
     try {
-      if (!draft.title.trim()) throw new Error('Add a title for this recording.');
       if (!Number.isFinite(duration) || duration <= 0)
         throw new Error('This recording has no captured audio duration.');
       if (!original.size || original.size > MAX_AUDIO_BYTES)
         throw new Error('Audio must be nonempty and no larger than 16 MiB.');
+      const savedAt = nowISO();
+      const capturedAt = upload ? undefined : (capture.startedAt ?? undefined);
       const recording: VisitRecording = {
         id: draft.id,
         visitID: detachedVisit ? '' : (draft.visit?.id ?? ''),
-        title: draft.title.trim(),
-        createdAt: nowISO(),
+        title: draft.title.trim() || recordingDateTitle(capturedAt ?? savedAt),
+        titleSource: draft.title.trim() ? 'user' : 'date',
+        createdAt: capturedAt ?? savedAt,
+        capturedAt,
+        savedAt,
         duration,
         audioFilename: `reva-audio-${draft.id}.${upload?.extension ?? audioExtension(original.type)}`,
+        // The live preview is provisional and may omit short/final speech. Always process the
+        // saved original automatically, even when preview text looks complete.
         segments: [],
         summary: draft.notes.trim(),
         isSample: false,
-        status: 'saved',
+        status: 'processing-queued',
       };
       await saveRecording(recording, original);
       if (!alive.current) return;
       clearDraft();
       notify(
         detachedVisit
-          ? 'Recording saved as a standalone session because the linked visit was removed. Your original audio is ready to review.'
-          : 'Recording saved. Your original audio is ready to review and transcribe.',
+          ? 'Recording saved as a standalone session because the linked visit was removed. Transcription and analysis are queued.'
+          : 'Recording saved. Transcription and analysis will continue in the background.',
       );
-      window.location.hash = `#/recordings/${encodeURIComponent(recording.id)}`;
+      window.location.hash = detachedVisit ? '#/summary' : draft.returnHash;
     } catch (failure) {
       if (alive.current)
         setError(
@@ -219,6 +223,7 @@ export function useRecordingSessionDraft() {
     draft,
     pending,
     capture,
+    liveTranscript: live.transcript,
     upload,
     original,
     duration,

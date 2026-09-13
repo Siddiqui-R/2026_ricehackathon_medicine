@@ -124,7 +124,7 @@ export class MedicalProfileAutomation {
       this.publish(
         'unavailable',
         state.mode === 'demo'
-          ? 'Demo profile. Connect and enable AI to update it from reports.'
+          ? 'Connect and enable AI to update your profile from reports.'
           : 'Automatic profile updates will resume when the AI service is available.',
       );
       return;

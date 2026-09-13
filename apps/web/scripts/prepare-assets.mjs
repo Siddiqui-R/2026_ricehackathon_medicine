@@ -16,6 +16,9 @@ await rm(ocr, { recursive: true, force: true });
 await mkdir(demo, { recursive: true });
 await mkdir(path.join(ocr, 'core'), { recursive: true });
 await cp(path.resolve(root, '../ios/Reva/Resources'), demo, { recursive: true });
+await cp(path.join(root, 'assets/source-previews'), path.join(root, 'public/source-previews'), {
+  recursive: true,
+});
 
 // MARK: - Serve one local English OCR model and worker; user documents never leave the browser
 await cp(path.join(root, 'node_modules/tesseract.js/dist/worker.min.js'), path.join(ocr, 'worker.min.js'));

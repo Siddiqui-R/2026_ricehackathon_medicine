@@ -29,7 +29,10 @@ struct RecordDetailView: View {
                     }
                     Text(record.title).font(.title.bold())
                     if record.symptomEntry == nil {
-                        DetailLine(symbol: "calendar", text: RevaDate.display(record.date))
+                        DetailLine(
+                            symbol: "calendar",
+                            text: (record.dateSource == "added" ? "Added " : "")
+                                + RevaDate.display(record.date))
                     }
                     DetailLine(
                         symbol: record.symptomEntry == nil ? "building.2" : "person", text: record.provider)
@@ -42,6 +45,10 @@ struct RecordDetailView: View {
                                 record.summaryModel != nil || hasAuthoredSummary(record)
                                     ? record.summaryLabel : "Local excerpt", systemImage: "text.alignleft"
                             ).font(.headline).foregroundStyle(RevaTheme.accent)
+                            if let generatedAt = record.summaryGeneratedAt, record.summaryModel != nil {
+                                Text("Generated " + RevaDate.display(generatedAt, time: true))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Text(
                                 displayedSummary(record).isEmpty
                                     ? "No complete source line fits in this excerpt. Open the source to review its text."

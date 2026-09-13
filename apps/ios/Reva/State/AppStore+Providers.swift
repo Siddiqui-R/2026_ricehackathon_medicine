@@ -19,8 +19,50 @@ extension AppStore {
         ProviderContext(connection: connectionGeneration, workspace: workspaceGeneration)
     }
 
+    // Retain request cancellation independently of the view task that initiated it.
+    // A workspace/connection switch stops both URLSession requests and Gemini backoff immediately.
+    func withProviderRequest<T>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T {
+        guard !providerWorkSuspended else { throw CancellationError() }
+        let id = UUID()
+        let request = Task { @MainActor in
+            try Task.checkCancellation()
+            let result = try await operation()
+            try Task.checkCancellation()
+            return result
+        }
+        providerRequestCancellations[id] = { request.cancel() }
+        defer { providerRequestCancellations.removeValue(forKey: id) }
+        return try await withTaskCancellationHandler {
+            try await request.value
+        } onCancel: {
+            request.cancel()
+        }
+    }
+
+    func cancelProviderRequests() {
+        let cancellations = Array(providerRequestCancellations.values)
+        providerRequestCancellations.removeAll()
+        for cancel in cancellations { cancel() }
+    }
+
+    // Stop derived work before the final sign-out sync while allowing saved originals to finish syncing.
+    func suspendProviderWork() {
+        providerWorkSuspended = true
+        profileDebounce?.cancel()
+        profileObserved = ""
+        stopRecordingProcessing()
+        cancelProviderRequests()
+    }
+    func resumeProviderWork() {
+        providerWorkSuspended = false
+        considerMedicalProfileUpdate()
+        considerRecordingProcessing()
+    }
+
     func providerClient() throws -> ProviderClient {
-        try ProviderClient(url: connectionURL, token: connectionToken)
+        try ProviderClient(
+            url: connectionURL, token: connectionToken,
+            session: account == nil ? .shared : NativeAccountTransport.session)
     }
     // MARK: - Service discovery
     // Read configuration flags and models; this operation does not test provider credentials.
@@ -29,13 +71,12 @@ extension AppStore {
         providerDiscoveryID = requestID
         let context = providerContext
         let url = connectionURL
-        let token = connectionToken
         do {
-            let status = try await ProviderClient(url: url, token: token).status()
+            let status = try await withProviderRequest { try await self.providerClient().status() }
             guard context == providerContext, requestID == providerDiscoveryID else { return }
             try Task.checkCancellation()
             providerStatus = status
-            UserDefaults.standard.set(url, forKey: "serverURL")
+            if account == nil { UserDefaults.standard.set(url, forKey: "serverURL") }
             notice = "Service configuration checked. Only configured connections can be used."
         } catch {
             guard context == providerContext, requestID == providerDiscoveryID else { return }

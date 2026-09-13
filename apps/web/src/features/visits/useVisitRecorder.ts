@@ -7,6 +7,14 @@ import { useEffect, useRef, useState } from 'react';
 
 export const MAX_AUDIO_BYTES = 16 * 1024 * 1024;
 type CaptureState = 'idle' | 'requesting' | 'recording' | 'paused' | 'stopped';
+export interface CaptureObserver {
+  start(stream: MediaStream): void;
+  resume(stream: MediaStream): void;
+  pause(): void;
+  stop(): void;
+  reset(): void;
+  dispose(): void;
+}
 
 // MARK: - Capability and container selection
 export function audioExtension(type: string): string {
@@ -16,9 +24,12 @@ export function audioExtension(type: string): string {
   if (type.includes('wav')) return 'wav';
   return 'webm';
 }
-export function useVisitRecorder() {
+export function useVisitRecorder(observer?: CaptureObserver) {
+  const observerRef = useRef(observer);
+  observerRef.current = observer;
   const [state, setState] = useState<CaptureState>('idle');
   const [seconds, setSeconds] = useState(0);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -48,12 +59,14 @@ export function useVisitRecorder() {
   }
   function stop() {
     settleClock();
+    observerRef.current?.stop();
     if (recorder.current && recorder.current.state !== 'inactive') recorder.current.stop();
     stopTracks();
   }
   function reset() {
     // Invalidate pending permission and queued media events before releasing the old draft.
     generation.current += 1;
+    observerRef.current?.reset();
     if (recorder.current) {
       recorder.current.ondataavailable = null;
       recorder.current.onstop = null;
@@ -69,6 +82,7 @@ export function useVisitRecorder() {
     overflow.current = false;
     setState('idle');
     setSeconds(0);
+    setStartedAt(null);
     setBlob(null);
     setError('');
     setNotice('');
@@ -76,12 +90,14 @@ export function useVisitRecorder() {
   function pause() {
     if (recorder.current?.state !== 'recording') return;
     recorder.current.pause();
+    observerRef.current?.pause();
     settleClock();
     setState('paused');
   }
   function resume() {
     if (recorder.current?.state !== 'paused' || document.hidden) return;
     recorder.current.resume();
+    if (stream.current) observerRef.current?.resume(stream.current);
     activeSince.current = performance.now();
     setState('recording');
     setNotice('');
@@ -96,6 +112,7 @@ export function useVisitRecorder() {
     setState('requesting');
     setBlob(null);
     setSeconds(0);
+    setStartedAt(null);
     elapsed.current = 0;
     try {
       const selected = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus'].find((type) =>
@@ -144,6 +161,7 @@ export function useVisitRecorder() {
       };
       media.onstop = () => {
         settleClock();
+        observerRef.current?.stop();
         stopTracks();
         if (alive.current && attempt === generation.current) {
           const captured = new Blob(chunks.current, { type: media.mimeType });
@@ -162,12 +180,15 @@ export function useVisitRecorder() {
         };
       });
       media.start(1000);
+      observerRef.current?.start(source);
+      setStartedAt(new Date().toISOString());
       activeSince.current = performance.now();
       setState('recording');
     } catch (failure) {
       // A superseded permission attempt cannot touch the current stream or its UI state.
       if (!alive.current || attempt !== generation.current) return;
       stopTracks();
+      observerRef.current?.stop();
       if (alive.current) {
         setState('idle');
         setError(
@@ -186,9 +207,7 @@ export function useVisitRecorder() {
     alive.current = true;
     const hidden = () => {
       if (document.hidden && recorder.current?.state === 'recording') {
-        recorder.current.pause();
-        settleClock();
-        setState('paused');
+        pause();
         setNotice('Recording paused when this page was hidden. Resume when everyone is ready.');
       }
     };
@@ -206,6 +225,7 @@ export function useVisitRecorder() {
     return () => {
       alive.current = false;
       generation.current += 1;
+      observerRef.current?.dispose();
       window.clearInterval(tick);
       document.removeEventListener('visibilitychange', hidden);
       if (recorder.current) {
@@ -216,5 +236,5 @@ export function useVisitRecorder() {
       stopTracks();
     };
   }, []);
-  return { state, seconds, blob, error, notice, supported, start, pause, resume, stop, reset };
+  return { state, seconds, startedAt, blob, error, notice, supported, start, pause, resume, stop, reset };
 }

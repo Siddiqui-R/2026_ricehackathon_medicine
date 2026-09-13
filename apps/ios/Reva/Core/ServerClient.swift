@@ -92,7 +92,7 @@ struct ServerClient {
     // Apply auth, a 20-second request timeout and explicit conflict/empty-state handling.
     private func send(
         path: String, method: String = "GET", data: Data? = nil, type: String = "application/json",
-        filename: String? = nil
+        filename: String? = nil, uploadID: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
@@ -101,6 +101,7 @@ struct ServerClient {
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         request.setValue(type, forHTTPHeaderField: "Content-Type")
         if let filename { request.setValue(filename, forHTTPHeaderField: "X-Filename") }
+        if let uploadID { request.setValue(uploadID, forHTTPHeaderField: "X-Reva-Upload") }
         let (bytes, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
             throw RevaError.invalid("The server response was unreadable.")
@@ -145,11 +146,16 @@ struct ServerClient {
         guard AppSnapshot.safeFilename(id), AppSnapshot.safeFilename(filename) else {
             throw RevaError.invalid("Invalid attachment identifier.")
         }
+        let upload = try await HostedTransfers.stage(data, origin: baseURL, token: token, session: session)
         _ = try await send(
-            path: "v1/attachments/" + id, method: "PUT", data: data, type: type, filename: filename)
+            path: "v1/attachments/" + id, method: "PUT", data: upload == nil ? data : nil, type: type,
+            filename: filename, uploadID: upload)
     }
     func attachment(id: String) async throws -> Data {
         guard AppSnapshot.safeFilename(id) else { throw RevaError.invalid("Invalid attachment identifier.") }
+        if HostedTransfers.enabled(baseURL) {
+            return try await HostedTransfers.download(id: id, origin: baseURL, token: token, session: session)
+        }
         return try await send(path: "v1/attachments/" + id).0
     }
     func deleteAttachment(id: String) async throws {

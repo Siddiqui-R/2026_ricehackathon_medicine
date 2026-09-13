@@ -54,7 +54,7 @@ function checkedStored(value: unknown): StoredSnapshot {
     !('snapshot' in value)
   )
     throw new Error(
-      'The saved browser workspace is corrupt. Existing data was kept; restore a backup or explicitly reset the demo.',
+      'The saved browser workspace is corrupt. Existing data was kept; restore a backup or explicitly reset the workspace.',
     );
   return { revision: value.revision as number, snapshot: validateSnapshot(value.snapshot) };
 }
@@ -311,13 +311,13 @@ export class IndexedDBRepository implements SnapshotRepository {
       redirect: 'error',
       cache: 'no-store',
     });
-    if (!response.ok) throw new Error('The bundled fictional demo could not be loaded.');
+    if (!response.ok) throw new Error('The bundled workspace could not be loaded.');
     const result = validateSnapshot(
       JSON.parse(
         new TextDecoder('utf-8', { fatal: true }).decode(await boundedBytes(response, MAX_SNAPSHOT_BYTES)),
       ),
     );
-    if (!result.profile.isDemo) throw new Error('The bundled seed is not marked as fictional demo data.');
+    if (!result.profile.isDemo) throw new Error('The bundled workspace has invalid account metadata.');
     return result;
   }
   async close(): Promise<void> {

@@ -5,7 +5,7 @@
 
 // MARK: - Mocked brief requests and standalone recording contracts
 import { describe, it, expect, vi } from 'vitest';
-import { RevaStore } from '../store';
+import { RevaStore, type APITransport } from '../store';
 import { BRIEF_MODEL, briefVisit, clinicalBrief, briefSources } from '../visitBrief';
 import { deferred, MemoryRepository, sample, seed, transport } from './fixtures';
 import type { AIPreparation } from '../models';
@@ -17,14 +17,34 @@ const response: AIPreparation = {
   selectedRecordIDs: [],
   model: BRIEF_MODEL,
 };
-async function ready(prepare = async () => response) {
+async function ready(prepare: APITransport['prepare'] = async () => response) {
   const repository = new MemoryRepository();
   const provider = vi.fn(prepare);
   const store = new RevaStore(repository, () => transport({ prepare: provider }));
   await store.initialize();
+  // These tests exercise connected preparation for a personal, rather than fictional, profile.
+  await store.mutate((snapshot) => {
+    snapshot.profile.isDemo = false;
+  });
   return { repository, provider, store };
 }
 describe('on-demand visit brief', () => {
+  it('cancels a page-owned request promptly without publishing a late result or global error', async () => {
+    const result = deferred<AIPreparation>();
+    const { store, provider, repository } = await ready(() => result.promise);
+    const before = structuredClone(repository.saved);
+    const controller = new AbortController();
+    const pending = store.generateVisitBrief(input, controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(provider).toHaveBeenCalledOnce());
+    controller.abort();
+    await rejected;
+    expect(provider.mock.calls[0][2]!.aborted).toBe(true);
+    expect(store.getState()).toMatchObject({ providerWork: false, error: null });
+    result.resolve(response);
+    await Promise.resolve();
+    expect(repository.saved).toEqual(before);
+  });
   it('calls Gemini for every request, includes profile context, and creates no saved appointment', async () => {
     const { store, repository, provider } = await ready();
     const before = structuredClone(repository.saved);
@@ -64,7 +84,10 @@ describe('on-demand visit brief', () => {
     await expect(generating).rejects.toThrow();
   });
   it.each([
-    { ...response, model: 'other-model' },
+    { ...response, model: '' },
+    { ...response, model: '   ' },
+    { ...response, model: 'x'.repeat(101) },
+    { ...response, model: 'gemini\0invalid' },
     { ...response, selectedRecordIDs: ['unknown'] },
     { ...response, overview: 'word '.repeat(181) },
     { ...response, questions: Array(4).fill('Question?') },
@@ -72,6 +95,17 @@ describe('on-demand visit brief', () => {
     const snapshot = seed();
     expect(() => clinicalBrief(snapshot, briefVisit(input), briefSources(snapshot), result)).toThrow();
   });
+  it.each(['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-configured-model'])(
+    'accepts a validated brief attributed to %s without pinning one provider version',
+    (model) => {
+      const snapshot = seed();
+      const brief = clinicalBrief(snapshot, briefVisit(input), briefSources(snapshot), {
+        ...response,
+        model,
+      });
+      expect(brief.model).toBe(model);
+    },
+  );
 });
 
 describe('standalone home recording', () => {

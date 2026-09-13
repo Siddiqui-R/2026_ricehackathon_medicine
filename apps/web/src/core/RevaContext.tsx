@@ -5,6 +5,7 @@
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { RevaStore } from './store.ts';
 import { MedicalProfileUpdates } from './MedicalProfileUpdates';
+import { RecordingProcessingUpdates } from './RecordingProcessingUpdates';
 
 // MARK: - One store instance survives React strict-effect retries without resetting persisted data.
 const Context = createContext<RevaStore | null>(null);
@@ -14,11 +15,17 @@ export function RevaProvider({ children, store }: { children: ReactNode; store?:
   useEffect(() => {
     const current = instance.current!;
     void current.initialize();
-    return current.startAutomaticSync();
+    const stopSync = current.startAutomaticSync();
+    return () => {
+      stopSync();
+      void current.cancelProviderWork();
+    };
   }, []);
   return (
     <Context.Provider value={instance.current}>
-      <MedicalProfileUpdates store={instance.current}>{children}</MedicalProfileUpdates>
+      <MedicalProfileUpdates store={instance.current}>
+        <RecordingProcessingUpdates store={instance.current}>{children}</RecordingProcessingUpdates>
+      </MedicalProfileUpdates>
     </Context.Provider>
   );
 }
@@ -34,6 +41,7 @@ export function useReva() {
     notify: store.notify,
     reportError: store.reportError,
     clearFeedback: store.clearFeedback,
+    cancelProviderWork: store.cancelProviderWork,
     resetDemo: store.resetDemo,
     getAttachment: store.getAttachment,
     saveRecord: store.saveRecord,

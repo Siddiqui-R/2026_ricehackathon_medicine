@@ -14,6 +14,8 @@ import type {
 } from './models.ts';
 import { safeFilename, sha256, validateSnapshot } from './domain.ts';
 import { validateProfileResult, validateProfileSources, type ProfileSource } from './medicalProfileAI';
+import { retryGemini, type GeminiRequestOptions } from './geminiRetry';
+import { recordDateContext } from './recordDates';
 
 // MARK: - One API origin: same-origin by default, or a validated VITE_REVA_API_ORIGIN.
 // Only https:// or a loopback http:// origin is accepted, so a bearer token can never leak over
@@ -112,17 +114,20 @@ export class APIError extends Error {
   readonly status: number;
   readonly revision: number | null;
   readonly retryAfter: number | null;
+  readonly geminiFallback: boolean;
   constructor(
     status: number,
     revision: number | null = null,
     reason: string | null = null,
     retryAfter: number | null = null,
+    geminiFallback = false,
   ) {
     super(reason?.trim() || defaultReason(status, retryAfter));
     this.name = 'APIError';
     this.status = status;
     this.revision = revision;
     this.retryAfter = retryAfter;
+    this.geminiFallback = geminiFallback;
   }
 }
 export function headerRetryAfter(value: string | null): number | null {
@@ -249,13 +254,18 @@ export class RevaAPI {
           headerRevision(response.headers.get('X-State-Revision')),
           await errorReason(response),
           headerRetryAfter(response.headers.get('Retry-After')),
+          response.headers.get('X-Reva-Gemini-Fallback') === 'true',
         );
       return { bytes: await boundedBytes(response, limit), headers: response.headers };
     } catch (error) {
       if (signal?.aborted)
         throw new DOMException('The request was canceled. Your saved audio was kept.', 'AbortError');
       if (controller.signal.aborted)
-        throw new Error('The server request timed out. Your saved data and original audio were kept.');
+        throw new APIError(
+          504,
+          null,
+          'The server request timed out. Your saved data and original audio were kept.',
+        );
       throw error;
     } finally {
       clearTimeout(timer);
@@ -268,6 +278,7 @@ export class RevaAPI {
     value?: unknown,
     timeout?: number,
     signal?: AbortSignal,
+    headers: Record<string, string> = {},
   ): Promise<Record<string, unknown>> {
     const body = value === undefined ? undefined : JSON.stringify(value);
     if (body && new TextEncoder().encode(body).byteLength > MAX_SNAPSHOT_BYTES)
@@ -276,12 +287,28 @@ export class RevaAPI {
       path,
       method,
       body,
-      { 'Content-Type': 'application/json' },
+      { 'Content-Type': 'application/json', ...headers },
       MAX_SNAPSHOT_BYTES,
       timeout,
       signal,
     );
     return object(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
+  }
+
+  private async gemini(path: string, value: unknown, signal?: AbortSignal, options?: GeminiRequestOptions) {
+    return retryGemini(
+      (fallbackOnly) =>
+        this.json(
+          path,
+          'POST',
+          value,
+          80_000,
+          signal,
+          fallbackOnly ? { 'X-Reva-Gemini-Fallback': 'true' } : {},
+        ),
+      signal,
+      options?.onRetry,
+    );
   }
 
   // MARK: - Revision-bearing state and configuration discovery.
@@ -299,7 +326,19 @@ export class RevaAPI {
       if (typeof item.configured !== 'boolean') throw new Error('Provider availability was unreadable.');
       capabilities[key] = { configured: item.configured, model: string(item.model) };
     }
+    if (result.realtimeTranscription !== undefined) {
+      const live = object(result.realtimeTranscription);
+      if (typeof live.configured !== 'boolean')
+        throw new Error('Live transcription availability was unreadable.');
+      capabilities.realtimeTranscription = { configured: live.configured, model: string(live.model) };
+    }
     return capabilities;
+  }
+  async realtimeTranscriptionToken(signal?: AbortSignal): Promise<string> {
+    const result = await this.json('/v1/audio/realtime-token', 'POST', undefined, 15_000, signal);
+    if (typeof result.token !== 'string' || !/^[!-~]{1,8192}$/.test(result.token))
+      throw new Error('The live transcription session could not be opened.');
+    return result.token;
   }
   async pull(): Promise<ServerState> {
     const result = await this.json('/v1/state');
@@ -321,7 +360,7 @@ export class RevaAPI {
 
   // MARK: - Original bytes use the same SHA256 filename IDs as the native client.
   // Vercel requests are bounded; staging chunks keeps the existing 16 MiB original limit.
-  private async stageLargeBlob(blob: Blob): Promise<string | undefined> {
+  private async stageLargeBlob(blob: Blob, signal?: AbortSignal): Promise<string | undefined> {
     if (!this.chunkedTransfers || blob.size <= 3 * 1024 * 1024) return undefined;
     const id = crypto.randomUUID();
     for (let offset = 0; offset < blob.size; offset += 3 * 1024 * 1024) {
@@ -330,6 +369,9 @@ export class RevaAPI {
         'PUT',
         blob.slice(offset, offset + 3 * 1024 * 1024),
         { 'Content-Type': 'application/octet-stream' },
+        MAX_SNAPSHOT_BYTES,
+        25_000,
+        signal,
       );
     }
     return id;
@@ -397,27 +439,38 @@ export class RevaAPI {
   }
 
   // MARK: - Provider DTOs contain only reviewed inputs and validated returned fields.
-  async summarize(record: MedicalRecord, signal?: AbortSignal): Promise<AISummary> {
-    const result = await this.json(
+  async summarize(
+    record: MedicalRecord,
+    signal?: AbortSignal,
+    options?: GeminiRequestOptions,
+  ): Promise<AISummary> {
+    const result = await this.gemini(
       '/v1/ai/summarize',
-      'POST',
-      { recordID: record.id, title: record.title, text: record.text },
-      80_000,
+      {
+        recordID: record.id,
+        title: record.title,
+        text: record.text,
+        date: options?.date ?? recordDateContext(record),
+        ...(options?.generateTitle ? { generateTitle: true } : {}),
+      },
       signal,
+      options,
     );
-    return { summary: string(result.summary), model: string(result.model) };
+    const title = result.title === undefined ? undefined : string(result.title).trim();
+    if (
+      options?.generateTitle &&
+      (!title || new TextEncoder().encode(title).byteLength > 120 || /[\r\n\u2013\u2014]/u.test(title))
+    )
+      throw new Error('The generated session title was invalid. Your original recording was kept.');
+    return { summary: string(result.summary), model: string(result.model), ...(title ? { title } : {}) };
   }
   async medicalProfile(records: ProfileSource[], signal?: AbortSignal) {
     validateProfileSources(records);
-    return validateProfileResult(
-      await this.json('/v1/ai/profile', 'POST', { records }, 80_000, signal),
-      records,
-    );
+    return validateProfileResult(await this.gemini('/v1/ai/profile', { records }, signal), records);
   }
-  async prepare(visit: Visit, records: MedicalRecord[]): Promise<AIPreparation> {
-    const result = await this.json(
+  async prepare(visit: Visit, records: MedicalRecord[], signal?: AbortSignal): Promise<AIPreparation> {
+    const result = await this.gemini(
       '/v1/ai/prepare',
-      'POST',
       {
         visit: {
           id: visit.id,
@@ -426,16 +479,16 @@ export class RevaAPI {
           goal: visit.goal,
           questions: visit.questions,
         },
-        records: records.map(({ id, title, date, text, summary, version }) => ({
-          id,
-          title,
-          date,
-          text,
-          summary,
-          version,
+        records: records.map((record) => ({
+          id: record.id,
+          title: record.title,
+          date: recordDateContext(record),
+          text: record.text,
+          summary: record.summary,
+          version: record.version,
         })),
       },
-      80_000,
+      signal,
     );
     return {
       overview: string(result.overview),
@@ -444,10 +497,10 @@ export class RevaAPI {
       model: string(result.model),
     };
   }
-  async transcribe(filename: string, audio: Blob): Promise<AudioTranscription> {
+  async transcribe(filename: string, audio: Blob, signal?: AbortSignal): Promise<AudioTranscription> {
     if (!safeFilename(filename) || !audio.size || audio.size > MAX_ATTACHMENT_BYTES)
       throw new Error('Saved audio must be nonempty and no larger than 16 MiB.');
-    const upload = await this.stageLargeBlob(audio);
+    const upload = await this.stageLargeBlob(audio, signal);
     const { bytes } = await this.send(
       '/v1/audio/transcribe',
       'POST',
@@ -459,6 +512,7 @@ export class RevaAPI {
       },
       MAX_SNAPSHOT_BYTES,
       110_000,
+      signal,
     );
     const result = object(JSON.parse(new TextDecoder().decode(bytes)));
     if (!Array.isArray(result.segments) || result.segments.length > 5000)

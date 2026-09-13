@@ -16,9 +16,18 @@ extension AppStore {
             }
             let current = data.records[i]
             var revised = record
+            if (current.summaryModel != nil || revised.summaryModel != nil)
+                && (revised.title != current.title || revised.text != current.text
+                    || revised.date != current.date || revised.dateSource != current.dateSource)
+            {
+                revised.summary = ReportEngine.localExcerpt(revised.text, isDemo: revised.isDemo)
+                revised.summaryModel = nil
+                revised.summaryGeneratedAt = nil
+            }
             // Only changes a brief can quote or select on advance the source version; notes-only edits keep it.
             let affectsBriefs =
                 revised.title != current.title || revised.date != current.date || revised.text != current.text
+                || revised.dateSource != current.dateSource
                 || revised.kind != current.kind || revised.provider != current.provider
                 || revised.tags != current.tags || revised.summary != current.summary
                 || revised.status != current.status
@@ -51,9 +60,14 @@ extension AppStore {
         guard !latest.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw RevaError.invalid("Enter a record title.")
         }
-        if latest.text != current.text {
+        if latest.title != current.title || latest.text != current.text || latest.date != current.date
+            || latest.dateSource != current.dateSource
+        {
             latest.summary = ReportEngine.localExcerpt(latest.text, isDemo: latest.isDemo)
             latest.summaryModel = nil
+            latest.summaryGeneratedAt = nil
+        }
+        if latest.text != current.text {
             latest.pageTexts = nil
         }
         latest.status = "ready"

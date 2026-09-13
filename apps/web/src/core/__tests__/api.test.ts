@@ -15,6 +15,27 @@ import { seed } from './fixtures.ts';
 
 // MARK: - Native state headers and wire shapes remain exact, including tombstone revisions.
 describe('same-origin API contract', () => {
+  it('requests a one-use live token with owner auth, cancellation and no audio or body', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ token: 'synthetic-live-token' }));
+    const controller = new AbortController();
+    const api = new RevaAPI('synthetic-owner', fetcher);
+    expect(await api.realtimeTranscriptionToken(controller.signal)).toBe('synthetic-live-token');
+    expect(fetcher.mock.calls[0][0]).toBe('/v1/audio/realtime-token');
+    expect(fetcher.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      cache: 'no-store',
+      redirect: 'error',
+      body: undefined,
+      headers: { Authorization: 'Bearer synthetic-owner' },
+    });
+    controller.abort();
+    await expect(api.realtimeTranscriptionToken(controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+    fetcher.mockResolvedValue(Response.json({ token: 'invalid\nvalue' }));
+    await expect(api.realtimeTranscriptionToken()).rejects.toThrow('could not be opened');
+  });
   it('sends owner authentication and the exact state CAS body', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ revision: 9 })));
     const api = new RevaAPI('private-test-token', fetcher),

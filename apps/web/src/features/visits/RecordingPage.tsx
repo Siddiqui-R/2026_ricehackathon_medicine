@@ -5,9 +5,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, AudioLines, Check, FileAudio, Mic, Pause, Play, Square, Upload } from 'lucide-react';
-import { Button, Field } from '../../components/ui';
+import { Button } from '../../components/ui';
 import { durationLabel } from '../../core/domain';
+import { recordingDateTitle } from '../../core/recordingDates';
 import { useRecordingSession } from './RecordingSession';
+import { RecordingLivePreview } from './RecordingLivePreview';
+import { RecordingNotes } from './RecordingNotes';
 
 // MARK: - Dedicated recording route uses shared state, never a route-owned MediaRecorder
 export function RecordingPage() {
@@ -45,42 +48,58 @@ export function RecordingPage() {
         : capture.state === 'paused'
           ? 'Paused. Take your time.'
           : original
-            ? 'Ready to review and save'
+            ? 'Save to finish your transcript and summary'
             : 'Ready when you are';
   return (
     <div className="recording-page">
       <a className="text-link back-link" href={draft.returnHash}>
         <ArrowLeft size={16} /> Back to your workspace
       </a>
-      <div className="recording-page-heading">
-        <div>
-          <h1>Record session</h1>
-          <p>Be present in the conversation. Keep the details for later.</p>
+      <header className="recording-heading">
+        <h1 className="recording-title-heading" aria-label={draft.title.trim() || 'Session recording'}>
+          <input
+            aria-label="Session title"
+            title="Edit session title"
+            value={draft.title}
+            placeholder={recordingDateTitle(capture.startedAt ?? undefined)}
+            maxLength={180}
+            disabled={saving || reading}
+            onChange={(event) => session.updateDraft({ title: event.target.value })}
+          />
+        </h1>
+        <div className="recording-actions" role="group" aria-label="Session actions">
+          <Button variant="ghost" onClick={session.discard} disabled={reading || saving}>
+            {session.hasUnsaved ? 'Discard draft' : 'Cancel session'}
+          </Button>
+          <Button
+            className="recording-save"
+            disabled={!original || active || reading || saving}
+            onClick={() => void session.save()}
+          >
+            {saving ? 'Saving…' : 'Save recording'}
+          </Button>
         </div>
-        <span className="recording-consent-badge">
-          <Check size={15} /> Permission confirmed
-        </span>
-      </div>
+      </header>
       <div className="recording-workspace">
+        <div className="recording-mode-switch" role="group" aria-label="Audio source">
+          <button
+            type="button"
+            aria-pressed={microphone}
+            disabled={active || Boolean(original) || reading || saving}
+            onClick={() => session.setMode('microphone')}
+          >
+            <Mic size={16} /> Record live
+          </button>
+          <button
+            type="button"
+            aria-pressed={!microphone}
+            disabled={active || Boolean(original) || reading || saving}
+            onClick={() => session.setMode('upload')}
+          >
+            <Upload size={16} /> Upload audio
+          </button>
+        </div>
         <section className="recording-studio" aria-label="Session audio">
-          <div className="recording-mode-switch" role="group" aria-label="Audio source">
-            <button
-              type="button"
-              aria-pressed={microphone}
-              disabled={active || Boolean(original) || reading || saving}
-              onClick={() => session.setMode('microphone')}
-            >
-              <Mic size={16} /> Record live
-            </button>
-            <button
-              type="button"
-              aria-pressed={!microphone}
-              disabled={active || Boolean(original) || reading || saving}
-              onClick={() => session.setMode('upload')}
-            >
-              <Upload size={16} /> Upload audio
-            </button>
-          </div>
           {microphone ? (
             <div className={`recording-capture-stage${capture.state === 'recording' ? ' is-recording' : ''}`}>
               <div className="recording-audio-symbol" aria-hidden="true">
@@ -117,16 +136,10 @@ export function RecordingPage() {
                   </Button>
                 )}
               </div>
+              <RecordingLivePreview transcript={session.liveTranscript} />
               {!capture.supported && (
                 <p className="inline-error">
                   Your browser cannot record here. Choose Upload audio to use an existing recording.
-                </p>
-              )}
-              {!original && (
-                <p className="recording-stage-hint">
-                  Browse your records while recording.
-                  <br />
-                  Switching away from this browser tab pauses capture.
                 </p>
               )}
             </div>
@@ -178,47 +191,20 @@ export function RecordingPage() {
               <p>Your original audio is kept with this session.</p>
             </div>
           )}
-          <div className="recording-stage-footer">
-            <span>
-              <Check size={14} /> Original audio preserved
-            </span>
-            <span>{microphone ? 'Up to 30 min · 16 MiB' : 'No conversion needed'}</span>
-          </div>
         </section>
-        <aside className="recording-details">
-          <Field label="Session title">
-            <input
-              value={draft.title}
-              maxLength={180}
-              disabled={saving || reading}
-              onChange={(event) => session.updateDraft({ title: event.target.value })}
-            />
-          </Field>
-          <Field label="Your notes" hint="Optional. Your notes stay separate from the transcript.">
-            <textarea
-              rows={7}
-              maxLength={20000}
-              disabled={saving || reading}
-              placeholder="Questions, reminders, anything you want to remember…"
-              value={draft.notes}
-              onChange={(event) => session.updateDraft({ notes: event.target.value })}
-            />
-          </Field>
-          <div className="recording-next">
-            <h3>After your conversation</h3>
-            <p>Save the original audio, then create a transcript and an appointment summary.</p>
-          </div>
-          <Button
-            className="recording-save"
-            disabled={!original || active || reading || saving}
-            onClick={() => void session.save()}
-          >
-            {saving ? 'Saving…' : 'Save recording'}
-          </Button>
-          <Button variant="ghost" onClick={session.discard} disabled={reading || saving}>
-            {session.hasUnsaved ? 'Discard draft' : 'Cancel session'}
-          </Button>
-        </aside>
+        <section className="recording-details" aria-label="Session notes">
+          <RecordingNotes
+            value={draft.notes}
+            disabled={saving || reading}
+            onChange={(notes) => session.updateDraft({ notes })}
+          />
+        </section>
+        <div className="recording-stage-footer">
+          <span>
+            <Check size={14} /> Original audio preserved
+          </span>
+          <span>Up to 30 min · 16 MiB</span>
+        </div>
       </div>
       {session.detachedVisit && (
         <p className="recording-page-notice" role="status">

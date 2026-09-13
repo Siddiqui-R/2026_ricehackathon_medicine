@@ -34,6 +34,102 @@ async function ready(overrides: Partial<APITransport> = {}) {
 const current = (store: RevaStore) => store.getState().snapshot!.recordings[0];
 
 describe('transcript-only appointment summaries', () => {
+  it('titles only a date fallback from its transcript and updates untouched memory titles', async () => {
+    const { store, recording, summarize } = await ready();
+    await store.mutate((draft) =>
+      Object.assign(draft.recordings[0], {
+        title: 'Sep 12, 2026',
+        titleSource: 'date',
+        capturedAt: '2026-09-13T02:00:00Z',
+        savedAt: '2026-09-13T02:30:00Z',
+      }),
+    );
+    await store.saveMemory(recording.id);
+    summarize.mockResolvedValueOnce({ ...answer, title: 'Follow-up on sleep and blood pressure' });
+    const onRetry = vi.fn();
+    await store.summarizeRecording(recording.id, undefined, true, onRetry);
+    expect(summarize.mock.calls[0][2]).toEqual({ generateTitle: true, date: '2026-09-12', onRetry });
+    expect(current(store)).toMatchObject({
+      title: 'Follow-up on sleep and blood pressure',
+      titleSource: 'ai',
+    });
+    expect(
+      store.getState().snapshot!.records.find((item) => item.sourceRecordingID === recording.id),
+    ).toMatchObject({
+      title: 'Follow-up on sleep and blood pressure · memory',
+      date: '2026-09-12',
+      dateSource: 'recorded',
+    });
+    await store.summarizeRecording(recording.id);
+    expect(summarize.mock.calls[1][2]?.generateTitle).toBe(false);
+  });
+
+  it('preserves concurrent manual titles and saved memory edits while a fallback title is generated', async () => {
+    const result = deferred<AISummary>();
+    const { store, recording } = await ready({ summarize: () => result.promise });
+    await store.mutate((draft) =>
+      Object.assign(draft.recordings[0], {
+        title: 'Sep 12, 2026',
+        titleSource: 'date',
+        savedAt: '2026-09-13T02:30:00Z',
+      }),
+    );
+    await store.saveMemory(recording.id);
+    const pending = store.summarizeRecording(recording.id);
+    await store.mutate((draft) => {
+      draft.recordings[0].title = 'My chosen session title';
+      draft.recordings[0].titleSource = 'user';
+      draft.records.find((item) => item.sourceRecordingID === recording.id)!.title = 'My memory title';
+    });
+    result.resolve({ ...answer, title: 'AI suggested title' });
+    await pending;
+    expect(current(store)).toMatchObject({
+      title: 'My chosen session title',
+      titleSource: 'user',
+      aiSummary: answer.summary,
+    });
+    expect(
+      store.getState().snapshot!.records.find((item) => item.sourceRecordingID === recording.id)!.title,
+    ).toBe('My memory title');
+  });
+
+  it('keeps import dates distinct from event dates and retains metadata through snapshot validation', async () => {
+    const { store, recording, summarize } = await ready();
+    await store.mutate((draft) =>
+      Object.assign(draft.recordings[0], {
+        title: 'Sep 12, 2026',
+        titleSource: 'date',
+        savedAt: '2026-09-13T02:30:00Z',
+      }),
+    );
+    summarize.mockResolvedValueOnce({ ...answer, title: 'Medication review' });
+    await store.summarizeRecording(recording.id);
+    expect(summarize.mock.calls[0][2]?.date).toBe('Added 2026-09-12; event date unknown');
+    expect(summarize.mock.calls[0][0].uploadedAt).toBe('2026-09-13T02:30:00Z');
+    await store.saveMemory(recording.id);
+    const saved = validateSnapshot(JSON.parse(JSON.stringify(store.getState().snapshot)));
+    expect(saved.recordings[0]).toMatchObject({ titleSource: 'ai', savedAt: '2026-09-13T02:30:00Z' });
+    expect(saved.recordings[0].capturedAt).toBeUndefined();
+    expect(saved.records.find((item) => item.sourceRecordingID === recording.id)).toMatchObject({
+      date: '2026-09-12',
+      dateSource: 'added',
+    });
+  });
+
+  it('ignores unsolicited titles for manual recordings and rejects invalid generated titles', async () => {
+    const { store, recording, summarize } = await ready();
+    summarize.mockResolvedValueOnce({ ...answer, title: 'Unexpected rename' });
+    await store.summarizeRecording(recording.id);
+    expect(current(store).title).toBe(recording.title);
+    await store.mutate((draft) => {
+      draft.recordings[0].titleSource = 'date';
+    });
+    summarize.mockResolvedValueOnce({ ...answer, title: '界'.repeat(41) });
+    await expect(store.summarizeRecording(recording.id)).rejects.toThrow('no usable recording title');
+    expect(current(store).title).toBe(recording.title);
+    expect(current(store).aiSummary).toBe(answer.summary);
+  });
+
   it('sends the full timestamped transcript, retains separate notes, and attributes saved memory', async () => {
     const { store, recording, summarize } = await ready();
     await store.mutate((draft) => {
@@ -66,6 +162,7 @@ describe('transcript-only appointment summaries', () => {
     expect(memory.text).toBe(transcript);
     expect(memory.summary).toBe(answer.summary);
     expect(memory.summaryModel).toBe(answer.model);
+    expect(memory.summaryGeneratedAt).toBe(current(store).aiSummaryGeneratedAt);
     expect(memory.pageTexts).toBeUndefined();
     expect(memory.notes).toBe('Edited saved-memory notes');
   });
@@ -197,6 +294,7 @@ describe('summary provenance after edits', () => {
       .snapshot!.records.find((item) => item.sourceRecordingID === recording.id)!;
     expect(memory.text).toBe(recordingTranscript(current(store)));
     expect(memory.summaryModel).toBeUndefined();
+    expect(memory.summaryGeneratedAt).toBeUndefined();
     expect(memory.summary).not.toBe(answer.summary);
     expect(memory.notes).toBe('Keep edited memory notes');
   });

@@ -32,14 +32,18 @@ Store secrets in **Vercel → revamed → Environment Variables → Production �
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                   | Required Tiger connection string with database password; certificate verification is enforced.              |
 | `REVA_STORAGE=postgres`          | Documents storage selection; this API supports PostgreSQL only.                                             |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Document summaries, transcript summaries and visit preparation.                                             |
-| `ELEVENLABS_API_KEY`             | Scribe v2 transcription; key needs Speech to Text access.                                                   |
+| `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-flash-latest` | Shared model for document/transcript summaries, medical-profile extraction and visit preparation. |
+| `ELEVENLABS_API_KEY`             | Scribe v2 saved-audio transcription and Scribe v2 Realtime browser captions; key needs Speech to Text access. |
 | `REVA_SIGNUP`                    | Optional `closed` disables registrations; open by default.                                                  |
 | `REVA_SESSION_DAYS`              | Optional lifetime, default 30, bounded 1–365.                                                               |
 | `REVA_ALLOWED_ORIGINS`           | Optional comma-separated exact origins; defaults to production domains and allows the deployment URL.       |
 | `REVA_TOKENS`                    | Optional private token-to-owner JSON mapping for native/manual integrations. Accounts need no shared token. |
 
 Existing ElevenLabs agent, Twilio and local Swift listener settings were also stored in Vercel as requested. They are inactive compatibility settings: this app has no telephone/booking routes. `OPENAI_TRANSCRIPTION_MODEL` is unused here; no OpenAI key is required. Vercel manages the port; `REVA_HOST`, `REVA_PORT` and `REVA_DATA_DIRECTORY` do not control functions. `REVA_ACCOUNTS` is Swift-only; Vercel account routes are always enabled.
+
+All Gemini analysis starts on the moving `gemini-flash-latest` alias. Both servers migrate absent/blank settings and the prior shipped `gemini-3.8-flash`, `gemini-3.5-flash-lite` and `gemini-flash-lite-latest` values to this primary alias. Other explicit custom model IDs remain primary overrides for all operations. A transient network, timeout, quota or provider-server failure immediately tries the fixed `gemini-flash-lite-latest` alias once. Each attempt has a 35-second limit; neither server sleeps between attempts. Successful responses identify the model that produced the result. [Google model aliases](https://ai.google.dev/gemini-api/docs/models), [latest model identifiers](https://ai.google.dev/api/interactions-api).
+
+After a retryable Lite failure, the server returns `X-Reva-Gemini-Fallback: true` and `Retry-After` of at least 60 seconds. Browser and native clients wait 60, 120, 240 seconds and so on, honor a longer server delay, and send only `X-Reva-Gemini-Fallback: true` to retry Lite directly. The header accepts only that literal value; clients cannot select arbitrary models. It is allowed and exposed by CORS. Request/output validation and configuration failures remain terminal without fallback or retry metadata. Caller cancellation stops the attempt and prevents the fallback.
 
 ## Transfer and provider limits
 

@@ -33,7 +33,7 @@ export function SettingsPage() {
         description={
           account
             ? 'Your account, your sessions, and connected services. Changes sync automatically.'
-            : 'Explore the local demo and configure connected services.'
+            : 'Manage your workspace and connected services.'
         }
       />
       <div className="settings-grid">
@@ -48,11 +48,11 @@ export function SettingsPage() {
                 </span>
                 <div>
                   <h2>Connect to Reva</h2>
-                  <p className="muted">Configure services for this demo.</p>
+                  <p className="muted">Configure services for this workspace.</p>
                 </div>
               </div>
               <p>
-                Demo records stay in this browser. Connect to use the services configured on your Reva server,
+                Records stay in this browser. Connect to use the services configured on your Reva server,
                 or sign in to keep your own records up to date across devices.
               </p>
               <Field
@@ -87,14 +87,14 @@ export function SettingsPage() {
             </>
           ) : (
             <Card className="settings-card">
-              <h2>Demo</h2>
+              <h2>Workspace</h2>
               <p className="muted">
-                Restore the original demonstration records in this browser. This replaces active local
+                Restore the original records in this browser. This replaces active local
                 changes; it does not change the server or your iPhone.
               </p>
               <Button variant="ghost" disabled={working || store.busy} onClick={() => setConfirmReset(true)}>
                 <RotateCcw size={16} />
-                Restore demo
+                Restore records
               </Button>
             </Card>
           )}
@@ -158,7 +158,7 @@ export function SettingsPage() {
               <p>
                 {account
                   ? 'Records and originals sync automatically to your account and between signed-in devices. This browser keeps a private copy for offline reading. Changes made offline sync when you reconnect.'
-                  : 'Demo records and originals stay in this browser. Clearing site data removes this copy. Sign in to use your own account with automatic syncing across devices.'}
+                  : 'Records and originals stay in this browser. Clearing site data removes this copy. Sign in to use your own account with automatic syncing across devices.'}
               </p>
             </div>
           </div>
@@ -175,9 +175,9 @@ export function SettingsPage() {
         </div>
       </div>
       {confirmReset && (
-        <Modal title="Restore the demo?" onClose={() => !working && setConfirmReset(false)}>
+        <Modal title="Restore the original records?" onClose={() => !working && setConfirmReset(false)}>
           <p>
-            Your active local edits will be replaced with the original demo data. Other devices and the server
+            Your active local edits will be replaced with the original records. Other devices and the server
             are unchanged.
           </p>
           <div className="form-actions">
@@ -193,7 +193,7 @@ export function SettingsPage() {
                 })
               }
             >
-              {working ? 'Working…' : 'Restore demo'}
+              {working ? 'Working…' : 'Restore records'}
             </Button>
           </div>
         </Modal>

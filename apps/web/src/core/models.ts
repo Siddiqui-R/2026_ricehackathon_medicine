@@ -52,6 +52,8 @@ export interface MedicalRecord {
   provider: string;
   date: string;
   uploadedAt: string;
+  /** Whether date is source/occurrence evidence or only the date the item was added. */
+  dateSource?: 'document' | 'observed' | 'recorded' | 'added' | null;
   tags: string[];
   text: string;
   summary: string;
@@ -65,6 +67,7 @@ export interface MedicalRecord {
   pageTexts?: string[] | null;
   sourceRecordingID?: string | null;
   summaryModel?: string | null;
+  summaryGeneratedAt?: string | null;
   symptomEntry?: SymptomEntry | null;
 }
 
@@ -143,7 +146,12 @@ export interface VisitRecording {
   /** Empty for a standalone session; nonempty IDs must reference an existing visit. */
   visitID: string;
   title: string;
+  titleSource?: 'user' | 'date' | 'ai' | null;
   createdAt: string;
+  /** Actual microphone start, absent for uploaded audio with unknown capture time. */
+  capturedAt?: string | null;
+  /** Time the original audio was saved/imported into this workspace. */
+  savedAt?: string | null;
   duration: number;
   audioFilename?: string | null;
   segments: TranscriptSegment[];
@@ -176,10 +184,12 @@ export interface ProviderCapability {
 export interface ProviderStatus {
   gemini: ProviderCapability;
   transcription: ProviderCapability;
+  realtimeTranscription?: ProviderCapability;
 }
 export interface AISummary {
   summary: string;
   model: string;
+  title?: string | null;
 }
 export interface AIPreparation {
   overview: string;

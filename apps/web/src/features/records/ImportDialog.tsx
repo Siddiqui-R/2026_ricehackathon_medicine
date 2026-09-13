@@ -18,7 +18,7 @@ import {
   textByteCount,
   type ExtractionResult,
 } from './extractDocument';
-import { localDay } from './recordPresentation';
+import { documentDate } from '../../core/recordDates';
 import { PDFPreview } from './PDFPreview';
 
 // MARK: - Cancellable reading and unchanged original ownership
@@ -29,7 +29,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [title, setTitle] = useState('');
   const [provider, setProvider] = useState('');
-  const [date, setDate] = useState(localDay());
+  const [date, setDate] = useState('');
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,6 +66,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setFile(chosen);
     setTitle(chosen.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
     setProvider('');
+    setDate('');
     setText('');
     setError('');
     setExtraction(null);
@@ -114,8 +115,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   // MARK: - Save original bytes and the reviewable record in one transaction
   const save = async () => {
     if (!file || !extraction || reading || saving) return;
-    if (!title.trim() || !date || textByteCount(text) > MAX_TEXT_BYTES) {
-      setError('Add a title and source date, and keep extracted text within 120 KB.');
+    if (!title.trim() || textByteCount(text) > MAX_TEXT_BYTES) {
+      setError('Add a title, and keep extracted text within 120 KB.');
       return;
     }
     setSaving(true);
@@ -123,13 +124,14 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     try {
       const filename = `${uid()}-${file.name.replace(/[^A-Za-z0-9 ._()-]/g, '_').slice(-120)}`;
       const type = sourceType(file);
+      const uploadedAt = nowISO();
       const record: MedicalRecord = {
         id: uid(),
         title: title.trim(),
         kind: type.startsWith('image/') ? 'Scan' : 'Notes',
         provider: provider.trim() || 'Manually added',
-        date,
-        uploadedAt: nowISO(),
+        ...documentDate(date, uploadedAt),
+        uploadedAt,
         tags: [],
         text,
         summary: localExcerpt(text),
@@ -243,7 +245,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                         maxLength={240}
                       />
                     </Field>
-                    <Field label="Source date" hint="Choose the date shown on the document.">
+                    <Field
+                      label="Source date · optional"
+                      hint="Use the date shown on the document. Leave blank if unknown; the added date is saved separately."
+                    >
                       <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
                     </Field>
                     <div className="field-full">

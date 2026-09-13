@@ -3,12 +3,13 @@
 // Outputs: Recording capture/detail dialogs and a sample tied only to its original sample visit.
 // Side effects: Explicit sample access reads bundled JSON and persists it through context; no microphone starts here.
 
+import { recordingDateLabel } from '../../core/recordingDates';
 import { useState } from 'react';
 import { ChevronRight, Mic, Play } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { demoLabel } from '../../core/presentation';
 import type { Visit, VisitRecording } from '../../core/models';
-import { durationLabel, formatDate, uid } from '../../core/domain';
+import { durationLabel, uid } from '../../core/domain';
 import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Card } from '../../components/ui';
 import { useRecordingSession } from './RecordingSession';
@@ -31,7 +32,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
     setSampleBusy(true);
     try {
       const response = await fetch('/demo/sample-transcript.json');
-      if (!response.ok) throw new Error('The sample could not be loaded.');
+      if (!response.ok) throw new Error('The transcript could not be loaded.');
       const value = (await response.json()) as VisitRecording;
       if (
         value.isSample !== true ||
@@ -39,9 +40,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
         !value.segments.length ||
         !snapshot?.visits.some((item) => item.id === value.visitID)
       )
-        throw new Error(
-          'The original sample visit is unavailable. Restore the demo in Settings to explore it.',
-        );
+        throw new Error('The original visit is unavailable. Restore records in Settings to open it.');
       const existing = snapshot.recordings.find((item) => item.isSample && item.visitID === value.visitID);
       let recordingID = existing?.id ?? uid();
       if (!existing)
@@ -64,7 +63,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
       <div className="section-heading">
         <div>
           <h2>Appointment recording</h2>
-          <p className="muted small">Record, transcribe, then summarize what was discussed.</p>
+          <p className="muted small">Save a recording to get its transcript and summary automatically.</p>
         </div>
         <Mic size={21} />
       </div>
@@ -85,11 +84,11 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
               <span className="record-main">
                 <strong>{demoLabel(recording.title, recording.isSample)}</strong>
                 <span className="record-meta">
-                  {formatDate(recording.createdAt)} · {durationLabel(recording.duration)}
+                  {recordingDateLabel(recording)} · {durationLabel(recording.duration)}
                 </span>
                 <Badge tone={recording.isSample ? 'review' : 'neutral'}>
                   {recording.isSample
-                    ? 'Sample · no audio'
+                    ? 'Transcript only · no audio'
                     : hasRecordingSummary(recording)
                       ? 'Summary available'
                       : recording.segments.length
@@ -107,10 +106,10 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
         </p>
       )}
       <details className="sample-access">
-        <summary>Explore a sample</summary>
+        <summary>Previous visit transcript</summary>
         <p className="small muted">
-          This sample has no matching audio and belongs to the September 8 demo visit. It will never be used
-          as a transcript for your recordings.
+          This transcript has no matching audio and belongs to the September 8 visit. It will never be used as
+          a transcript for your recordings.
         </p>
         <Button
           variant="secondary"
@@ -119,7 +118,7 @@ export function RecordingsPanel({ visit }: { visit: Visit }) {
           }}
           disabled={sampleBusy}
         >
-          {sampleBusy ? 'Opening…' : 'Open sample'}
+          {sampleBusy ? 'Opening…' : 'Open transcript'}
         </Button>
       </details>
       {selectedRecording && (

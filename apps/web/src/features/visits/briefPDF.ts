@@ -10,6 +10,7 @@ import fontkit from '@pdf-lib/fontkit';
 import type { ClinicalBrief } from '../../core/visitBrief';
 import { validateBriefText } from '../../core/visitBrief';
 import { formatDate } from '../../core/dates';
+import { demoDescription, demoLabel } from '../../core/presentation';
 
 export function wrapText(text: string, font: PDFFont, size: number, width: number): string[] {
   const lines: string[] = [];
@@ -78,7 +79,7 @@ export async function createBriefPDF(
   document.setAuthor('Reva');
   document.setSubject('Patient-provided visit preparation');
   write('PRE-VISIT BRIEF', 19, 10);
-  write(brief.patient.name, 12, 2);
+  write(demoLabel(brief.patient.name, brief.patient.isDemo), 12, 2);
   if (brief.patient.dateOfBirth) write(`DOB: ${formatDate(brief.patient.dateOfBirth)}`, 10, 3);
   write(`${brief.visitType}  |  Prepared ${formatDate(brief.createdAt)}`, 10, 10, gray);
   page.drawLine({
@@ -88,7 +89,7 @@ export async function createBriefPDF(
     color: gray,
   });
   y -= 16;
-  write(brief.overview, 11, 14);
+  write(demoDescription(brief.overview, brief.patient.isDemo), 11, 14);
   if (brief.questions.length) {
     write('QUESTIONS TO ASK', 10, 5);
     brief.questions.forEach((question, index) => write(`${index + 1}. ${question}`, 11, 3));
@@ -106,7 +107,7 @@ export async function createBriefPDF(
         sourceURL = url.href;
       }
       write(
-        `${index + 1}. ${source.title}${source.date ? ` · ${formatDate(source.date)}` : ''}`,
+        `${index + 1}. ${demoLabel(source.title, brief.patient.isDemo)}${source.date ? ` · ${formatDate(source.date)}` : ''}`,
         8.5,
         2,
         sourceURL ? rgb(0.14, 0.42, 0.82) : gray,
@@ -116,7 +117,9 @@ export async function createBriefPDF(
   }
   page.drawLine({ start: { x: left, y: 61 }, end: { x: left + width, y: 61 }, thickness: 0.4, color: gray });
   page.drawText(
-    `${brief.patient.isDemo ? 'FICTIONAL DEMO · ' : ''}Patient-prepared · AI-assisted · Review for accuracy`,
+    brief.example
+      ? 'Prepared from saved records · Review for accuracy'
+      : 'Patient-prepared · AI-assisted · Review for accuracy',
     { x: left, y: 45, font, size: 8, color: gray },
   );
   page.drawText('1 / 1', { x: 544, y: 45, font, size: 8, color: gray });

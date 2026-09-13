@@ -345,6 +345,7 @@ enum Validation {
                 )
             }
         }
+        try snapshotMetadata(object)
         try checkDepth(value, depth: 0)
         guard try JSONEncoder().encode(value).count <= maxSnapshotBytes else {
             throw Abort(.payloadTooLarge, reason: "Snapshot exceeds 4 MiB.")

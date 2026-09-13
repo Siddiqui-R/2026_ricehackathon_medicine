@@ -13,17 +13,23 @@ struct RecordingSessionView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = AudioRecorder()
-    let visit: Visit
+    var visit: Visit? = nil
+    @State private var title = "Appointment recording"
     @State private var agreed = false
     @State private var starting = false
     @State private var savedID: String?
+    @State private var capturedAt: String?
     @State private var saveDraft = RecordingSaveDraft()
     @State private var discard = false
     // MARK: - Rendering and navigation
     var body: some View {
         Page {
-            Text("Record your appointment.").font(.title2.bold())
-            Text(visit.title).foregroundStyle(.secondary)
+            Text("Record your session.").font(.title2.bold())
+            if let visit {
+                Text(visit.title).foregroundStyle(.secondary)
+            } else if !recorder.isRecording && saveDraft.recording == nil {
+                TextField("Session title", text: $title).textFieldStyle(.roundedBorder)
+            }
             StatusNotice(
                 title: "Before you record",
                 message:
@@ -73,6 +79,7 @@ struct RecordingSessionView: View {
                                 defer { starting = false }
                                 do {
                                     try await recorder.start(directory: store.repository.attachmentDirectory)
+                                    capturedAt = RevaDate.now
                                 } catch { store.errorMessage = error.localizedDescription }
                             }
                         } label: {
@@ -89,9 +96,9 @@ struct RecordingSessionView: View {
                 StatusNotice(title: "Recording status", message: message, symbol: "mic.badge.xmark")
             }
             StatusNotice(
-                title: "Record → transcribe → summarize",
+                title: "Ready after saving",
                 message:
-                    "Save your audio, then use connected transcription and an AI appointment summary. Review both against the recording; your separate notes remain editable. The fictional sample transcript is separate from your audio."
+                    "Saving automatically prepares your transcript and appointment summary. Your original audio and separate notes are kept."
             )
         }.navigationTitle("Record appointment").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -126,25 +133,33 @@ struct RecordingSessionView: View {
                     )
                 }
             }
-            .navigationDestination(item: $savedID) { RecordingDetailView(id: $0) }
             .onDisappear { if recorder.isRecording { recorder.pause() } }
     }
     // MARK: - Finalize capture
     /// Finish the audio file before adding its recording metadata to the visit history.
     private func finish() {
-        store.perform {
+        if store.perform({
             let url = try recorder.finish()
-            let recording = VisitRecording(
-                visitID: visit.id, title: visit.title + " · audio", duration: recorder.elapsed,
+            var recording = VisitRecording(
+                visitID: visit?.id ?? "",
+                title: visit.map { $0.title + " · audio" }
+                    ?? (title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Appointment recording" : title),
+                duration: recorder.elapsed,
                 audioFilename: url.lastPathComponent)
+            recording.capturedAt = capturedAt
+            recording.savedAt = RevaDate.now
+            recording.createdAt = capturedAt ?? recording.savedAt!
             saveDraft.retain(recording, audioURL: url)
             savedID = try saveDraft.save(to: store)
+        }) {
+            dismiss()
         }
     }
 
     // MARK: - Retry metadata persistence
     /// Reuse the finalized recording identity and audio file without starting or finishing capture again.
     private func saveFinishedRecording() {
-        store.perform { savedID = try saveDraft.save(to: store) }
+        if store.perform({ savedID = try saveDraft.save(to: store) }) { dismiss() }
     }
 }

@@ -33,14 +33,14 @@ export function PDFPreview({ blob, title, page = 1 }: { blob: Blob; title: strin
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setError('This PDF could not be previewed. Download the original to open it.');
+        setError('This PDF could not be previewed. Download the document to open it.');
         setLoading(false);
       });
     return () => controller.abort();
   }, [blob, requested]);
   return (
     <div className="stack pdf-preview">
-      {loading && <p role="status">Rendering original PDF…</p>}
+      {loading && <p role="status">Rendering PDF…</p>}
       {error && (
         <p className="inline-error" role="alert">
           {error}
@@ -50,7 +50,7 @@ export function PDFPreview({ blob, title, page = 1 }: { blob: Blob; title: strin
         ref={canvas}
         hidden={loading || !!error}
         role="img"
-        aria-label={`Original PDF page ${position.pageNumber} of ${position.pageCount}: ${title}`}
+        aria-label={`PDF page ${position.pageNumber} of ${position.pageCount}: ${title}`}
       />
       {position.pageCount > 0 && (
         <div className="pdf-page-controls" aria-label="PDF page navigation">

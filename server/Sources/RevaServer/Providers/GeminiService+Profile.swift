@@ -8,7 +8,9 @@ import Vapor
 
 // MARK: - Medical-profile extraction separate from diagnosis or recommendations
 extension GeminiService {
-    func profile(_ request: GeminiProfileRequest) async throws -> GeminiProfileResponse {
+    func profile(_ request: GeminiProfileRequest, fallbackOnly: Bool = false) async throws
+        -> GeminiProfileResponse
+    {
         try request.validate()
         let categories = ["allergies", "medications", "conditions", "surgeriesAndImplants", "careNotes"]
         let recordIDs = Set(request.records.map(\.id))
@@ -37,8 +39,9 @@ extension GeminiService {
                     })),
             "required": .array(categories.map(JSONValue.string)), "additionalProperties": .bool(false),
         ])
-        let object = try await generate(
+        let generated = try await generate(
             input: request, schema: schema, maxOutputTokens: 32768, maxStructuredBytes: 256_000,
+            fallbackOnly: fallbackOnly,
             task: """
                 Extract a compact medical profile from ALL supplied report records, using only explicitly documented facts.
                 Return exactly allergies, medications, conditions, surgeriesAndImplants and careNotes, each an array of
@@ -52,12 +55,18 @@ extension GeminiService {
                 Retain conflicting evidence with its dates and source context instead of choosing a side or silently
                 discarding it. Never turn a question, a rule-out finding or a family history into the patient's diagnosis.
                 Put relevant explicitly documented follow-up or care context in careNotes; do not add advice.
+                Write careNotes as concise care themes or actions, not descriptions of what a transcript or report discusses.
+                For example, if the source explicitly states both the prevention purpose and poor general hygiene, use
+                "Frequent sock changes to prevent foot fungus, poor general hygiene". If it only mentions sock-changing
+                frequency and hygiene, use "Sock-changing frequency and hygiene"; do not invent fungus prevention or poor
+                hygiene. Preserve questions, suggestions and agreed plans as distinct. Keep attribution in recordIDs.
                 Omit unknown facts. Missing documentation does not mean no allergies, no medication or no condition.
                 Do not diagnose, infer new medical facts, recommend treatment, identify the patient or output identity,
                 date of birth, narrative summaries, markdown, additional keys or anything outside the five arrays.
                 """)
 
         // MARK: - Reject unknown fields, unsupported IDs and overlong generated facts
+        let object = generated.object
         guard Set(object.keys) == Set(categories) else { throw invalidResponse() }
         var facts: [String: [GeminiProfileFact]] = [:]
         for category in categories {
@@ -70,12 +79,13 @@ extension GeminiService {
                     let ids = item["recordIDs"] as? [String], !ids.isEmpty, ids.count <= recordIDs.count,
                     Set(ids).count == ids.count, Set(ids).isSubset(of: recordIDs)
                 else { throw invalidResponse() }
+                try validateWriting(text)
                 return GeminiProfileFact(text: text, recordIDs: ids)
             }
         }
         return GeminiProfileResponse(
             allergies: facts["allergies"] ?? [], medications: facts["medications"] ?? [],
             conditions: facts["conditions"] ?? [], surgeriesAndImplants: facts["surgeriesAndImplants"] ?? [],
-            careNotes: facts["careNotes"] ?? [], model: configuration.geminiModel)
+            careNotes: facts["careNotes"] ?? [], model: generated.model)
     }
 }

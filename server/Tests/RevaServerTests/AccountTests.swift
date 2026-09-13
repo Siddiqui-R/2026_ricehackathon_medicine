@@ -538,7 +538,7 @@ struct AccountTests {
                         == "GET, PUT, POST, DELETE, OPTIONS")
                 #expect(
                     response.headers.first(name: .accessControlAllowHeaders)
-                        == "Authorization, Content-Type, X-Filename")
+                        == "Authorization, Content-Type, X-Filename, X-Reva-Gemini-Fallback")
                 #expect(response.headers.first(name: .accessControlMaxAge) == "600")
                 #expect(response.headers[.vary].contains("Origin"))
                 #expect(response.headers.first(name: .accessControlAllowCredentials) == nil)
@@ -547,7 +547,7 @@ struct AccountTests {
                 response async in
                 #expect(response.status == .ok)
                 #expect(response.headers.first(name: .accessControlAllowOrigin) == "http://localhost:5173")
-                #expect(response.headers.first(name: .accessControlExpose) == "X-State-Revision, X-Filename")
+                #expect(response.headers.first(name: .accessControlExpose) == "X-State-Revision, X-Filename, Retry-After, X-Reva-Gemini-Fallback")
                 #expect(response.headers[.vary].contains("Origin"))
             }
             // Error responses for an allowed origin still carry the CORS headers so the browser can read them.

@@ -1,19 +1,21 @@
 // Purpose: Review saved audio and timestamped transcripts, then turn reviewed content into visit memory.
 // Inputs: A persisted recording, original attachment storage, and configured transcription capability.
 // Outputs: Audio playback, faithful segment corrections, separate notes, and links to saved memory records.
-// Side effects: Loads original audio; explicit actions transcribe or persist corrections/notes through context.
+// Side effects: Loads original audio; saves corrections/notes and delegates optional reprocessing to the background queue.
 
+import { recordingDateLabel } from '../../core/recordingDates';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { FileText, Pencil, Sparkles } from 'lucide-react';
+import { FileText, Pencil, RotateCcw } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
-import { demoLabel } from '../../core/presentation';
+import { useRecordingProcessing } from '../../core/RecordingProcessingUpdates';
+import { demoDescription, demoLabel, demoSourceText } from '../../core/presentation';
 import type { VisitRecording } from '../../core/models';
 import { durationLabel, formatDate } from '../../core/domain';
 import { hasRecordingSummary } from '../../core/mutations';
 import { Badge, Button, Field, Modal } from '../../components/ui';
 import { SourceLink } from '../../components/SourceLink';
 
-// MARK: - Original playback and explicit connected transcription
+// MARK: - Original playback and automatic processing progress
 export function RecordingDetail({
   recording,
   onClose,
@@ -23,23 +25,33 @@ export function RecordingDetail({
   onClose: () => void;
   embedded?: boolean;
 }) {
-  const { snapshot, providers, transcribeRecording, summarizeRecording, saveMemory, getAttachment, busy } =
-    useReva();
-  const summaryRequest = useRef<AbortController | null>(null);
+  const { snapshot, getAttachment, busy } = useReva();
+  const processing = useRecordingProcessing();
+  const job = processing.jobs.find((item) => item.id === recording.id);
+  const processingStage =
+    job?.stage ??
+    (recording.status === 'processing-queued'
+      ? 'queued'
+      : ['processing-transcribing', 'processing-retranscribing'].includes(recording.status)
+        ? 'transcribing'
+        : recording.status === 'processing-analyzing'
+          ? 'analyzing'
+          : ['processing-failed', 'processing-reprocess-failed'].includes(recording.status)
+            ? 'failed'
+            : recording.status === 'processing-complete'
+              ? 'complete'
+              : null);
+  const automaticWork = ['queued', 'transcribing', 'analyzing', 'waiting'].includes(processingStage ?? '');
   const transcript = useRef<HTMLElement>(null);
   const audioPlayer = useRef<HTMLAudioElement>(null);
-  useEffect(() => () => summaryRequest.current?.abort(), []);
   const [audio, setAudio] = useState('');
   const [audioError, setAudioError] = useState('');
   const [editor, setEditor] = useState<'transcript' | 'notes' | null>(null);
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState('');
   const hasSummary = hasRecordingSummary(recording);
   const memory = snapshot?.records.find(
     (item) => item.sourceRecordingID === recording.id || item.id === `memory-${recording.id}`,
   );
   function close() {
-    summaryRequest.current?.abort();
     onClose();
   }
   useEffect(() => {
@@ -64,33 +76,57 @@ export function RecordingDetail({
       if (objectURL) URL.revokeObjectURL(objectURL);
     };
   }, [getAttachment, recording.audioFilename, recording.isSample]);
-  async function act(operation: () => Promise<void>) {
-    setError('');
-    setWorking(true);
-    try {
-      await operation();
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'This action could not be completed.');
-    } finally {
-      setWorking(false);
-    }
-  }
-  if (editor === 'transcript')
+  if (editor === 'transcript' && !automaticWork)
     return <TranscriptEditor recording={recording} onClose={() => setEditor(null)} />;
-  if (editor === 'notes')
+  if (editor === 'notes' && !automaticWork)
     return <RecordingNotesEditor recording={recording} onClose={() => setEditor(null)} />;
   const content = (
     <div className="stack">
       <div className="row">
         <Badge tone={recording.isSample ? 'review' : 'accent'}>
-          {recording.isSample ? 'Sample · no audio' : 'Saved visit audio'}
+          {recording.isSample ? 'Transcript only · no audio' : 'Saved visit audio'}
         </Badge>
         <span className="muted small">
-          {formatDate(recording.createdAt, true)} · {durationLabel(recording.duration)}
+          {recordingDateLabel(recording, true)} · {durationLabel(recording.duration)}
         </span>
       </div>
+      {processingStage && (
+        <div className="recording-page-notice stack" role={processingStage === 'failed' ? 'alert' : 'status'}>
+          <strong>
+            {processingStage === 'queued'
+              ? 'Recording queued'
+              : processingStage === 'transcribing'
+                ? 'Transcribing your recording'
+                : processingStage === 'analyzing'
+                  ? 'Analyzing your conversation'
+                  : processingStage === 'waiting'
+                    ? 'Recording saved · waiting to continue'
+                    : processingStage === 'failed'
+                      ? 'Recording saved · processing needs attention'
+                      : 'Transcript and analysis ready'}
+          </strong>
+          <p>
+            {job?.message ??
+              (processingStage === 'complete'
+                ? 'Review the transcript and summary below against your original audio.'
+                : processingStage === 'failed'
+                  ? 'Your original audio is safe. Retry transcription and analysis when you’re ready.'
+                  : 'You can keep browsing your workspace. This will continue in the background.')}
+          </p>
+          {(processingStage === 'failed' || job?.canRetry) && (
+            <Button variant="secondary" disabled={busy} onClick={() => processing.retry(recording.id)}>
+              Retry processing
+            </Button>
+          )}
+          {processingStage === 'waiting' && !job?.retryAt && !job?.canRetry && (
+            <a className="text-link" href="#/settings" onClick={close}>
+              View connection settings
+            </a>
+          )}
+        </div>
+      )}
       {recording.isSample ? (
-        <p className="small">This is a sample conversation, separate from any microphone recording.</p>
+        <p className="small">No audio is attached to this transcript.</p>
       ) : audio ? (
         <audio ref={audioPlayer} controls preload="metadata" src={audio}>
           Audio playback is unavailable.
@@ -103,54 +139,8 @@ export function RecordingDetail({
               : 'No original audio is attached to this visit memory.')}
         </p>
       )}
-      {!recording.isSample && recording.audioFilename && (
-        <div className="stack">
-          <Button
-            variant="secondary"
-            disabled={!providers?.transcription.configured || busy || working}
-            onClick={() => {
-              void act(() => transcribeRecording(recording.id));
-            }}
-          >
-            <Sparkles size={16} />
-            {working ? 'Working…' : recording.segments.length ? 'Transcribe again' : 'Transcribe'}
-          </Button>
-          {!providers?.transcription.configured && (
-            <p className="muted small">
-              Configure and check your transcription service in{' '}
-              <a className="text-link" href="#/settings" onClick={onClose}>
-                Settings
-              </a>
-              . Your original audio is already saved.
-            </p>
-          )}
-        </div>
-      )}
       <section className="stack">
-        <div className="section-heading">
-          <h3>Appointment summary</h3>
-          <Button
-            disabled={!recording.segments.length || !providers?.gemini.configured || busy || working}
-            onClick={() => {
-              const controller = new AbortController();
-              summaryRequest.current = controller;
-              void act(async () => {
-                try {
-                  await summarizeRecording(recording.id, controller.signal);
-                } finally {
-                  if (summaryRequest.current === controller) summaryRequest.current = null;
-                }
-              });
-            }}
-          >
-            <Sparkles size={16} /> Summarize appointment
-          </Button>
-        </div>
-        {working && summaryRequest.current && (
-          <Button variant="secondary" onClick={() => summaryRequest.current?.abort()}>
-            Cancel summarization
-          </Button>
-        )}
+        <h3>Appointment summary</h3>
         {hasSummary ? (
           <>
             {recording.aiSummary
@@ -178,18 +168,11 @@ export function RecordingDetail({
           </>
         ) : (
           <p className="muted small">
-            {recording.segments.length
-              ? 'Summarize the saved transcript to review what was discussed. Your personal notes stay separate.'
-              : 'Transcribe the appointment first. The summary is generated only from the saved transcript.'}
-          </p>
-        )}
-        {!providers?.gemini.configured && (
-          <p className="muted small">
-            Check your AI service in{' '}
-            <a className="text-link" href="#/settings" onClick={close}>
-              Settings
-            </a>{' '}
-            to enable summaries.
+            {recording.isSample
+              ? 'This transcript has no generated appointment summary.'
+              : processingStage === 'failed'
+                ? 'Your saved audio and completed steps are kept while processing needs attention.'
+                : 'Your appointment summary is prepared automatically from the saved audio and will appear here when ready.'}
           </p>
         )}
       </section>
@@ -197,7 +180,7 @@ export function RecordingDetail({
         <div className="section-heading">
           <h3>Transcript</h3>
           {recording.segments.length > 0 && (
-            <Button variant="ghost" onClick={() => setEditor('transcript')} disabled={working || busy}>
+            <Button variant="ghost" onClick={() => setEditor('transcript')} disabled={busy || automaticWork}>
               <Pencil size={15} /> Correct words
             </Button>
           )}
@@ -210,69 +193,74 @@ export function RecordingDetail({
         )}
         {recording.segments.length ? (
           <div className="transcript-segments stack">
-            {recording.segments.map((segment) => (
-              <div key={segment.id} className="transcript-segment">
-                <p className="small muted">
-                  {durationLabel(segment.start)}–{durationLabel(segment.end)} ·{' '}
-                  {demoLabel(segment.speaker, recording.isSample)}
-                </p>
-                <p className="prose">
-                  {segment.text}
-                  {audio && (
-                    <SourceLink
-                      label={`Listen to original audio at ${durationLabel(segment.start)}`}
-                      onOpen={() => {
-                        if (audioPlayer.current) {
-                          audioPlayer.current.currentTime = segment.start;
-                          audioPlayer.current.scrollIntoView({ block: 'center' });
-                          audioPlayer.current.focus({ preventScroll: true });
-                          void audioPlayer.current.play().catch(() => {
-                            setAudioError(
-                              'Use the audio player to play this part of the original recording.',
-                            );
-                          });
-                        }
-                      }}
-                    />
-                  )}
-                </p>
-              </div>
-            ))}
+            {recording.segments
+              .filter((segment) => demoSourceText(segment.text, recording.isSample))
+              .map((segment) => (
+                <div key={segment.id} className="transcript-segment">
+                  <p className="small muted">
+                    {durationLabel(segment.start)}–{durationLabel(segment.end)} ·{' '}
+                    {demoLabel(segment.speaker, recording.isSample)}
+                  </p>
+                  <p className="prose">
+                    {demoSourceText(segment.text, recording.isSample)}
+                    {audio && (
+                      <SourceLink
+                        label={`Listen to original audio at ${durationLabel(segment.start)}`}
+                        onOpen={() => {
+                          if (audioPlayer.current) {
+                            audioPlayer.current.currentTime = segment.start;
+                            audioPlayer.current.scrollIntoView({ block: 'center' });
+                            audioPlayer.current.focus({ preventScroll: true });
+                            void audioPlayer.current.play().catch(() => {
+                              setAudioError(
+                                'Use the audio player to play this part of the original recording.',
+                              );
+                            });
+                          }
+                        }}
+                      />
+                    )}
+                  </p>
+                </div>
+              ))}
           </div>
         ) : (
-          <p className="muted">No transcript has been generated for this audio.</p>
+          <p className="muted">
+            {automaticWork
+              ? 'Your transcript will appear here when it is ready.'
+              : 'The transcript from your saved audio will appear here when processing finishes.'}
+          </p>
         )}
       </section>
       <section>
         <div className="section-heading">
           <h3>My visit notes</h3>
-          <Button variant="ghost" onClick={() => setEditor('notes')} disabled={working || busy}>
+          <Button variant="ghost" onClick={() => setEditor('notes')} disabled={busy || automaticWork}>
             <Pencil size={15} /> Edit notes
           </Button>
         </div>
-        <p className="prose">{recording.summary || 'Add what you want to remember from this visit.'}</p>
+        <p className="prose">
+          {demoDescription(recording.summary, recording.isSample) ||
+            'Add what you want to remember from this visit.'}
+        </p>
         <p className="muted small">Your notes are kept separately from transcript corrections.</p>
       </section>
-      {error && (
-        <p className="inline-error" role="alert">
-          {error}
-        </p>
-      )}
       <div className="form-actions">
         {memory && (
           <a className="text-link" href={`#/records/${encodeURIComponent(memory.id)}`} onClick={onClose}>
             <FileText size={16} /> Open saved memory
           </a>
         )}
-        <Button
-          disabled={working || busy || (!recording.segments.length && !recording.summary.trim())}
-          onClick={() => {
-            void act(() => saveMemory(recording.id));
-          }}
-        >
-          {memory ? 'Update saved memory' : 'Save memory to Records'}
-        </Button>
       </div>
+      {!recording.isSample && recording.audioFilename && !automaticWork && processingStage !== 'failed' && (
+        <details className="source-disclosure">
+          <summary>Processing options</summary>
+          <p className="muted small">Rebuild the transcript and summary from the original audio.</p>
+          <Button variant="secondary" disabled={busy} onClick={() => processing.reprocess(recording.id)}>
+            <RotateCcw size={16} /> Reprocess recording
+          </Button>
+        </details>
+      )}
     </div>
   );
   return embedded ? (
@@ -287,6 +275,7 @@ export function RecordingDetail({
 // MARK: - Correct words while retaining segment identity, speaker, and original timing
 function TranscriptEditor({ recording, onClose }: { recording: VisitRecording; onClose: () => void }) {
   const { snapshot, saveMemory } = useReva();
+  const processing = useRecordingProcessing();
   const [original] = useState(() => JSON.stringify(recording.segments));
   const [texts, setTexts] = useState(() =>
     Object.fromEntries(recording.segments.map((segment) => [segment.id, segment.text])),
@@ -311,6 +300,7 @@ function TranscriptEditor({ recording, onClose }: { recording: VisitRecording; o
           'Keep every segment nonempty and under 20,000 characters, with at most 200,000 characters overall.',
         );
       await saveMemory(recording.id, texts, original);
+      if (!recording.isSample && recording.audioFilename) processing.retry(recording.id);
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Corrections could not be saved.');
@@ -325,22 +315,24 @@ function TranscriptEditor({ recording, onClose }: { recording: VisitRecording; o
           Correct the words you hear. Segment times, speakers, original audio, and your separate notes stay
           unchanged. Any existing saved memory is updated.
         </p>
-        {recording.segments.map((segment) => (
-          <Field
-            key={segment.id}
-            label={`${durationLabel(segment.start)}–${durationLabel(segment.end)} · ${demoLabel(segment.speaker, recording.isSample)}`}
-          >
-            <textarea
-              rows={3}
-              required
-              maxLength={20000}
-              value={texts[segment.id] ?? ''}
-              onChange={(event) =>
-                setTexts((previous) => ({ ...previous, [segment.id]: event.target.value }))
-              }
-            />
-          </Field>
-        ))}
+        {recording.segments
+          .filter((segment) => demoSourceText(segment.text, recording.isSample))
+          .map((segment) => (
+            <Field
+              key={segment.id}
+              label={`${durationLabel(segment.start)}–${durationLabel(segment.end)} · ${demoLabel(segment.speaker, recording.isSample)}`}
+            >
+              <textarea
+                rows={3}
+                required
+                maxLength={20000}
+                value={demoSourceText(texts[segment.id] ?? '', recording.isSample)}
+                onChange={(event) =>
+                  setTexts((previous) => ({ ...previous, [segment.id]: event.target.value }))
+                }
+              />
+            </Field>
+          ))}
         {error && (
           <p className="inline-error" role="alert">
             {error}
@@ -392,12 +384,12 @@ function RecordingNotesEditor({ recording, onClose }: { recording: VisitRecordin
       <form className="stack" onSubmit={save}>
         <Field
           label="What would you like to remember?"
-          hint="These notes remain separate from the transcript. Use Update saved memory when you want to copy them to Records."
+          hint="These notes stay with this recording, separate from the transcript and its generated summary."
         >
           <textarea
             rows={8}
             maxLength={20000}
-            value={notes}
+            value={demoDescription(notes, recording.isSample)}
             onChange={(event) => setNotes(event.target.value)}
           />
         </Field>

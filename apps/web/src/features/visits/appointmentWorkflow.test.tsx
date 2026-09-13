@@ -91,8 +91,9 @@ describe('appointment recording interface', () => {
         <RecordingDetail recording={recording} onClose={() => {}} />
       </RevaProvider>,
     );
-    expect(button(html, 'Transcribe again')).toBeDefined();
-    expect(button(html, 'Summarize appointment')).toBeDefined();
+    expect(html).not.toContain('Summarize appointment');
+    expect(html).not.toContain('Transcribe again');
+    expect(button(html, 'Reprocess recording')).toBeDefined();
     expect(html).toContain('Generated appointment summary');
     expect(html).toContain('mock-gemini');
     expect(html).toContain('Review it against the transcript and original audio. It may contain mistakes.');
@@ -103,5 +104,51 @@ describe('appointment recording interface', () => {
       </RevaProvider>,
     );
     expect(incomplete).not.toContain('Generated appointment summary');
+  });
+
+  it.each(['queued', 'transcribing', 'analyzing'])(
+    'keeps manual actions from competing with %s background work',
+    async (stage) => {
+      const store = await ready();
+      const recording = { ...store.getState().snapshot!.recordings[0], status: `processing-${stage}` };
+      const html = renderToStaticMarkup(
+        <RevaProvider store={store}>
+          <RecordingDetail recording={recording} embedded onClose={() => {}} />
+        </RevaProvider>,
+      );
+      for (const label of ['Correct words', 'Edit notes'])
+        expect(button(html, label)).toContain('disabled=""');
+      expect(html).toContain('This will continue in the background.');
+      expect(html).not.toMatch(
+        /Summarize appointment|Transcribe again|Save memory to Records|Reprocess recording/,
+      );
+    },
+  );
+
+  it('offers processing retry after a failure and transcript correction after completion', async () => {
+    const store = await ready();
+    const recording = store.getState().snapshot!.recordings[0];
+    const failed = renderToStaticMarkup(
+      <RevaProvider store={store}>
+        <RecordingDetail
+          recording={{ ...recording, status: 'processing-failed' }}
+          embedded
+          onClose={() => {}}
+        />
+      </RevaProvider>,
+    );
+    expect(button(failed, 'Retry processing')).not.toContain('disabled=""');
+    expect(failed).toContain('Your original audio is safe.');
+    const complete = renderToStaticMarkup(
+      <RevaProvider store={store}>
+        <RecordingDetail
+          recording={{ ...recording, status: 'processing-complete' }}
+          embedded
+          onClose={() => {}}
+        />
+      </RevaProvider>,
+    );
+    expect(button(complete, 'Correct words')).not.toContain('disabled=""');
+    expect(complete).toContain('Transcript and analysis ready');
   });
 });

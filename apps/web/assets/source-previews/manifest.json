@@ -1,0 +1,56 @@
+{
+  "reva-synthetic-symptom-diary-scan.png": {
+    "recordID": "demo-record-symptom-diary",
+    "mimeType": "image/png",
+    "bytes": 143594,
+    "sha256": "5ba2efaaf27ee419038445de9895ce684d5212dbaea570e35913678addfbeff1"
+  },
+  "reva-synthetic-laboratory-results.pdf": {
+    "recordID": "demo-record-labs",
+    "mimeType": "application/pdf",
+    "bytes": 64613,
+    "sha256": "b0e213cff1ea1a5f622221eee3e42763528f934db7f28f5787df1814d451f129"
+  },
+  "reva-synthetic-resting-ecg-note.pdf": {
+    "recordID": "demo-record-ecg",
+    "mimeType": "application/pdf",
+    "bytes": 64550,
+    "sha256": "55052ef49ae2552fb4ed536b688430fcaaebe10c3362218cf82447659006318c"
+  },
+  "reva-synthetic-health-history.pdf": {
+    "recordID": "demo-record-history",
+    "mimeType": "application/pdf",
+    "bytes": 64705,
+    "sha256": "7eef704c4663840416905323a432231c6e39a57585d14783aa8b067ae8bf4db0"
+  },
+  "reva-synthetic-leg-imaging.pdf": {
+    "recordID": "demo-record-leg-imaging",
+    "mimeType": "application/pdf",
+    "bytes": 64669,
+    "sha256": "363545b4020831b16f3c49a8d54e7a7e54f1b32c18c1a10318cd260e0dc6eaab"
+  },
+  "reva-synthetic-fibula-injury-2026.pdf": {
+    "recordID": "demo-record-fibula-injury",
+    "mimeType": "application/pdf",
+    "bytes": 64685,
+    "sha256": "f995ce14a0698ea88d8d11bbdba611d35a1346f318ad4bdd9993e80085f5b0d2"
+  },
+  "reva-synthetic-asthma-context.txt": {
+    "recordID": "demo-record-asthma",
+    "mimeType": "text/plain",
+    "bytes": 805,
+    "sha256": "1a52d019d481a99e608b7e042aaa71ee88a53e9f00fbd99ef215d23800ed3c02"
+  },
+  "reva-synthetic-resolved-ear-infection.pdf": {
+    "recordID": "demo-record-ear-infection",
+    "mimeType": "application/pdf",
+    "bytes": 64471,
+    "sha256": "e4a01c1b2d869b0a924852dcaeed55ba8f32b4ead1fd1832059e7fb799764458"
+  },
+  "reva-synthetic-tibia-procedure-2019.pdf": {
+    "recordID": "demo-record-tibia-procedure",
+    "mimeType": "application/pdf",
+    "bytes": 66098,
+    "sha256": "8793d2456276986ee063933118e7b54bb0543142b379ed3a253bbeabc5b4fab3"
+  }
+}

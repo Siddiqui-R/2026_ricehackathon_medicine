@@ -9,6 +9,7 @@ import type {
   MedicalProfileField,
   PatientProfile,
 } from './models';
+import { recordDateContext } from './recordDates';
 
 // MARK: - Only original readable reports are evidence; recovery copies are never clinical sources.
 export const medicalProfileFields: MedicalProfileField[] = [
@@ -35,7 +36,13 @@ export const emptyProfileFacts = (): AIProfileFacts => ({
 export function profileSources(snapshot: AppSnapshot): ProfileSource[] {
   return snapshot.records
     .filter((record) => record.kind !== 'Sync recovery' && record.text.trim())
-    .map(({ id, version, title, date, text }) => ({ id, version, title, date, text }))
+    .map((record) => ({
+      id: record.id,
+      version: record.version,
+      title: record.title,
+      date: recordDateContext(record),
+      text: record.text,
+    }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 export const profileSourceKey = (snapshot: AppSnapshot): string => JSON.stringify(profileSources(snapshot));

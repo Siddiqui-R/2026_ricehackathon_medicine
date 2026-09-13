@@ -12,10 +12,21 @@ struct GeminiSummaryRequest: Content {
     let recordID: String
     let title: String
     let text: String
+    let generateTitle: Bool?
+    let date: String?
+
+    init(recordID: String, title: String, text: String, generateTitle: Bool? = nil, date: String? = nil) {
+        self.recordID = recordID
+        self.title = title
+        self.text = text
+        self.generateTitle = generateTitle
+        self.date = date
+    }
 
     func validate() throws {
         guard Validation.safeID(recordID), GeminiValidation.text(title, maximum: 240),
-            GeminiValidation.text(text, maximum: 120_000)
+            GeminiValidation.text(text, maximum: 120_000),
+            date.map({ GeminiValidation.text($0, maximum: 40) }) ?? true
         else {
             throw Abort(
                 .badRequest,
@@ -86,6 +97,13 @@ struct GeminiPreparationRequest: Content {
 struct GeminiSummaryResponse: Content {
     let summary: String
     let model: String
+    let title: String?
+
+    init(summary: String, model: String, title: String? = nil) {
+        self.summary = summary
+        self.model = model
+        self.title = title
+    }
 }
 struct GeminiPreparationResponse: Content {
     let overview: String

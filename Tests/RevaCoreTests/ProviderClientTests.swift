@@ -13,9 +13,11 @@ import XCTest
 private struct ProviderStubResponse {
     var status = 200
     var body: Data
-    init(status: Int = 200, json: String) {
+    var headers: [String: String]
+    init(status: Int = 200, json: String, headers: [String: String] = [:]) {
         self.status = status
         self.body = Data(json.utf8)
+        self.headers = headers
     }
 }
 
@@ -46,7 +48,10 @@ private final class ProviderStubProtocol: URLProtocol {
             let result = try handler(request)
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: result.status,
-                httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+                httpVersion: "HTTP/1.1",
+                headerFields: result.headers.merging(["Content-Type": "application/json"]) { current, _ in
+                    current
+                })!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: result.body)
             client?.urlProtocolDidFinishLoading(self)
@@ -64,6 +69,9 @@ private final class ProviderTestTransport {
 
     init(
         token: String = "synthetic-provider-" + UUID().uuidString,
+        retrySleep: @escaping @Sendable (UInt64) async throws -> Void = {
+            try await Task.sleep(nanoseconds: $0)
+        },
         handler: @escaping ProviderStubProtocol.Handler
     ) throws {
         self.token = token
@@ -73,7 +81,8 @@ private final class ProviderTestTransport {
         ProviderStubProtocol.install(token: token, handler: handler)
         do {
             client = try ProviderClient(
-                url: "https://reva.example.test/gateway/", token: token, session: session)
+                url: "https://reva.example.test/gateway/", token: token, session: session,
+                retrySleep: retrySleep)
         } catch {
             session.invalidateAndCancel()
             ProviderStubProtocol.remove(token: token)
@@ -98,6 +107,21 @@ private final class ProviderRequestCount {
         lock.lock()
         defer { lock.unlock() }
         return count
+    }
+}
+
+private final class ProviderRetryDelays: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [UInt64] = []
+    func append(_ value: UInt64) {
+        lock.lock()
+        values.append(value)
+        lock.unlock()
+    }
+    var all: [UInt64] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
     }
 }
 
@@ -194,10 +218,11 @@ final class ProviderClientTests: XCTestCase {
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
             let input = try self.json(request)
-            XCTAssertEqual(Set(input.keys), Set(["recordID", "title", "text"]))
+            XCTAssertEqual(Set(input.keys), Set(["recordID", "title", "text", "date"]))
             XCTAssertEqual(input["recordID"] as? String, "synthetic-record-a")
             XCTAssertEqual(input["title"] as? String, "SYNTHETIC café note")
             XCTAssertEqual(input["text"] as? String, source.text)
+            XCTAssertEqual(input["date"] as? String, "Date 2026-09-07; source unverified")
             return ProviderStubResponse(
                 json:
                     #"{"summary":"Synthetic returned summary; no change documented.","model":"synthetic-summary-model"}"#
@@ -238,7 +263,7 @@ final class ProviderClientTests: XCTestCase {
                 XCTAssertEqual(Set(sent.keys), Set(["id", "title", "date", "text", "summary", "version"]))
                 XCTAssertEqual(sent["id"] as? String, expected.id)
                 XCTAssertEqual(sent["title"] as? String, expected.title)
-                XCTAssertEqual(sent["date"] as? String, expected.date)
+                XCTAssertEqual(sent["date"] as? String, "Date \(expected.date); source unverified")
                 XCTAssertEqual(sent["text"] as? String, expected.text)
                 XCTAssertEqual(sent["summary"] as? String, expected.summary)
                 XCTAssertEqual(sent["version"] as? Int, expected.version)
@@ -255,6 +280,187 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual(result.model, "synthetic-preparation-model")
         XCTAssertEqual(
             appointment.questions, ["Keep my edited question?", "Preserve café and 0.25 exactly?"])
+    }
+
+    func testSummaryDistinguishesKnownSourceDatesFromAddedAndUnknownDates() async throws {
+        let cases: [(String?, String)] = [
+            ("document", "2026-09-07"), ("observed", "2026-09-07"), ("recorded", "2026-09-07"),
+            ("added", "Added 2026-09-07; event date unknown"),
+            (nil, "Date 2026-09-07; source unverified"), ("legacy", "Date 2026-09-07; source unverified"),
+        ]
+        for (provenance, expectedDate) in cases {
+            var source = record()
+            source.dateSource = provenance
+            let snapshot = AppSnapshot(
+                profile: .init(
+                    id: "synthetic-profile", name: "Synthetic Person", dateOfBirth: "1990-01-01",
+                    initials: "SP", allergies: [], medications: [], conditions: [], isDemo: true),
+                records: [source], visits: [])
+            XCTAssertEqual(NativeMedicalProfile.sources(snapshot).first?.date, expectedDate)
+            let transport = try ProviderTestTransport { request in
+                let input = try self.json(request)
+                XCTAssertEqual(input["date"] as? String, expectedDate)
+                XCTAssertEqual(input["text"] as? String, source.text)
+                return ProviderStubResponse(
+                    json: #"{"summary":"Synthetic source summary.","model":"synthetic-model"}"#)
+            }
+            _ = try await transport.client.summarize(source)
+        }
+    }
+
+    // MARK: - Gemini fallback retries preserve evidence and remain cancellable
+
+    func testExhaustedPairRetriesOnlyFallbackAfterOneTwoAndFourMinutes() async throws {
+        let calls = ProviderRequestCount()
+        let delays = ProviderRetryDelays()
+        let source = record()
+        let unchanged = source
+        let transport = try ProviderTestTransport(retrySleep: { delays.append($0) }) { request in
+            calls.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"), calls.value == 1 ? nil : "true")
+            XCTAssertEqual(try self.json(request)["text"] as? String, source.text)
+            if calls.value <= 3 {
+                return ProviderStubResponse(
+                    status: 503, json: #"{"reason":"Temporarily unavailable."}"#,
+                    headers: ["X-Reva-Gemini-Fallback": "true"])
+            }
+            return ProviderStubResponse(
+                json: #"{"summary":"Synthetic returned summary.","model":"synthetic-flash-lite"}"#)
+        }
+        let result = try await transport.client.summarize(source)
+        XCTAssertEqual(calls.value, 4)
+        XCTAssertEqual(delays.all, [60_000_000_000, 120_000_000_000, 240_000_000_000])
+        XCTAssertEqual(result.model, "synthetic-flash-lite")
+        XCTAssertEqual(source, unchanged)
+    }
+
+    func testUnmarkedTemporaryFailureAndLostConnectionTryFallbackImmediately() async throws {
+        for networkFailure in [false, true] {
+            let calls = ProviderRequestCount()
+            let delays = ProviderRetryDelays()
+            let transport = try ProviderTestTransport(retrySleep: { delays.append($0) }) { request in
+                calls.increment()
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"),
+                    calls.value == 1 ? nil : "true")
+                if calls.value == 1 {
+                    if networkFailure { throw URLError(.networkConnectionLost) }
+                    return ProviderStubResponse(
+                        status: 503, json: #"{"reason":"Temporary gateway failure."}"#)
+                }
+                return ProviderStubResponse(
+                    json: #"{"summary":"Synthetic fallback summary.","model":"synthetic-lite"}"#)
+            }
+            _ = try await transport.client.summarize(record())
+            XCTAssertEqual(calls.value, 2)
+            XCTAssertTrue(delays.all.isEmpty)
+        }
+    }
+
+    func testRateLimitRespectsLongerRetryAfterAndDoesNotRevisitPrimary() async throws {
+        let calls = ProviderRequestCount()
+        let delays = ProviderRetryDelays()
+        let transport = try ProviderTestTransport(retrySleep: { delays.append($0) }) { request in
+            calls.increment()
+            if calls.value == 1 {
+                XCTAssertNil(request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"))
+                return ProviderStubResponse(
+                    status: 429, json: #"{"reason":"Try again later."}"#, headers: ["Retry-After": "90"])
+            }
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"), "true")
+            return ProviderStubResponse(
+                json: #"{"summary":"Synthetic fallback summary.","model":"synthetic-lite"}"#)
+        }
+        _ = try await transport.client.summarize(record())
+        XCTAssertEqual(calls.value, 2)
+        XCTAssertEqual(delays.all, [90_000_000_000])
+    }
+
+    func testCancellationDuringBackoffDoesNotSendAnotherRequest() async throws {
+        let sleeping = expectation(description: "Entered cancellable retry wait")
+        let calls = ProviderRequestCount()
+        let transport = try ProviderTestTransport(retrySleep: { delay in
+            sleeping.fulfill()
+            try await Task.sleep(nanoseconds: delay)
+        }) { _ in
+            calls.increment()
+            return ProviderStubResponse(
+                status: 503, json: #"{"reason":"Temporarily unavailable."}"#,
+                headers: ["X-Reva-Gemini-Fallback": "true"])
+        }
+        let operation = Task { try await transport.client.summarize(record()) }
+        await fulfillment(of: [sleeping], timeout: 2)
+        operation.cancel()
+        await expectFailure({ try await operation.value }) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(calls.value, 1)
+    }
+
+    func testProfileAndPreparationUseSameFallbackPolicy() async throws {
+        for profile in [false, true] {
+            let calls = ProviderRequestCount()
+            let delays = ProviderRetryDelays()
+            let transport = try ProviderTestTransport(retrySleep: { delays.append($0) }) { request in
+                calls.increment()
+                XCTAssertEqual(
+                    request.url?.path, profile ? "/gateway/v1/ai/profile" : "/gateway/v1/ai/prepare")
+                if calls.value == 1 {
+                    return ProviderStubResponse(
+                        status: 503, json: #"{"reason":"Temporarily unavailable."}"#,
+                        headers: ["X-Reva-Gemini-Fallback": "true"])
+                }
+                XCTAssertEqual(request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"), "true")
+                return ProviderStubResponse(
+                    json: profile
+                        ? #"{"allergies":[],"medications":[],"conditions":[],"surgeriesAndImplants":[],"careNotes":[],"model":"synthetic-lite"}"#
+                        : #"{"overview":"Synthetic overview.","questions":[],"selectedRecordIDs":["synthetic-record-a"],"model":"synthetic-lite"}"#
+                )
+            }
+            if profile {
+                let source = record()
+                let result = try await transport.client.medicalProfile([
+                    .init(
+                        id: source.id, version: source.version, title: source.title, date: source.date,
+                        text: source.text)
+                ])
+                XCTAssertEqual(result.model, "synthetic-lite")
+            } else {
+                let result = try await transport.client.prepare(visit(), records: [record()])
+                XCTAssertEqual(result.model, "synthetic-lite")
+            }
+            XCTAssertEqual(calls.value, 2)
+            XCTAssertEqual(delays.all, [60_000_000_000])
+        }
+    }
+
+    func testPermanentFailuresAndOtherProviderOperationsNeverEnterGeminiRetry() async throws {
+        let operations = ["summary", "status", "audio"]
+        for operation in operations {
+            for status in operation == "summary" ? [400, 401, 403, 404, 409, 422, 424] : [503] {
+                let calls = ProviderRequestCount()
+                let delays = ProviderRetryDelays()
+                let transport = try ProviderTestTransport(retrySleep: { delays.append($0) }) { request in
+                    calls.increment()
+                    XCTAssertNil(request.value(forHTTPHeaderField: "X-Reva-Gemini-Fallback"))
+                    return ProviderStubResponse(
+                        status: status, json: #"{"reason":"Synthetic failure."}"#,
+                        headers: ["X-Reva-Gemini-Fallback": "true"])
+                }
+                await expectFailure({
+                    switch operation {
+                    case "summary": _ = try await transport.client.summarize(self.record())
+                    case "status": _ = try await transport.client.status()
+                    default:
+                        _ = try await transport.client.transcribe(
+                            bytes: Data([0x53]), filename: "synthetic.m4a")
+                    }
+                }) { self.assertProviderMessage($0, equals: "Synthetic failure.") }
+                XCTAssertEqual(calls.value, 1)
+                XCTAssertTrue(delays.all.isEmpty)
+            }
+        }
     }
 
     // MARK: - Audio transfer and relative transcript times
@@ -314,7 +520,7 @@ final class ProviderClientTests: XCTestCase {
         let source = record()
         let cases = [
             (
-                503, #"{"reason":"Document summarization is not configured."}"#,
+                424, #"{"reason":"Document summarization is not configured."}"#,
                 "Document summarization is not configured."
             ),
             (

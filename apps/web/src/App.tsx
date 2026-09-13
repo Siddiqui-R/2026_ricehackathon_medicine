@@ -24,6 +24,7 @@ import { readWorkspaceRoute } from './routing';
 import { Button } from './components/ui';
 import { Dashboard } from './features/Dashboard';
 import { AccountMenu } from './components/AccountMenu';
+import { RecordingProcessingIndicator } from './components/RecordingProcessingIndicator';
 import { SettingsPage } from './features/SettingsPage';
 import { RecordsPage } from './features/records/RecordsPage';
 import { RecordDetail } from './features/records/RecordDetail';
@@ -117,8 +118,11 @@ function Workspace() {
   // The store reports a failed revoke in the feedback banner; a successful one leaves this page.
   const logout = () => {
     if (!recordingSession.allowWorkspaceExit()) return;
-    if (account) void store.logout().catch(() => undefined);
-    else location.assign('/');
+    void (async () => {
+      await store.cancelProviderWork();
+      if (account) await store.logout();
+      else location.assign('/');
+    })().catch(() => undefined);
   };
 
   // MARK: - Desktop navigation and phone tabs share the same active route and labels
@@ -166,8 +170,14 @@ function Workspace() {
           <ArrowUpRight size={16} />
         </a>
         <div className="sidebar-bottom">
+          <RecordingProcessingIndicator placement="sidebar" />
           <div className="sidebar-divider" />
-          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} />
+          <AccountMenu
+            profile={profile}
+            demo={demo}
+            busy={store.busy && !store.providerWork}
+            onSignOut={logout}
+          />
         </div>
       </aside>
       <div className="workspace">
@@ -193,9 +203,15 @@ function Workspace() {
           </form>
           <span className="workspace-status">
             <ShieldCheck size={17} />
-            <span>{account ? 'Your account' : profile.isDemo ? 'Demo' : 'Saved in this browser'}</span>
+            <span>{account ? 'Your account' : 'Saved in this browser'}</span>
           </span>
-          <AccountMenu profile={profile} demo={demo} busy={store.busy} onSignOut={logout} compact />
+          <AccountMenu
+            profile={profile}
+            demo={demo}
+            busy={store.busy && !store.providerWork}
+            onSignOut={logout}
+            compact
+          />
         </header>
         <RecordingBanner onRecordingPage={route.section === 'recording'} />
         <main ref={content} id="main-content" className="main-content" tabIndex={-1}>
@@ -237,7 +253,7 @@ function Workspace() {
             <span>
               reva<span aria-hidden="true"> · </span>Making every appointment count.
             </span>
-            <span>{demo ? 'Demo workspace' : 'Your sources. Your questions. Your next step.'}</span>
+            <span>Your sources. Your questions. Your next step.</span>
           </footer>
         </main>
       </div>
@@ -259,21 +275,31 @@ function Workspace() {
         ))}
       </nav>
       <RecordingConsent />
-      {(store.error || store.notice) && (
+      <RecordingProcessingIndicator placement="compact" />
+      {(store.error || store.notice || (store.busy && store.providerWork)) && (
         <div
           className={`feedback ${store.error ? 'feedback-error' : ''}`}
           role={store.error ? 'alert' : 'status'}
         >
-          <span className="feedback-icon">{store.error ? <Activity size={18} /> : <Check size={18} />}</span>
-          <p>{store.error || store.notice}</p>
-          <Button
-            variant="ghost"
-            className="icon-button"
-            onClick={store.clearFeedback}
-            aria-label="Dismiss notification"
-          >
-            <X size={18} />
-          </Button>
+          <span className="feedback-icon">
+            {store.error || (store.busy && store.providerWork) ? <Activity size={18} /> : <Check size={18} />}
+          </span>
+          <p>{store.error || store.notice || 'Analyzing your records…'}</p>
+          {store.busy && store.providerWork && (
+            <Button variant="ghost" onClick={() => void store.cancelProviderWork()}>
+              Stop analysis
+            </Button>
+          )}
+          {!(store.busy && store.providerWork) && (
+            <Button
+              variant="ghost"
+              className="icon-button"
+              onClick={store.clearFeedback}
+              aria-label="Dismiss notification"
+            >
+              <X size={18} />
+            </Button>
+          )}
         </div>
       )}
     </div>

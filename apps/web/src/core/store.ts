@@ -6,6 +6,7 @@ import {
   type ClinicalBrief,
   type VisitBriefInput,
 } from './visitBrief';
+import { demoClinicalBrief } from './demoVisitBrief';
 // Purpose: Coordinate durable browser edits, automatic account synchronization and connected actions.
 // Inputs: UI intents, an injectable repository/API factory, reviewed provider requests and, in account
 //         mode, the signed-in session (token, user) with injectable storage/redirect boundaries.
@@ -32,6 +33,7 @@ import {
 import {
   clearRecordingSummary,
   createMemoryRecord,
+  hasRecordingSummary,
   invalidateChangedRecordingSummaries,
   reconcileMemory,
   recordingTranscript,
@@ -56,6 +58,10 @@ import {
   type StoredSnapshot,
 } from './repository.ts';
 import { mergeSnapshots, sameSyncValue } from './syncMerge.ts';
+import { calendarDay } from './dates';
+import { recordingInstant } from './recordingDates';
+import { recordDateContext } from './recordDates';
+import type { GeminiRetryState } from './geminiRetry';
 
 // MARK: - Observable values deliberately exclude credentials from durable snapshot state.
 export interface RevaState {
@@ -64,6 +70,7 @@ export interface RevaState {
   error: string | null;
   notice: string | null;
   busy: boolean;
+  providerWork: boolean;
   providers: ProviderStatus | null;
   connectedAI: boolean;
   token: string;
@@ -134,6 +141,28 @@ function audioType(filename: string): string | undefined {
   )[filename.split('.').pop()?.toLowerCase() ?? ''];
 }
 
+// A transport that finishes late after abort cannot keep the workspace busy or publish its result.
+function providerResult<T>(signal: AbortSignal, request: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () =>
+      reject(new DOMException('Analysis canceled. Your saved data was kept.', 'AbortError'));
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve()
+      .then(() => {
+        signal.throwIfAborted();
+        return request();
+      })
+      .then(resolve, reject)
+      .finally(() => {
+        signal.removeEventListener('abort', abort);
+      });
+  });
+}
+
 // MARK: - A testable store serializes commits and publishes only after storage succeeds.
 export class RevaStore {
   private state: RevaState = {
@@ -142,6 +171,7 @@ export class RevaStore {
     error: null,
     notice: null,
     busy: false,
+    providerWork: false,
     providers: null,
     connectedAI: false,
     token: 'reva-local-demo-token',
@@ -157,6 +187,8 @@ export class RevaStore {
   private writes: Promise<unknown> = Promise.resolve();
   private initialization?: Promise<void>;
   private identity = 0;
+  private recordingRequests = new Set<string>();
+  private providerRequests = new Map<AbortController, Promise<void>>();
   private mustPull = false;
   private readonly account: AccountOptions | null;
   private readonly storage: StorageLike | null;
@@ -197,6 +229,7 @@ export class RevaStore {
       };
   }
   getState = (): RevaState => this.state;
+  isWorkspaceActive = (): boolean => !this.sessionEnded;
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -267,6 +300,36 @@ export class RevaStore {
     if (identity !== this.identity || this.sessionEnded)
       throw new Error('The workspace token changed during this request. Its result was not applied.');
   }
+  // All provider timers and fetches belong to the active workspace, including background work.
+  private async providerAction<T>(
+    work: (signal: AbortSignal) => Promise<T>,
+    external?: AbortSignal,
+  ): Promise<T> {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    external?.addEventListener('abort', abort, { once: true });
+    if (external?.aborted || this.sessionEnded) controller.abort();
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    this.providerRequests.set(controller, finished);
+    this.publish({ providerWork: true });
+    try {
+      controller.signal.throwIfAborted();
+      return await work(controller.signal);
+    } finally {
+      external?.removeEventListener('abort', abort);
+      this.providerRequests.delete(controller);
+      this.publish({ providerWork: this.providerRequests.size > 0 });
+      finish();
+    }
+  }
+  cancelProviderWork = async (): Promise<void> => {
+    const requests = [...this.providerRequests];
+    requests.forEach(([controller]) => controller.abort());
+    await Promise.all(requests.map(([, finished]) => finished));
+  };
 
   // MARK: - Startup distinguishes absent state from corruption and never replays interrupted work.
   initialize = (): Promise<void> => {
@@ -322,14 +385,14 @@ export class RevaStore {
   mutate = (change: (draft: AppSnapshot) => void): Promise<void> => this.edit(change);
   resetDemo = (): Promise<void> =>
     this.action(async () => {
-      if (this.account) throw new Error('The demo is not available inside an account workspace.');
+      if (this.account) throw new Error('Original-record restoration is not available inside a signed-in workspace.');
       const seed = await this.persistence.seed();
       await this.queue(async () => {
         this.adopt(await this.persistence.reset(seed));
         this.mustPull = false;
         this.publish({ loading: false, serverRevision: null });
       });
-      this.notify('Demo restored in this browser.');
+      this.notify('Original records restored in this browser.');
     });
   setToken = (token: string): void => {
     if (token === this.state.token) return;
@@ -337,12 +400,13 @@ export class RevaStore {
       this.reportError(new Error('Your account session is the workspace token; log out to switch accounts.'));
       return;
     }
-    if (this.state.busy) {
+    if (this.state.busy && !this.state.providerWork) {
       this.reportError(
         new Error('Wait for the current action to finish before changing the workspace token.'),
       );
       return;
     }
+    void this.cancelProviderWork();
     this.identity += 1;
     this.mustPull = false;
     this.publish({ token, providers: null, serverRevision: null, connectedAI: false, notice: null });
@@ -390,12 +454,13 @@ export class RevaStore {
   private endSession(notice: string | null, path: string): void {
     if (this.sessionEnded) return;
     this.sessionEnded = true;
+    void this.cancelProviderWork();
     this.cancelSync();
     this.lifecycleCleanup?.();
     const currentSession = readSession(this.storage);
     const replaced = currentSession && currentSession.token !== this.state.token;
     if (!replaced) clearSession(this.storage);
-    if (notice) this.publish({ notice, error: null });
+    this.publish(notice ? { notice, error: null } : {});
     this.redirect(replaced ? '/app' : path);
   }
 
@@ -712,6 +777,7 @@ export class RevaStore {
     }
   }
   private async revoke(everywhere: boolean): Promise<void> {
+    await this.cancelProviderWork();
     const auth = this.requireAuth();
     await this.writes;
     await this.flushBeforeLeaving();
@@ -723,8 +789,14 @@ export class RevaStore {
     }
     this.endSession(null, '/');
   }
-  logout = (): Promise<void> => this.action(() => this.revoke(false));
-  logoutAll = (): Promise<void> => this.action(() => this.revoke(true));
+  logout = async (): Promise<void> => {
+    await this.cancelProviderWork();
+    await this.action(() => this.revoke(false));
+  };
+  logoutAll = async (): Promise<void> => {
+    await this.cancelProviderWork();
+    await this.action(() => this.revoke(true));
+  };
   changePassword = (currentPassword: string, newPassword: string): Promise<void> =>
     this.action(async () => {
       const auth = this.requireAuth();
@@ -737,8 +809,9 @@ export class RevaStore {
       }
       this.notify('Password changed. Your other sessions were logged out.');
     });
-  deleteAccount = (password: string): Promise<void> =>
-    this.action(async () => {
+  deleteAccount = async (password: string): Promise<void> => {
+    await this.cancelProviderWork();
+    await this.action(async () => {
       const auth = this.requireAuth();
       await this.writes;
       try {
@@ -757,6 +830,7 @@ export class RevaStore {
       }
       this.endSession(null, '/');
     });
+  };
 
   // MARK: - Source and visit editing retain exact user-authored questions, notes and versions.
   // Every preview and capture stays bound to this workspace's repository, including account stores.
@@ -818,272 +892,393 @@ export class RevaStore {
           'The transcript changed while this editor was open. Reopen it before correcting the words.',
         );
       reconcileMemory(draft, recordingID, correctedSegmentTexts);
+      const recording = draft.recordings.find((item) => item.id === recordingID);
+      if (
+        correctedSegmentTexts &&
+        recording?.audioFilename &&
+        !recording.isSample &&
+        !hasRecordingSummary(recording)
+      )
+        recording.status = 'processing-analyzing';
     });
 
   // MARK: - Summary publication checks the captured source before applying provider text.
   summarizeRecord = (id: string): Promise<void> =>
-    this.action(async () => {
-      const original = structuredClone(this.requiredSnapshot().records.find((record) => record.id === id));
-      if (!original) throw new Error('This record is no longer available.');
-      if (!this.state.connectedAI) {
+    this.providerAction((signal) =>
+      this.action(async () => {
+        const original = structuredClone(this.requiredSnapshot().records.find((record) => record.id === id));
+        if (!original) throw new Error('This record is no longer available.');
+        if (!this.state.connectedAI) {
+          await this.edit((draft) => {
+            const latest = draft.records.find((record) => record.id === id);
+            if (!latest) throw new Error('This record is no longer available.');
+            upsertRecord(draft, {
+              ...latest,
+              summary: localExcerpt(latest.text, latest.isDemo),
+              summaryModel: undefined,
+              summaryGeneratedAt: undefined,
+            });
+          });
+          this.notify('Original-text excerpt saved.');
+          return;
+        }
+        const identity = this.identity,
+          result = await providerResult(signal, () =>
+            this.apiFactory(this.state.token).summarize(original, signal),
+          );
+        signal.throwIfAborted();
+        this.assertIdentity(identity);
+        if (!result.summary.trim())
+          throw new Error('The AI returned no summary. Your previous summary was kept.');
         await this.edit((draft) => {
+          signal.throwIfAborted();
+          this.assertIdentity(identity);
           const latest = draft.records.find((record) => record.id === id);
-          if (!latest) throw new Error('This record is no longer available.');
+          if (!latest || latest.version !== original.version || latest.text !== original.text)
+            throw new Error(
+              'This record changed during summarization. Your edits were kept; retry with the current source.',
+            );
           upsertRecord(draft, {
             ...latest,
-            summary: localExcerpt(latest.text, latest.isDemo),
-            summaryModel: undefined,
+            summary: result.summary,
+            summaryModel: result.model,
+            summaryGeneratedAt: nowISO(),
           });
         });
-        this.notify('Original-text excerpt saved.');
-        return;
-      }
-      const identity = this.identity,
-        result = await this.apiFactory(this.state.token).summarize(original);
-      this.assertIdentity(identity);
-      if (!result.summary.trim())
-        throw new Error('The AI returned no summary. Your previous summary was kept.');
-      await this.edit((draft) => {
-        this.assertIdentity(identity);
-        const latest = draft.records.find((record) => record.id === id);
-        if (!latest || latest.version !== original.version || latest.text !== original.text)
-          throw new Error(
-            'This record changed during summarization. Your edits were kept; retry with the current source.',
-          );
-        upsertRecord(draft, { ...latest, summary: result.summary, summaryModel: result.model });
-      });
-      this.notify('AI summary saved. Review it against the original source.');
-    });
+        this.notify('AI summary saved. Review it against the original source.');
+      }),
+    );
 
   // Always call the server on request; this result is never written to the appointment log.
-  generateVisitBrief = async (input: VisitBriefInput): Promise<ClinicalBrief> => {
-    const identity = this.identity;
-    const snapshot = structuredClone(this.requiredSnapshot());
-    const visit = briefVisit(input),
-      sources = briefSources(snapshot);
-    try {
-      const result = await this.apiFactory(this.state.token).prepare(visit, sources);
-      this.assertIdentity(identity);
-      if (briefContextSignature(snapshot) !== briefContextSignature(this.requiredSnapshot()))
-        throw new Error(
-          'Your records or profile changed. Generate a new brief with the current information.',
+  generateVisitBrief = (input: VisitBriefInput, external?: AbortSignal): Promise<ClinicalBrief> =>
+    this.providerAction(async (signal) => {
+      const identity = this.identity;
+      const snapshot = structuredClone(this.requiredSnapshot());
+      if (this.state.mode === 'demo' && snapshot.profile.isDemo) {
+        signal.throwIfAborted();
+        return demoClinicalBrief(snapshot, input);
+      }
+      const visit = briefVisit(input),
+        sources = briefSources(snapshot);
+      try {
+        const result = await providerResult(signal, () =>
+          this.apiFactory(this.state.token).prepare(visit, sources, signal),
         );
-      return clinicalBrief(snapshot, visit, sources, result);
-    } catch (error) {
-      this.reportError(error);
-      throw error;
-    }
-  };
+        signal.throwIfAborted();
+        this.assertIdentity(identity);
+        if (briefContextSignature(snapshot) !== briefContextSignature(this.requiredSnapshot()))
+          throw new Error(
+            'Your records or profile changed. Generate a new brief with the current information.',
+          );
+        return clinicalBrief(snapshot, visit, sources, result);
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'AbortError')) this.reportError(error);
+        throw error;
+      }
+    }, external);
 
   // MARK: - Reports preserve source signatures and authoritative questions through asynchronous work.
   prepareVisit = (id: string): Promise<void> =>
-    this.action(async () => {
-      const snapshot = structuredClone(this.requiredSnapshot()),
-        original = snapshot.visits.find((visit) => visit.id === id);
-      if (!original) throw new Error('This visit is no longer available.');
-      const identity = this.identity,
-        connected = this.state.connectedAI,
-        api = connected ? this.apiFactory(this.state.token) : null;
-      const signature = await reportSignature(original, snapshot.records);
-      const candidates = snapshot.records
-        .filter((record) => record.text.trim())
-        .map((record) => ({ ...record, summary: currentSummary(record) }));
-      if (connected && !candidates.length)
-        throw new Error(
-          'Add readable sources before using connected preparation, or turn it off to prepare locally.',
-        );
-      this.assertIdentity(identity);
-      const result = api ? await api.prepare(original, candidates) : null;
-      this.assertIdentity(identity);
-      if (
-        result &&
-        result.selectedRecordIDs.some((recordID) => !candidates.some((record) => record.id === recordID))
-      )
-        throw new Error('The AI returned an unknown source. No report was saved.');
-      await this.edit(async (draft) => {
-        this.assertIdentity(identity);
-        const latest = draft.visits.find((visit) => visit.id === id);
-        if (!latest || signature !== (await reportSignature(latest, draft.records)))
+    this.providerAction((signal) =>
+      this.action(async () => {
+        const snapshot = structuredClone(this.requiredSnapshot()),
+          original = snapshot.visits.find((visit) => visit.id === id);
+        if (!original) throw new Error('This visit is no longer available.');
+        const identity = this.identity,
+          connected = this.state.connectedAI,
+          api = connected ? this.apiFactory(this.state.token) : null;
+        const signature = await reportSignature(original, snapshot.records);
+        const candidates = snapshot.records
+          .filter((record) => record.text.trim())
+          .map((record) => ({ ...record, summary: currentSummary(record) }));
+        if (connected && !candidates.length)
           throw new Error(
-            'Sources or visit details changed during preparation. Your edits were kept; prepare again.',
+            'Add readable sources before using connected preparation, or turn it off to prepare locally.',
           );
-        if (result) {
-          const selected = new Set([...result.selectedRecordIDs, ...latest.pinnedRecordIDs]);
-          const report = await generateReport(
-            { ...latest, pinnedRecordIDs: [...selected] },
-            draft.records.filter((record) => selected.has(record.id)),
-          );
-          report.sourceSignature = signature;
-          report.generationModel = result.model;
-          report.isDemo = false;
-          report.sections.splice(Math.min(1, report.sections.length), 0, {
-            id: uid(),
-            title: 'AI preparation overview · review with your clinician',
-            body: result.overview,
-            sources: [],
-          });
-          if (
-            !original.report &&
-            !original.questions.length &&
-            JSON.stringify(latest.questions) === JSON.stringify(original.questions)
-          )
-            latest.questions = [...result.questions];
-          report.questions = [...latest.questions];
-          report.notes = latest.notes;
-          latest.report = report;
-        } else {
-          const report = await generateReport(latest, draft.records);
-          latest.questions = [...report.questions];
-          latest.report = report;
-        }
         this.assertIdentity(identity);
-      });
-      this.notify(
-        result
-          ? 'AI-assisted brief ready. Review its overview and original source excerpts.'
-          : 'Visit brief ready with original source excerpts.',
-      );
-    });
+        const result = api
+          ? await providerResult(signal, () => api.prepare(original, candidates, signal))
+          : null;
+        signal.throwIfAborted();
+        this.assertIdentity(identity);
+        if (
+          result &&
+          result.selectedRecordIDs.some((recordID) => !candidates.some((record) => record.id === recordID))
+        )
+          throw new Error('The AI returned an unknown source. No report was saved.');
+        await this.edit(async (draft) => {
+          signal.throwIfAborted();
+          this.assertIdentity(identity);
+          const latest = draft.visits.find((visit) => visit.id === id);
+          if (!latest || signature !== (await reportSignature(latest, draft.records)))
+            throw new Error(
+              'Sources or visit details changed during preparation. Your edits were kept; prepare again.',
+            );
+          if (result) {
+            const selected = new Set([...result.selectedRecordIDs, ...latest.pinnedRecordIDs]);
+            const report = await generateReport(
+              { ...latest, pinnedRecordIDs: [...selected] },
+              draft.records.filter((record) => selected.has(record.id)),
+            );
+            report.sourceSignature = signature;
+            report.generationModel = result.model;
+            report.isDemo = false;
+            report.sections.splice(Math.min(1, report.sections.length), 0, {
+              id: uid(),
+              title: 'AI preparation overview · review with your clinician',
+              body: result.overview,
+              sources: [],
+            });
+            if (
+              !original.report &&
+              !original.questions.length &&
+              JSON.stringify(latest.questions) === JSON.stringify(original.questions)
+            )
+              latest.questions = [...result.questions];
+            report.questions = [...latest.questions];
+            report.notes = latest.notes;
+            latest.report = report;
+          } else {
+            const report = await generateReport(latest, draft.records);
+            latest.questions = [...report.questions];
+            latest.report = report;
+          }
+          this.assertIdentity(identity);
+        });
+        this.notify(
+          result
+            ? 'AI-assisted brief ready. Review its overview and original source excerpts.'
+            : 'Visit brief ready with original source excerpts.',
+        );
+      }),
+    );
 
   // MARK: - Transcription keeps original audio and rejects mismatched or edited transcript results.
-  transcribeRecording = (id: string): Promise<void> =>
-    this.action(async () => {
-      const original = structuredClone(
-        this.requiredSnapshot().recordings.find((recording) => recording.id === id),
+  private async recordingAction(
+    id: string,
+    work: (signal: AbortSignal) => Promise<void>,
+    background: boolean,
+    external?: AbortSignal,
+  ) {
+    if (this.recordingRequests.has(id)) throw new Error('This recording is already being processed.');
+    this.recordingRequests.add(id);
+    try {
+      await this.providerAction(
+        (signal) => (background ? work(signal) : this.action(() => work(signal))),
+        external,
       );
-      if (!original || original.isSample || !original.audioFilename)
-        throw new Error('Save a real audio recording before requesting transcription.');
-      if (!this.state.providers?.transcription.configured)
-        throw new Error('Check a server with configured transcription first.');
-      const identity = this.identity,
-        blob = await this.persistence.getAttachment(original.audioFilename);
-      const type = audioType(original.audioFilename) ?? blob.type.split(';')[0];
-      if (
-        ![
-          'audio/mp4',
-          'audio/m4a',
-          'audio/x-m4a',
-          'audio/wav',
-          'audio/x-wav',
-          'audio/mpeg',
-          'audio/webm',
-          'audio/ogg',
-        ].includes(type)
-      )
-        throw new Error(
-          'This recording format is not supported for transcription. Its original audio is preserved.',
-        );
-      this.assertIdentity(identity);
-      const result = await this.apiFactory(this.state.token).transcribe(
-        original.audioFilename,
-        blob.slice(0, blob.size, type),
-      );
-      this.assertIdentity(identity);
-      if (
-        !result.text.trim() ||
-        !result.segments.length ||
-        new Set(result.segments.map((segment) => segment.id)).size !== result.segments.length ||
-        result.segments.some(
-          (segment) =>
-            !segment.id ||
-            !segment.text.trim() ||
-            !Number.isFinite(segment.start) ||
-            !Number.isFinite(segment.end) ||
-            segment.start < 0 ||
-            segment.end < segment.start ||
-            segment.end > original.duration + 5,
-        )
-      )
-        throw new Error(
-          'The transcript did not match valid audio timestamps. Your previous transcript was kept.',
-        );
-      await this.edit((draft) => {
-        this.assertIdentity(identity);
-        const latest = draft.recordings.find((recording) => recording.id === id);
-        if (
-          !latest ||
-          latest.audioFilename !== original.audioFilename ||
-          JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
-        )
-          throw new Error('Audio or transcript changed during transcription. Your edits were kept.');
-        if (JSON.stringify(latest.segments) !== JSON.stringify(result.segments))
-          clearRecordingSummary(latest);
-        latest.segments = result.segments;
-        latest.transcriptionModel = result.model;
-        latest.status = 'ready';
-        if (draft.records.some((record) => record.sourceRecordingID === id || record.id === `memory-${id}`))
-          reconcileMemory(
-            draft,
-            id,
-            Object.fromEntries(result.segments.map((segment) => [segment.id, segment.text])),
-          );
-      });
-      this.notify('Transcript saved. Review the words and speakers against the original recording.');
-    });
-
-  // MARK: - Appointment summaries use only the exact saved transcript and reject stale or canceled work.
-  summarizeRecording = (id: string, signal?: AbortSignal): Promise<void> =>
-    this.action(async () => {
-      const snapshot = this.requiredSnapshot();
-      const original = structuredClone(snapshot.recordings.find((recording) => recording.id === id));
-      if (!original || !original.segments.length || original.segments.some((segment) => !segment.text.trim()))
-        throw new Error('Transcribe this appointment before summarizing it.');
-      if (!this.state.providers?.gemini.configured)
-        throw new Error('Check a server with configured AI before summarizing this appointment.');
-      const checkCancellation = () => {
-        if (signal?.aborted)
-          throw new DOMException('Summarization canceled. Your saved audio was kept.', 'AbortError');
-      };
-      const identity = this.identity;
-      const source: MedicalRecord = {
-        id: original.id,
-        title: original.title,
-        text: recordingTranscript(original),
-        summary: '',
-        notes: '',
-        kind: 'Recording',
-        provider: '',
-        date: original.createdAt,
-        uploadedAt: original.createdAt,
-        pageCount: 1,
-        tags: [],
-        status: 'ready',
-        isDemo: original.isSample,
-        version: 1,
-      };
-      checkCancellation();
-      const result = await this.apiFactory(this.state.token).summarize(source, signal);
-      checkCancellation();
-      this.assertIdentity(identity);
-      if (!result.summary.trim() || !result.model.trim())
-        throw new Error('The AI returned no usable summary. Your previous summary was kept.');
-      await this.edit((draft) => {
+    } catch (error) {
+      if (background && error instanceof APIError && error.status === 401) this.reportError(error);
+      throw error;
+    } finally {
+      this.recordingRequests.delete(id);
+    }
+  }
+  transcribeRecording = (id: string, external?: AbortSignal, background = false): Promise<void> =>
+    this.recordingAction(
+      id,
+      async (signal) => {
+        const checkCancellation = () => {
+          if (signal?.aborted)
+            throw new DOMException('Transcription canceled. Your audio was kept.', 'AbortError');
+        };
         checkCancellation();
-        this.assertIdentity(identity);
-        const latest = draft.recordings.find((recording) => recording.id === id);
+        const original = structuredClone(
+          this.requiredSnapshot().recordings.find((recording) => recording.id === id),
+        );
+        if (!original || original.isSample || !original.audioFilename)
+          throw new Error('Save a real audio recording before requesting transcription.');
+        if (!this.state.providers?.transcription.configured)
+          throw new Error('Check a server with configured transcription first.');
+        const identity = this.identity,
+          blob = await this.persistence.getAttachment(original.audioFilename);
+        const type = audioType(original.audioFilename) ?? blob.type.split(';')[0];
         if (
-          !latest ||
-          latest.visitID !== original.visitID ||
-          latest.createdAt !== original.createdAt ||
-          latest.title !== original.title ||
-          latest.audioFilename !== original.audioFilename ||
-          latest.duration !== original.duration ||
-          latest.isSample !== original.isSample ||
-          JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          ![
+            'audio/mp4',
+            'audio/m4a',
+            'audio/x-m4a',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/mpeg',
+            'audio/webm',
+            'audio/ogg',
+          ].includes(type)
         )
           throw new Error(
-            'The transcript or recording changed during summarization. Your edits were kept; summarize again.',
+            'This recording format is not supported for transcription. Its original audio is preserved.',
           );
-        latest.aiSummary = result.summary;
-        latest.aiSummaryModel = result.model;
-        latest.aiSummaryGeneratedAt = nowISO();
-        const index = draft.records.findIndex(
-          (record) => record.id === `memory-${id}` || record.sourceRecordingID === id,
+        this.assertIdentity(identity);
+        const result = await providerResult(signal, () =>
+          this.apiFactory(this.state.token).transcribe(
+            original.audioFilename!,
+            blob.slice(0, blob.size, type),
+            signal,
+          ),
         );
-        if (index >= 0) draft.records[index] = createMemoryRecord(latest, draft, true);
-      });
-      this.notify('Appointment summary saved. Review it against the transcript and original audio.');
-    });
+        checkCancellation();
+        this.assertIdentity(identity);
+        if (
+          !result.text.trim() ||
+          !result.segments.length ||
+          new Set(result.segments.map((segment) => segment.id)).size !== result.segments.length ||
+          result.segments.some(
+            (segment) =>
+              !segment.id ||
+              !segment.text.trim() ||
+              !Number.isFinite(segment.start) ||
+              !Number.isFinite(segment.end) ||
+              segment.start < 0 ||
+              segment.end < segment.start ||
+              segment.end > original.duration + 5,
+          )
+        )
+          throw new Error(
+            'The transcript did not match valid audio timestamps. Your previous transcript was kept.',
+          );
+        await this.edit((draft) => {
+          checkCancellation();
+          this.assertIdentity(identity);
+          const latest = draft.recordings.find((recording) => recording.id === id);
+          if (
+            !latest ||
+            latest.audioFilename !== original.audioFilename ||
+            JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          )
+            throw new Error('Audio or transcript changed during transcription. Your edits were kept.');
+          if (
+            original.status === 'processing-retranscribing' ||
+            JSON.stringify(latest.segments) !== JSON.stringify(result.segments)
+          )
+            clearRecordingSummary(latest);
+          latest.segments = result.segments;
+          latest.transcriptionModel = result.model;
+          latest.status = background ? 'processing-analyzing' : 'ready';
+          if (draft.records.some((record) => record.sourceRecordingID === id || record.id === `memory-${id}`))
+            reconcileMemory(
+              draft,
+              id,
+              Object.fromEntries(result.segments.map((segment) => [segment.id, segment.text])),
+            );
+        });
+        if (!background)
+          this.notify('Transcript saved. Review the words and speakers against the original recording.');
+      },
+      background,
+      external,
+    );
+
+  // MARK: - Appointment summaries use only the exact saved transcript and reject stale or canceled work.
+  summarizeRecording = (
+    id: string,
+    external?: AbortSignal,
+    background = false,
+    onRetry?: (retry: GeminiRetryState | null) => void,
+  ): Promise<void> =>
+    this.recordingAction(
+      id,
+      async (signal) => {
+        const snapshot = this.requiredSnapshot();
+        const original = structuredClone(snapshot.recordings.find((recording) => recording.id === id));
+        if (
+          !original ||
+          !original.segments.length ||
+          original.segments.some((segment) => !segment.text.trim())
+        )
+          throw new Error('Transcribe this appointment before summarizing it.');
+        if (!this.state.providers?.gemini.configured)
+          throw new Error('Check a server with configured AI before summarizing this appointment.');
+        const checkCancellation = () => {
+          if (signal?.aborted)
+            throw new DOMException('Summarization canceled. Your saved audio was kept.', 'AbortError');
+        };
+        const identity = this.identity;
+        const source: MedicalRecord = {
+          id: original.id,
+          title: original.title,
+          text: recordingTranscript(original),
+          summary: '',
+          notes: '',
+          kind: 'Recording',
+          provider: '',
+          date: calendarDay(new Date(recordingInstant(original))),
+          dateSource: original.capturedAt ? 'recorded' : original.savedAt ? 'added' : undefined,
+          uploadedAt: original.savedAt ?? original.createdAt,
+          pageCount: 1,
+          tags: [],
+          status: 'ready',
+          isDemo: original.isSample,
+          version: 1,
+        };
+        checkCancellation();
+        const generateTitle = original.titleSource === 'date';
+        const result = await providerResult(signal, () =>
+          this.apiFactory(this.state.token).summarize(source, signal, {
+            generateTitle,
+            date: recordDateContext(source),
+            onRetry,
+          }),
+        );
+        checkCancellation();
+        this.assertIdentity(identity);
+        if (!result.summary.trim() || !result.model.trim())
+          throw new Error('The AI returned no usable summary. Your previous summary was kept.');
+        const generatedTitle = generateTitle ? result.title?.trim() : undefined;
+        if (
+          generateTitle &&
+          (!generatedTitle ||
+            new TextEncoder().encode(generatedTitle).length > 120 ||
+            /[\r\n\u0000-\u001f]/.test(generatedTitle))
+        )
+          throw new Error('The AI returned no usable recording title. Your saved recording was kept.');
+        await this.edit((draft) => {
+          checkCancellation();
+          this.assertIdentity(identity);
+          const latest = draft.recordings.find((recording) => recording.id === id);
+          if (
+            !latest ||
+            latest.visitID !== original.visitID ||
+            latest.createdAt !== original.createdAt ||
+            latest.capturedAt !== original.capturedAt ||
+            latest.savedAt !== original.savedAt ||
+            (!generateTitle && latest.title !== original.title) ||
+            latest.audioFilename !== original.audioFilename ||
+            latest.duration !== original.duration ||
+            latest.isSample !== original.isSample ||
+            JSON.stringify(latest.segments) !== JSON.stringify(original.segments)
+          )
+            throw new Error(
+              'The transcript or recording changed during summarization. Your edits were kept; summarize again.',
+            );
+          const automaticTitle =
+            generatedTitle && latest.titleSource === 'date' && latest.title === original.title;
+          if (automaticTitle) {
+            latest.title = generatedTitle;
+            latest.titleSource = 'ai';
+          } else if (generateTitle && latest.title !== original.title && latest.titleSource === 'date') {
+            latest.titleSource = 'user';
+          }
+          latest.aiSummary = result.summary;
+          latest.aiSummaryModel = result.model;
+          latest.aiSummaryGeneratedAt = nowISO();
+          const index = draft.records.findIndex(
+            (record) => record.id === `memory-${id}` || record.sourceRecordingID === id,
+          );
+          if (index >= 0) {
+            const memory = createMemoryRecord(latest, draft, true);
+            if (automaticTitle && memory.title === `${original.title} · memory`) {
+              memory.title = `${latest.title} · memory`;
+              if (memory.version === draft.records[index].version) memory.version += 1;
+            }
+            draft.records[index] = memory;
+          }
+        });
+        if (!background)
+          this.notify('Appointment summary saved. Review it against the transcript and original audio.');
+      },
+      background,
+      external,
+    );
 
   // MARK: - Revision-aware discovery and explicit synchronization.
   private async discover(api: APITransport): Promise<Discovery> {

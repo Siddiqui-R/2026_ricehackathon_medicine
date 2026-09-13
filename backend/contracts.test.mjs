@@ -200,7 +200,7 @@ function briefResponse(result) {
     }),
   );
 }
-test("preparation keeps the fixed concise model while summaries use the configured model", async () => {
+test("preparation and summaries use the same configured model", async () => {
   const previousKey = process.env.GEMINI_API_KEY,
     previousModel = process.env.GEMINI_MODEL;
   process.env.GEMINI_API_KEY = "fictional-test-key";
@@ -216,8 +216,11 @@ test("preparation keeps the fixed concise model while summaries use the configur
         selectedRecordIDs: ["source-1"],
       });
     });
-    assert.equal(result.model, "gemini-3.8-flash");
-    assert.match(destination, /models\/gemini-3\.8-flash:generateContent$/);
+    assert.equal(result.model, "gemini-other-summary-model");
+    assert.match(
+      destination,
+      /models\/gemini-other-summary-model:generateContent$/,
+    );
     assert.equal(payload.generationConfig.candidateCount, undefined);
     assert.equal(payload.generationConfig.temperature, undefined);
     assert.deepEqual(JSON.parse(payload.contents[0].parts[0].text), briefInput);
@@ -270,7 +273,7 @@ test("preparation rejects overflow and invalid sources before returning a brief"
     };
     assert.deepEqual(
       await gemini("prepare", briefInput, async () => briefResponse(boundary)),
-      { ...boundary, model: "gemini-3.8-flash" },
+      { ...boundary, model: "gemini-flash-latest" },
     );
   } finally {
     if (previousKey === undefined) delete process.env.GEMINI_API_KEY;

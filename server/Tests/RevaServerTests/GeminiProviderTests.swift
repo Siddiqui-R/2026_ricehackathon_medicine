@@ -68,7 +68,7 @@ private let preparationInput = GeminiPreparationRequest(
 // MARK: - Private configuration and authenticated capability discovery
 @Suite("Gemini providers — mocked HTTP only")
 struct GeminiProviderTests {
-    @Test func conciseBriefUsesFixedModelAndRejectsOverflow() async throws {
+    @Test func conciseBriefUsesConfiguredModelAndRejectsOverflow() async throws {
         let requests = GeminiRequests()
         let mock = GeminiHTTPTransport { request in
             await requests.append(request)
@@ -83,9 +83,11 @@ struct GeminiProviderTests {
             paidAccessAllowed: true)
         let result = try await GeminiService(configuration: configuration, transport: mock).prepare(
             preparationInput)
-        #expect(result.model == "gemini-3.8-flash")
+        #expect(result.model == "gemini-other-summary-model")
         let request = try #require(await requests.values.first)
-        #expect(request.url?.absoluteString.hasSuffix("models/gemini-3.8-flash:generateContent") == true)
+        #expect(
+            request.url?.absoluteString.hasSuffix("models/gemini-other-summary-model:generateContent") == true
+        )
         let oversized = GeminiHTTPTransport { _ in
             .init(
                 status: 200,
@@ -120,14 +122,14 @@ struct GeminiProviderTests {
                 #expect(response.status == .ok)
                 let status = try response.content.decode(ProviderStatus.self)
                 #expect(status.gemini.configured)
-                #expect(status.gemini.model == "gemini-3.8-flash")
+                #expect(status.gemini.model == "gemini-flash-latest")
                 #expect(status.transcription.configured)
                 #expect(status.transcription.model == "whisper-1")
                 #expect(!response.body.string.contains("fake-"))
                 let json = try #require(
                     JSONSerialization.jsonObject(with: Data(response.body.readableBytesView))
                         as? [String: Any])
-                #expect(Set(json.keys) == ["gemini", "transcription"])
+                #expect(Set(json.keys) == ["gemini", "transcription", "realtimeTranscription"])
                 #expect(response.headers.first(name: .cacheControl) == "no-store")
             }
             #expect(await requests.values.isEmpty)
@@ -186,7 +188,7 @@ struct GeminiProviderTests {
             configuration: try ProviderConfiguration(
                 environment: ["GEMINI_API_KEY": fakeGeminiKey], paidAccessAllowed: true), transport: mock)
         let result = try await service.summarize(input)
-        #expect(result.model == "gemini-3.8-flash")
+        #expect(result.model == "gemini-flash-latest")
         #expect(result.summary == "The discussion mentions no fever and a possible follow-up.")
         let request = try #require(await requests.values.first)
         let requestBody = try #require(request.httpBody)
@@ -219,7 +221,7 @@ struct GeminiProviderTests {
         }
         try await withGeminiServer(
             environment: [
-                "ELEVENLABS_API_KEY": "obsolete key\n", "ELEVENLABS_AGENT_ID": "obsolete/id",
+                "ELEVENLABS_API_KEY": "fake-elevenlabs-key", "ELEVENLABS_AGENT_ID": "obsolete/id",
                 "ELEVENLABS_PHONE_NUMBER_ID": "obsolete/id", "REVA_ENABLE_LIVE_CALLS": "obsolete-value",
             ], transport: mock
         ) { app, configuration in
@@ -262,7 +264,7 @@ struct GeminiProviderTests {
                     #expect(response.status == .ok)
                     let summary = try response.content.decode(GeminiSummaryResponse.self)
                     #expect(summary.summary == "The synthetic source records hemoglobin 12.8 g/dL.")
-                    #expect(summary.model == "gemini-3.8-flash")
+                    #expect(summary.model == "gemini-flash-latest")
                 })
         }
         let recorded = await requests.values
@@ -271,7 +273,8 @@ struct GeminiProviderTests {
         #expect(request.httpMethod == "POST")
         #expect(
             request.url?.absoluteString
-                == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent")
+                == "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        )
         #expect(request.url?.query == nil)
         #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == fakeGeminiKey)
         let requestBody = try #require(request.httpBody)
@@ -307,7 +310,7 @@ struct GeminiProviderTests {
                     let prepared = try response.content.decode(GeminiPreparationResponse.self)
                     #expect(prepared.selectedRecordIDs == ["synthetic-record"])
                     #expect(prepared.questions == ["What remains undocumented?"])
-                    #expect(prepared.model == "gemini-3.8-flash")
+                    #expect(prepared.model == "gemini-flash-latest")
                 })
         }
         #expect(await requests.values.count == 1)
@@ -411,6 +414,18 @@ struct GeminiProviderTests {
         let empty = try ServerConfiguration(environment: [:])
         #expect(empty.providers.geminiAPIKey == nil)
         #expect(!empty.providers.paidAccessAllowed)
+        #expect(empty.providers.geminiModel == "gemini-flash-latest")
+        for configured in [
+            "", "   ", "gemini-3.8-flash", " gemini-3.8-flash ", "gemini-3.5-flash-lite",
+            " gemini-3.5-flash-lite ", "gemini-flash-lite-latest",
+        ] {
+            let settings = try ProviderConfiguration(
+                environment: ["GEMINI_MODEL": configured], paidAccessAllowed: true)
+            #expect(settings.geminiModel == "gemini-flash-latest")
+        }
+        let override = try ProviderConfiguration(
+            environment: ["GEMINI_MODEL": " gemini-custom-model "], paidAccessAllowed: true)
+        #expect(override.geminiModel == "gemini-custom-model")
         for environment in [
             ["GEMINI_MODEL": "gemini-test/../../unexpected"], ["GEMINI_API_KEY": "header\r\ninjection"],
             ["OPENAI_TRANSCRIPTION_MODEL": "unsupported-model"],
@@ -420,4 +435,40 @@ struct GeminiProviderTests {
             }
         }
     }
+    // MARK: - Authenticated HTTP retries carry the bounded Lite flag across allowed origins
+    @Test func fallbackHeaderRoutesOnlyToLiteAndExposesRetryMetadata() async throws {
+        let requests = GeminiRequests()
+        let mock = GeminiHTTPTransport { request in
+            await requests.append(request)
+            return .init(status: 503, data: Data())
+        }
+        let origin = "http://127.0.0.1:5173"
+        try await withGeminiServer(
+            environment: ["GEMINI_API_KEY": fakeGeminiKey, "REVA_ALLOWED_ORIGINS": origin], transport: mock
+        ) { app, _ in
+            var headers = providerHeaders()
+            headers.replaceOrAdd(name: .origin, value: origin)
+            headers.replaceOrAdd(name: "X-Reva-Gemini-Fallback", value: "true")
+            try await app.testing().test(
+                .POST, "v1/ai/summarize", headers: headers,
+                beforeRequest: { request in try request.content.encode(summaryInput) },
+                afterResponse: { response async in
+                    #expect(response.status == .serviceUnavailable)
+                    #expect(response.headers.first(name: "X-Reva-Gemini-Fallback") == "true")
+                    #expect(response.headers.first(name: .retryAfter) == "60")
+                    #expect(
+                        response.headers.first(name: .accessControlExpose)?.contains("X-Reva-Gemini-Fallback")
+                            == true)
+                })
+            headers.replaceOrAdd(name: "X-Reva-Gemini-Fallback", value: "gemini-custom-model")
+            try await app.testing().test(
+                .POST, "v1/ai/summarize", headers: headers,
+                beforeRequest: { request in try request.content.encode(summaryInput) },
+                afterResponse: { response async in #expect(response.status == .badRequest) })
+        }
+        let sent = await requests.values
+        #expect(sent.count == 1)
+        #expect(sent.first?.url?.path.hasSuffix("gemini-flash-lite-latest:generateContent") == true)
+    }
+
 }

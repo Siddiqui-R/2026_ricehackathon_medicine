@@ -136,7 +136,7 @@ describe('profile evidence boundary', () => {
         id: 'report-1',
         version: 1,
         title: snapshot.records[0].title,
-        date: snapshot.records[0].date,
+        date: `Date ${snapshot.records[0].date}; source unverified`,
         text: 'Original source',
       },
     ]);

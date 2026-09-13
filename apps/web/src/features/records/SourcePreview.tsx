@@ -1,6 +1,6 @@
-// Purpose: Present an original locally stored source without executing its text as HTML.
+// Purpose: Present source documents without executing their text as HTML.
 // Inputs: A record attachment reference and an optional one-based PDF evidence page.
-// Outputs: Original PDF/image/text preview and an explicit download link.
+// Outputs: PDF/image/text previews and downloads; bundled fixtures use verified display copies.
 // Side effects: Reads the repository and manages a scoped blob URL that is revoked on dismissal.
 
 import { useEffect, useState } from 'react';
@@ -10,6 +10,8 @@ import type { MedicalRecord } from '../../core/models';
 import { Modal } from '../../components/ui';
 import { boundedText, MAX_TEXT_BYTES, textByteCount } from './extractDocument';
 import { PDFPreview } from './PDFPreview';
+import { demoSourcePreview, loadDemoSourcePreview } from './demoSourcePreview';
+import { demoLabel, demoSourceText } from '../../core/presentation';
 
 // MARK: - Read originals with stale-load and URL lifetime protection
 export function SourcePreview({
@@ -27,6 +29,7 @@ export function SourcePreview({
   const [text, setText] = useState('');
   const [shortened, setShortened] = useState(false);
   const [error, setError] = useState('');
+  const bundledPreview = demoSourcePreview(record);
   const type = record.mimeType || 'application/octet-stream';
   useEffect(() => {
     let active = true;
@@ -39,7 +42,9 @@ export function SourcePreview({
     void (async () => {
       try {
         if (!record.sourceFilename) throw new Error('This record has no original attachment.');
-        const original = await getAttachment(record.sourceFilename);
+        const original = bundledPreview
+          ? await loadDemoSourcePreview(record.sourceFilename, bundledPreview)
+          : await getAttachment(record.sourceFilename);
         if (!active) return;
         const blob = original.type ? original : original.slice(0, original.size, type);
         objectURL = URL.createObjectURL(blob);
@@ -61,13 +66,15 @@ export function SourcePreview({
       active = false;
       if (objectURL) URL.revokeObjectURL(objectURL);
     };
-  }, [getAttachment, record.sourceFilename, type]);
+  }, [getAttachment, record.sourceFilename, type, bundledPreview]);
   return (
-    <Modal title="Original source" onClose={onClose} wide>
+    <Modal title={bundledPreview ? 'Source document' : 'Original source'} onClose={onClose} wide>
       <div className="stack">
         <div>
-          <h3>{record.title}</h3>
-          <p className="small muted">Original bytes retained with this record</p>
+          <h3>{demoLabel(record.title, record.isDemo)}</h3>
+          <p className="small muted">
+            {bundledPreview ? 'Full source document' : 'Original bytes retained with this record'}
+          </p>
         </div>
         {error ? (
           <p className="inline-error" role="alert">
@@ -80,11 +87,22 @@ export function SourcePreview({
         ) : (
           <>
             {type === 'application/pdf' ? (
-              originalBlob && <PDFPreview key={url} blob={originalBlob} title={record.title} page={page} />
+              originalBlob && (
+                <PDFPreview
+                  key={url}
+                  blob={originalBlob}
+                  title={demoLabel(record.title, record.isDemo)}
+                  page={page}
+                />
+              )
             ) : type.startsWith('image/') ? (
-              <img className="source-preview-image" src={url} alt={`Original source: ${record.title}`} />
+              <img
+                className="source-preview-image"
+                src={url}
+                alt={`Original source: ${demoLabel(record.title, record.isDemo)}`}
+              />
             ) : type.startsWith('text/') ? (
-              <pre className="prose source-text">{text}</pre>
+              <pre className="prose source-text">{demoSourceText(text, record.isDemo)}</pre>
             ) : (
               <p>This file type does not have a browser preview. Download the original to open it.</p>
             )}
@@ -93,8 +111,16 @@ export function SourcePreview({
                 Preview shortened to 120 KB. The download contains the complete original.
               </p>
             )}
-            <a className="button button-secondary" href={url} download={record.sourceFilename}>
-              <Download size={18} /> Download original
+            <a
+              className="button button-secondary"
+              href={url}
+              download={
+                bundledPreview
+                  ? record.sourceFilename?.replace(/^reva-synthetic-/, 'reva-')
+                  : record.sourceFilename
+              }
+            >
+              <Download size={18} /> {bundledPreview ? 'Download source' : 'Download original'}
             </a>
           </>
         )}

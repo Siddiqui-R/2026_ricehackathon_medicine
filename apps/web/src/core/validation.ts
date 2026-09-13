@@ -8,7 +8,7 @@ import type { AppSnapshot } from './models';
 type Shape = Record<string, unknown>;
 function fail(path: string): never {
   throw new Error(
-    `Saved data is invalid at ${path}. Your existing data was kept; restore a valid backup or explicitly reset the demo.`,
+    `Saved data is invalid at ${path}. Your existing data was kept; restore a valid backup or explicitly reset the workspace.`,
   );
 }
 function object(value: unknown, path: string): Shape {
@@ -135,6 +135,18 @@ export function validateSnapshot(value: unknown): AppSnapshot {
     ['sourceFilename', 'mimeType', 'sourceRecordingID', 'summaryModel'].forEach((key) =>
       optional(record, key, path),
     );
+    optional(record, 'summaryGeneratedAt', path);
+    if (
+      record.summaryGeneratedAt != null &&
+      !Number.isFinite(Date.parse(record.summaryGeneratedAt as string))
+    )
+      fail(`${path}.summaryGeneratedAt`);
+    optional(record, 'dateSource', path);
+    if (
+      record.dateSource != null &&
+      !['document', 'observed', 'recorded', 'added'].includes(record.dateSource as string)
+    )
+      fail(`${path}.dateSource`);
     optional(record, 'pageTexts', path, strings);
     optional(record, 'symptomEntry', path, symptom);
     if (typeof record.sourceFilename === 'string' && !safeFilename(record.sourceFilename))
@@ -197,6 +209,14 @@ export function validateSnapshot(value: unknown): AppSnapshot {
     optional(recording, 'aiSummary', path);
     optional(recording, 'aiSummaryModel', path);
     optional(recording, 'aiSummaryGeneratedAt', path);
+    optional(recording, 'titleSource', path);
+    if (recording.titleSource != null && !['user', 'date', 'ai'].includes(recording.titleSource as string))
+      fail(`${path}.titleSource`);
+    for (const field of ['capturedAt', 'savedAt']) {
+      optional(recording, field, path);
+      if (typeof recording[field] === 'string' && !Number.isFinite(Date.parse(recording[field])))
+        fail(`${path}.${field}`);
+    }
     if (
       typeof recording.aiSummaryGeneratedAt === 'string' &&
       !Number.isFinite(Date.parse(recording.aiSummaryGeneratedAt))

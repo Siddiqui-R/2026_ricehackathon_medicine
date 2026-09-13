@@ -68,6 +68,48 @@ private func expectVoiceAbort(_ status: HTTPResponseStatus, _ action: () async t
 // MARK: - Whisper multipart fidelity and transcript validation
 @Suite("Voice provider adapters — mocked transport only")
 struct VoiceProviderTests {
+    @Test func realtimeTokenRequiresOwnerAndConfiguredPrivateAccess() async throws {
+        let mock = VoiceMockHTTP([.response(200, #"{"token":"synthetic-one-use-token"}"#)])
+        let configuration = try voiceConfiguration(["ELEVENLABS_API_KEY": "synthetic-private-key"])
+        try await withApp(configure: { app in
+            registerVoiceProviderRoutes(
+                app.grouped(VoiceTestOwnerMiddleware()).grouped("v1"), configuration: configuration,
+                transport: mock.transport)
+        }) { app in
+            try await app.testing().test(.POST, "v1/audio/realtime-token") { response async in
+                #expect(response.status == .unauthorized)
+            }
+            try await app.testing().test(.POST, "v1/audio/realtime-token", headers: ["Authorization": "Bearer owner-a"]) {
+                response async throws in
+                #expect(response.status == .ok)
+                #expect(response.headers.first(name: .cacheControl) == "no-store")
+                #expect(try response.content.decode(RealtimeTranscriptionToken.self).token == "synthetic-one-use-token")
+            }
+        }
+        let request = try #require(await mock.requests.first)
+        #expect(request.url?.absoluteString == "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "xi-api-key") == "synthetic-private-key")
+        #expect(await mock.count == 1)
+        for config in [try voiceConfiguration([:]), try voiceConfiguration(["ELEVENLABS_API_KEY": "synthetic"], allowed: false)] {
+            try await expectVoiceAbort(.serviceUnavailable) {
+                _ = try await RealtimeTranscriptionService(configuration: config, transport: mock.transport).createToken()
+            }
+        }
+        #expect(await mock.count == 1)
+    }
+
+    @Test func realtimeTokenRejectsUnsafeProviderResponses() async throws {
+        for value in ["", "bad\nvalue", String(repeating: "x", count: 8193)] {
+            let body = String(data: try JSONEncoder().encode(RealtimeTranscriptionToken(token: value)), encoding: .utf8)!
+            let mock = VoiceMockHTTP([.response(200, body)])
+            try await expectVoiceAbort(.badGateway) {
+                _ = try await RealtimeTranscriptionService(
+                    configuration: try voiceConfiguration(["ELEVENLABS_API_KEY": "synthetic"]),
+                    transport: mock.transport).createToken()
+            }
+        }
+    }
     // MARK: - Browser originals preserve bytes and MIME across storage and transcription boundaries
     @Test(arguments: ["webm", "ogg"])
     func browserAudioOriginalsAreAcceptedWithoutRelabeling(format: String) async throws {

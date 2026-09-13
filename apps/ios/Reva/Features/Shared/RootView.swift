@@ -1,18 +1,15 @@
-// Purpose: Coordinate main tabs, first-run onboarding, and shared error presentation.
-// Inputs: AppStore and the persisted hasSeenWelcome preference.
-// Outputs: Summary, Records, Visits, and Medical profile navigation stacks.
-// Side effects: Updates the welcome preference and tab state; explicit recovery restores the fictional demo.
+// Coordinate Overview, Records and Profile tabs, account controls, and foreground synchronization.
 
 import SwiftUI
 
 // MARK: - RootView
-/// Coordinate main tabs, first-run onboarding, and shared error presentation.
+/// Keep native navigation and its account workspace together.
 struct RootView: View {
     // MARK: - Inputs and view state
 
     @EnvironmentObject private var store: AppStore
-    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
-    @State private var welcome = false
+    @EnvironmentObject private var account: NativeSessionController
+    @Environment(\.scenePhase) private var scenePhase
     @State private var confirmRestore = false
     @State private var selectedTab: RevaTab = .summary
     @State private var recordsGeneration = 0
@@ -25,8 +22,11 @@ struct RootView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Restore fictional demo") { confirmRestore = true }.buttonStyle(
-                        .borderedProminent)
+                    if store.account == nil {
+                        Button("Restore fictional demo") { confirmRestore = true }.buttonStyle(
+                            .borderedProminent)
+                    }
+                    Button("Return to sign in") { Task { await account.signOut() } }
                 }
             } else {
                 TabView(selection: $selectedTab) {
@@ -35,15 +35,22 @@ struct RootView: View {
                             showAllRecords: {
                                 recordsGeneration += 1
                                 selectedTab = .records
-                            }, showMedicalProfile: { selectedTab = .medicalProfile })
-                    }.tabItem { Label("Summary", systemImage: "heart.text.square") }.tag(RevaTab.summary)
-                    NavigationStack { RecordsView() }.id(recordsGeneration).tabItem {
+                            })
+                            .toolbar { ToolbarItem(placement: .topBarTrailing) { NativeAccountMenu() } }
+                    }.tabItem { Label("Overview", systemImage: "heart.text.square") }.tag(RevaTab.summary)
+                    NavigationStack {
+                        RecordsView().toolbar {
+                            ToolbarItem(placement: .topBarTrailing) { NativeAccountMenu() }
+                        }
+                    }.id(recordsGeneration).tabItem {
                         Label("Records", systemImage: "folder")
                     }.tag(RevaTab.records)
-                    NavigationStack { VisitsView() }.tabItem { Label("Visits", systemImage: "calendar") }.tag(
-                        RevaTab.visits)
-                    NavigationStack { MedicalProfileView() }.tabItem {
-                        Label("Medical profile", systemImage: "person.text.rectangle")
+                    NavigationStack {
+                        MedicalProfileView().toolbar {
+                            ToolbarItem(placement: .topBarTrailing) { NativeAccountMenu() }
+                        }
+                    }.tabItem {
+                        Label("Profile", systemImage: "person.text.rectangle")
                     }.tag(RevaTab.medicalProfile)
                 }
                 .background {
@@ -68,19 +75,20 @@ struct RootView: View {
         ) {
             Button("Restore demo", role: .destructive) { store.perform { try store.resetDemo() } }
         }
-        .sheet(isPresented: $welcome) {
-            WelcomeView {
-                hasSeenWelcome = true
-                welcome = false
+        .task(id: scenePhase) {
+            if scenePhase == .active {
+                await store.runBackgroundUpdates()
+            } else {
+                store.stopBackgroundUpdates()
             }
         }
-        .onAppear { if !hasSeenWelcome { welcome = true } }
+        .onDisappear { store.stopBackgroundUpdates() }
     }
 }
 
 // MARK: - RevaTab
 /// Keep tab-selection identities scoped to root navigation.
-private enum RevaTab: Int, CaseIterable { case summary, records, visits, medicalProfile }
+private enum RevaTab: Int, CaseIterable { case summary, records, medicalProfile }
 
 // MARK: - Native tab lens interaction
 

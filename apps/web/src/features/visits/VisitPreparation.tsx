@@ -1,3 +1,4 @@
+import { demoDescription, demoLabel } from '../../core/presentation';
 // Purpose: Generate and preview a concise pre-visit brief with an explicit PDF download.
 // Inputs: Optional visit details, current workspace context, and patient-entered concerns/questions.
 // Outputs: A bounded brief preview, downloadable PDF, and actionable generation errors.
@@ -9,26 +10,31 @@ import { Download, Sparkles } from 'lucide-react';
 import { useReva } from '../../core/RevaContext';
 import { briefContextSignature, type ClinicalBrief, type VisitBriefInput } from '../../core/visitBrief';
 import { formatDate } from '../../core/dates';
+import { demoBriefDefaults } from '../../core/demoVisitBrief';
 import { Button, Field } from '../../components/ui';
 import { SourceLink, type SourceTarget } from '../../components/SourceLink';
 import './visitPreparation.css';
 
 export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
-  const { generateVisitBrief, snapshot, token } = useReva();
-  const [type, setType] = useState(initial?.type ?? '');
-  const [concern, setConcern] = useState(initial?.concern ?? '');
-  const [questions, setQuestions] = useState(initial?.questions.join('\n') ?? '');
+  const { generateVisitBrief, snapshot, token, mode } = useReva();
+  const demo = mode === 'demo' && snapshot?.profile.isDemo === true;
+  const defaults = initial ?? (demo && snapshot ? demoBriefDefaults(snapshot) : undefined);
+  const [type, setType] = useState(defaults?.type ?? '');
+  const [concern, setConcern] = useState(defaults?.concern ?? '');
+  const [questions, setQuestions] = useState(defaults?.questions.join('\n') ?? '');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ brief: ClinicalBrief; url: string } | null>(null);
   const visitDetails = useRef<HTMLFormElement>(null);
   const mounted = useRef(true),
     request = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       request.current++;
+      activeRequest.current?.abort();
     };
   }, []);
   useEffect(
@@ -38,7 +44,11 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
     [result],
   );
   useEffect(() => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
     setResult(null);
+    setWorking(false);
+    setError('');
     request.current++;
   }, [token]);
   const stale = result && snapshot && result.brief.sourceSignature !== briefContextSignature(snapshot);
@@ -51,9 +61,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
       : [];
   };
   const sourceTargets = result?.brief.sources.flatMap(sourceTarget) ?? [];
-  const sourceIcon = sourceTargets.length ? (
-    <SourceLink sources={sourceTargets} label="View sources used for this brief" />
-  ) : (
+  const inputIcon = (
     <SourceLink
       label="View source: details entered for this visit"
       onOpen={() => {
@@ -62,38 +70,59 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
       }}
     />
   );
+  const sourceIcon = sourceTargets.length ? (
+    <SourceLink sources={sourceTargets} label="View sources used for this brief" />
+  ) : (
+    inputIcon
+  );
   async function generate(event: FormEvent) {
     event.preventDefault();
-    if (working) return;
+    if (working || activeRequest.current) return;
     const generation = ++request.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const current = () => mounted.current && generation === request.current && !controller.signal.aborted;
     setWorking(true);
     setError('');
     setResult(null);
     try {
-      const brief = await generateVisitBrief({
-        type,
-        concern,
-        questions: questions
-          .split('\n')
-          .map((q) => q.trim())
-          .filter(Boolean),
-      });
+      const brief = await generateVisitBrief(
+        {
+          type,
+          concern,
+          questions: questions
+            .split('\n')
+            .map((q) => q.trim())
+            .filter(Boolean),
+        },
+        controller.signal,
+      );
+      if (!current()) return;
       const { createBriefPDF } = await import('./briefPDF');
+      if (!current()) return;
       const sourceURLs = Object.fromEntries(
         brief.sources.flatMap((source) =>
           sourceTarget(source).map((target) => [source.id, new URL(target.href, window.location.href).href]),
         ),
       );
       const bytes = await createBriefPDF(brief, undefined, sourceURLs);
-      if (!mounted.current || generation !== request.current) return;
+      if (!current()) return;
       const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
       setResult({ brief, url });
     } catch (failure) {
-      if (mounted.current)
+      if (current())
         setError(failure instanceof Error ? failure.message : 'The brief could not be generated. Try again.');
     } finally {
-      if (mounted.current) setWorking(false);
+      if (activeRequest.current === controller) activeRequest.current = null;
+      if (mounted.current && generation === request.current) setWorking(false);
     }
+  }
+  function stop() {
+    request.current++;
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    setWorking(false);
+    setError('');
   }
   return (
     <div className="visit-preparation stack">
@@ -143,13 +172,21 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
           </Field>
         </fieldset>
         <p className="muted small">
-          Prepare for your upcoming appointment. Gemini uses your current records and medical profile when you
-          run this brief.
+          {demo
+            ? 'Prepare a brief using the records in this workspace.'
+            : 'Prepare for your upcoming appointment. Gemini uses your current records and medical profile when you run this brief.'}
         </p>
-        <Button type="submit" disabled={working}>
-          <Sparkles size={16} />
-          {working ? 'Preparing your visit…' : 'Run pre-visit brief'}
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" disabled={working}>
+            <Sparkles size={16} />
+            {working ? 'Preparing your visit…' : 'Run pre-visit brief'}
+          </Button>
+          {working && (
+            <Button type="button" variant="secondary" onClick={stop}>
+              Stop preparation
+            </Button>
+          )}
+        </div>
       </form>
       {error && (
         <p className="inline-error" role="alert">
@@ -165,7 +202,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
           <article className="clinical-brief" aria-label="Pre-visit brief preview">
             <header>
               <h2>Pre-visit brief</h2>
-              <strong>{result.brief.patient.name}</strong>
+              <strong>{demoLabel(result.brief.patient.name, result.brief.patient.isDemo)}</strong>
               {result.brief.patient.dateOfBirth && (
                 <div>DOB: {formatDate(result.brief.patient.dateOfBirth)}</div>
               )}
@@ -179,7 +216,15 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
               .map((line, index) => (
                 <p className="clinical-overview" key={index}>
                   {line}
-                  {sourceIcon}
+                  {result.brief.overviewSourceIDs?.[index] ? (
+                    <SourceLink
+                      sources={result.brief.sources
+                        .filter((source) => source.id === result.brief.overviewSourceIDs?.[index])
+                        .flatMap(sourceTarget)}
+                    />
+                  ) : (
+                    sourceIcon
+                  )}
                 </p>
               ))}
             {!!result.brief.questions.length && (
@@ -189,7 +234,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
                   {result.brief.questions.map((q, i) => (
                     <li key={i}>
                       {q}
-                      {sourceIcon}
+                      {result.brief.example ? inputIcon : sourceIcon}
                     </li>
                   ))}
                 </ol>
@@ -201,7 +246,7 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
                 <ol>
                   {result.brief.sources.map((source) => (
                     <li key={source.id}>
-                      {source.title}
+                      {demoLabel(source.title, result.brief.patient.isDemo)}
                       {source.date && ` · ${formatDate(source.date)}`}
                       <SourceLink sources={sourceTarget(source)} />
                     </li>
@@ -210,8 +255,9 @@ export function VisitPreparation({ initial }: { initial?: VisitBriefInput }) {
               </section>
             )}
             <footer>
-              {result.brief.patient.isDemo && 'Fictional demo · '}Patient-prepared · AI-assisted · Review for
-              accuracy
+              {result.brief.example
+                ? 'Prepared from saved records · Review for accuracy'
+                : 'Patient-prepared · AI-assisted · Review for accuracy'}
             </footer>
           </article>
         </>

@@ -9,6 +9,9 @@ import { it, expect } from 'vitest';
 import { PDFDocument, PDFDict, PDFName, PDFString } from 'pdf-lib';
 import { createBriefPDF } from './briefPDF';
 import type { ClinicalBrief } from '../../core/visitBrief';
+import { demoBriefDefaults, demoClinicalBrief } from '../../core/demoVisitBrief';
+import { demoPeople, demoSnapshot } from '../../core/demoProfiles';
+import demoSeed from '../../../public/demo/seed.json';
 const font = new Uint8Array(await readFile(new URL('../../../public/fonts/NotoSans.ttf', import.meta.url)));
 const brief: ClinicalBrief = {
   patient: { name: 'Alex Morgan (fictional)', dateOfBirth: '1988-04-17', isDemo: true },
@@ -26,9 +29,23 @@ const brief: ClinicalBrief = {
     { id: 'ecg', title: 'Resting ECG', date: '2026-09-07' },
     { id: 'labs', title: 'Laboratory results', date: '2026-09-07' },
   ],
-  model: 'gemini-3.8-flash',
+  model: 'gemini-flash-lite-latest',
   sourceSignature: '',
 };
+it.each(demoPeople)('exports the $name example as one page with real demo source links', async ({ id }) => {
+  const snapshot = demoSnapshot(demoSeed, id);
+  const example = demoClinicalBrief(snapshot, demoBriefDefaults(snapshot)!);
+  const links = Object.fromEntries(
+    example.sources.map((source) => [
+      source.id,
+      `https://example.test/demo?demo=${id}#/records/${source.id}`,
+    ]),
+  );
+  const pdf = await PDFDocument.load(await createBriefPDF(example, font, links));
+  expect(pdf.getPageCount()).toBe(1);
+  expect(pdf.getSubject()).toBe('Patient-provided visit preparation');
+  expect(pdf.getPage(0).node.Annots()!.size()).toBe(example.sources.length);
+});
 it('creates one letter-size PDF with Unicode clinical units', async () => {
   const bytes = await createBriefPDF(brief, font);
   const pdf = await PDFDocument.load(bytes);

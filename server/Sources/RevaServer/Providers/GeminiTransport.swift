@@ -30,20 +30,20 @@ public struct GeminiHTTPTransport: Sendable {
             let configuration = URLSessionConfiguration.ephemeral
             configuration.urlCache = nil
             configuration.httpCookieStorage = nil
-            configuration.timeoutIntervalForRequest = 40
-            configuration.timeoutIntervalForResource = 45
+            configuration.timeoutIntervalForRequest = 35
+            configuration.timeoutIntervalForResource = 35
             let session = URLSession(
                 configuration: configuration, delegate: GeminiNoRedirects(), delegateQueue: nil)
             defer { session.invalidateAndCancel() }
             #if canImport(FoundationNetworking)
                 let (data, response) = try await session.data(for: request)
-                guard data.count <= 1_048_576 else { throw GeminiTransportFailure() }
+                guard data.count <= 1_048_576 else { throw GeminiResponseTooLarge() }
             #else
                 let (bytes, response) = try await session.bytes(for: request)
-                guard response.expectedContentLength <= 1_048_576 else { throw GeminiTransportFailure() }
+                guard response.expectedContentLength <= 1_048_576 else { throw GeminiResponseTooLarge() }
                 var data = Data()
                 for try await byte in bytes {
-                    guard data.count < 1_048_576 else { throw GeminiTransportFailure() }
+                    guard data.count < 1_048_576 else { throw GeminiResponseTooLarge() }
                     data.append(byte)
                 }
             #endif
@@ -64,3 +64,5 @@ private final class GeminiNoRedirects: NSObject, URLSessionTaskDelegate, @unchec
 }
 
 private struct GeminiTransportFailure: Error {}
+
+struct GeminiResponseTooLarge: Error {}

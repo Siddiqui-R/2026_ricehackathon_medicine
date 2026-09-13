@@ -95,21 +95,37 @@ async function rejectProviderResponse(response) {
 }
 
 // MARK: - One timed, redirect-free request and bounded success JSON
-export async function providerJSON(url, options, fetcher) {
+export async function providerJSON(
+  url,
+  options,
+  fetcher,
+  { signal, timeoutMs = 90000 } = {},
+) {
+  signal?.throwIfAborted();
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
   let response;
   try {
     response = await fetcher(url, {
       ...options,
       redirect: "error",
-      signal: AbortSignal.timeout(90000),
+      signal: requestSignal,
     });
   } catch {
+    signal?.throwIfAborted();
     fail(
       503,
       "The provider could not be reached. Your saved data is unchanged.",
     );
   }
-  if (!response.ok) await rejectProviderResponse(response);
+  signal?.throwIfAborted();
+  if (!response.ok) {
+    try {
+      await rejectProviderResponse(response);
+    } finally {
+      signal?.throwIfAborted();
+    }
+  }
   let bytes = 0;
   const parts = [];
   try {
@@ -123,12 +139,14 @@ export async function providerJSON(url, options, fetcher) {
       parts.push(part);
     }
   } catch (error) {
+    signal?.throwIfAborted();
     if (error?.status) throw error;
     fail(
       503,
       "The provider response was interrupted. Your saved data is unchanged.",
     );
   }
+  signal?.throwIfAborted();
   try {
     return JSON.parse(Buffer.concat(parts).toString("utf8"));
   } catch {

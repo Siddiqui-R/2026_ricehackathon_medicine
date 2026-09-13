@@ -30,7 +30,7 @@ const valid = () => ({
   ...empty(),
   allergies: [
     {
-      text: "2024: sample allergen — rash; 2026 report records no known allergies (conflicting documentation).",
+      text: "2024: sample allergen, rash; 2026 report records no known allergies (conflicting documentation).",
       recordIDs: ["report-1", "report-2"],
     },
   ],
@@ -63,6 +63,33 @@ async function configured(operation) {
 }
 
 // MARK: - Source-only extraction preserves all reports and conflicting documentation
+test("care themes stay direct and source-linked; source narration is rejected", () =>
+  configured(async () => {
+    const source = {
+      ...records[0],
+      text: "Fictional source: frequent sock changes to prevent foot fungus; poor general hygiene.",
+    };
+    const output = {
+      ...empty(),
+      careNotes: [{ text: "Frequent sock changes to prevent foot fungus, poor general hygiene", recordIDs: [source.id] }],
+    };
+    let instruction;
+    const result = await gemini("profile", { records: [source] }, async (_url, options) => {
+      instruction = JSON.parse(options.body).systemInstruction.parts[0].text;
+      return response(output);
+    });
+    assert.deepEqual(result.careNotes, output.careNotes);
+    assert.match(instruction, /Write careNotes as concise care themes or actions/);
+    assert.match(instruction, /do not invent fungus prevention or poor/);
+    await assert.rejects(
+      gemini("profile", { records: [source] }, async () => response({
+        ...empty(),
+        careNotes: [{ text: "The transcript discusses sock changing frequency and hygiene topics.", recordIDs: [source.id] }],
+      })),
+      (error) => error.status === 422 && !error.message.includes("sock"),
+    );
+  }));
+
 test("profile sends every original source separately from instructions and uses the configured model", () =>
   configured(async () => {
     let payload;
